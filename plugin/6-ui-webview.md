@@ -1,5 +1,7 @@
 # UI 插件与 WebView Surface
 
+> 本文是 UI 插件的对外规范。PR #422 的架构拆解与实现约束见 [ui/](ui/0-overview.md)。
+
 ## 定位
 
 UI 插件向 Ora 贡献 **Surface**：一块由 Ora 以原生 WebView 承载并显示在桌面端中的界面。Surface 的内容来自外部站点（`remote_site`）或插件安装包内的页面（`panel`）。Ora 负责创建、放置、隔离、关闭 WebView 并转发其中发生的事件；插件负责决定这些事件的业务含义，并在需要时与自己的页面交换数据。
