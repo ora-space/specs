@@ -2,15 +2,27 @@
 
 ## Session MCP
 
-`Effective MCP Set` 是一次 Agent session setup 可以选择的完整 MCP 集合，来源是当前 installed snapshot
-中静态有效且配置完整的 MCP 插件。它不表示 Agent 已接收、Server 已连接或工具可用。
+`Effective MCP Set` 是一次 Agent session setup 或 refresh 必须完整选择的 MCP 集合，来源是当前
+installed snapshot 中静态有效且配置完整的 MCP 插件。它不表示 Agent 已接收、Server 已连接或工具
+可用。
+
+`Desired Session MCP Revision` 是 Effective MCP Set 的 secret-free 内容身份，绑定成员的 canonical
+Plugin ID、精确 package version 与 Configuration revision。它用于合并变化通知并判断 Live Session
+是否过期，不是持久化 ownership 或 Server 健康证据。
 
 `Session MCP Snapshot` 是 Host 针对一个 Agent、一个 Workspace `cwd` 和一次 ACP `session/new` 或
 `session/load` 解析出的有序 `mcpServers`。它是只在内存与该次 setup 帧中存在的运行输入，不是 Effect
 Desired State、持久化 Session 属性或 Workspace Resource。
 
-`Active Session MCP Set` 是 Agent 已从一次成功 setup 接受的集合。插件或 Settings 的后续变化不会热
-更新正在运行的会话；新的 `session/new`、`session/load` 或失效 warm session 重建会使用新的 Snapshot。
+`Active Session MCP Revision` 是 Live Session 最近一次成功 `session/new` 或 `session/load` 接受的
+Desired Session MCP Revision。停止的 Ora Session 没有 provider channel，因而没有 Active revision。
+
+`Live Session MCP Convergence` 是在不打断当前 prompt 的前提下，通过标准 ACP `session/load` 把 Live
+Session 从旧 Active revision 切换到最新 Desired revision。变化提交后开始的 prompt 必须先完成该收敛，
+或在进入 Agent 前明确失败。
+
+`Agent Session Barrier` 是 Effect Resource mutation、Agent replacement 与 MCP refresh 共用的协调
+seam。它等待已经开始的 prompt 到达安全点，并阻止新 prompt 穿过未完成的变更窗口。
 
 ## Plugin
 

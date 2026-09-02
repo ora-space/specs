@@ -24,7 +24,7 @@ MCP 插件才有资格进入一次 Session MCP Snapshot，并在 ACP session set
   endpoint 可访问或任何 Agent 已加载该 MCP。
 - **Configured MCP Eligibility** 表示 installed MCP 的当前 Configuration revision 完整，因而可以在
   session setup 时被重新解析；它不是持久化 Source，也不证明 Agent 已接受或 Server 在线。
-- Ora 负责声明、配置与 session setup 输入边界，不代理 MCP 协议流量，也不在安装阶段连接 Server 做
+- Ora 负责声明、配置与 Session MCP 输入边界，不代理 MCP 协议流量，也不在安装阶段连接 Server 做
   健康检查。
 
 ## 决策
@@ -77,8 +77,9 @@ transport 中的 Setting 引用采用：
 数字和布尔 literal 在编译时规范化为字符串，因为参数、环境变量和 header 的最终位置都是字符串。
 
 配置记录的 revision 是一次运行时解析的精确输入。带 Settings 的 MCP 只有在配置状态为 `Complete` 时
-才具备 session setup 资格；配置修改、清除、损坏或变为不完整时，后续解析必须观察到新的 revision 或
-失去资格。无 Settings 的 MCP 使用稳定的配置 revision `0`，安装完成即具备资格。
+才具备 Session MCP Snapshot 资格；配置修改、清除、损坏或变为不完整时，后续 setup 与 Live Session
+refresh 必须观察到新的 revision 或失去资格。无 Settings 的 MCP 使用稳定的配置 revision `0`，安装
+完成即具备资格。
 
 ### D4：transport 用枚举隔离 `stdio` 与 Streamable HTTP
 
@@ -109,7 +110,7 @@ issue，不回退到同一 Plugin ID 的较低版本，也不产生部分 descri
 
 验证不会执行 stdio command、发起 HTTP 请求、读取用户 Setting 实值或判断 Agent 兼容性。这样安装
 过程保持确定且无外部副作用；Agent capability 不匹配、远端不可用、运行时鉴权失败和 Agent 消费失败由
-session setup 或 Agent 运行边界报告，不能反过来改变 installed package 的静态有效性。
+Session setup、refresh 或 Agent 运行边界报告，不能反过来改变 installed package 的静态有效性。
 
 ### D6：只有配置完整的 installed MCP 才具备 Session MCP Snapshot 资格
 
@@ -161,8 +162,8 @@ ACP Server name、transport capability、Setting 解析与秘密边界由 Sessio
   作者通过未知字段提前启用。
 - stdio command 的安装期 canonical containment 不能消除验证后文件被外部替换的 TOCTOU 风险；session
   setup 是否以及如何重复验证由 Agent Session 决策约束。
-- Agent 如何接收 MCP、不同 transport capability 如何协商，以及运行中热更新是否可用，属于 Agent
-  Session 领域。
+- Agent 如何接收 MCP、不同 transport capability 如何协商，以及运行中会话如何热更新，属于 Agent
+  Session 领域，并由 `desktop/core/agent/session/mcp/0-acp-session-setup-delivery.md` 定义。
 
 ## 核心测试依据
 
