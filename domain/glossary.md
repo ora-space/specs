@@ -1,5 +1,15 @@
 # Glossary
 
+## MCP Effect
+
+`MCP Desired` 表示 Scope 希望某个已配置 MCP 插件对符合能力的 Consumer 可用；它不表示项目文件已经
+写入或 Agent 已加载。`MCP Projected` 表示 secret-free server template 已进入 Target/Resource
+projection；`MCP Applied` 表示 shared project file mutation 已验证；只有完整 Target 的 readiness
+receipt 推进后才称该 Agent 在此 Workspace 中 `MCP Ready`。
+
+`MCP Ownership Sidecar` 是 Resource Adapter 的有限 ownership evidence，不是 Desired、配置存储或
+独立授权。它必须与数据库 Managed ledger、server semantic fingerprint 和配置 revision 精确匹配。
+
 ## Plugin
 
 插件相关术语必须区分“插件叫什么”“插件属于谁”和“插件的完整身份”。除非明确讨论某个旧版
