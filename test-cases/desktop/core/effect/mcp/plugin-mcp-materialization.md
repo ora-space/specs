@@ -1,4 +1,4 @@
-# MCP Agent 自动物化
+# Plugin MCP Source 发布与 Agent 配置收敛
 
 ## Secret Values Must Reach Only the Exact Agent Child Process
 
@@ -31,7 +31,7 @@ Agent 插件请求 host 在 Workspace cwd 下启动其 CLI/adapter。
 ### 验证义务与证据
 
 | 验证义务 | 代表性证据测试 | 状态 |
-|---|---|---|
+| --- | --- | --- |
 | 保留变量不能由插件提供，host provider 绑定 plugin/cwd | `ora_plugin_lifecycle::childprocess_tests::spawn_rejects_plugin_supplied_reserved_mcp_environment`、`spawn_injects_host_authorized_mcp_environment_after_binding_the_workspace` | `Covered` |
 | Revision template 不含 secret，OpenCode/Claude 编码不同 | `ora_effect_mcp::template::tests::http_templates_are_secret_free_while_each_agent_receives_its_required_encoding` | `Covered` |
 | sidecar、fingerprint、revision 全链路失配时不注入 | backend provider performs the complete fail-closed check; filesystem lifecycle and forged ownership are covered by `ora_effect_mcp::planner_tests` | `Covered` |
@@ -39,7 +39,8 @@ Agent 插件请求 host 在 Workspace cwd 下启动其 CLI/adapter。
 
 ### 决策依据
 
-- ADR `20260901-mcp-agent-materialization.md` 的 Secret 注入边界。
+- MCP Effect 根决策 D2、D7：Revision 保持 secret-free，Setting 实值只注入精确 Agent 子进程。
+- MCP Effect 根决策不变量 2、3：revision identity 与 secret boundary 必须稳定。
 
 ## Shared MCP Files Must Preserve User State and Ownership
 
@@ -49,7 +50,7 @@ Agent 插件请求 host 在 Workspace cwd 下启动其 CLI/adapter。
 
 ### 前置状态
 
-- 文件含注释、未知顶层字段或用户 server。
+- 文件含注释、未知顶层字段或用户 Server。
 - Ora 可能拥有零个或多个 sidecar 记录。
 
 ### 触发
@@ -65,22 +66,24 @@ MCP Desired 新增、更新、卸载、漂移检测或进程恢复后重新 reco
 
 ### 禁止结果
 
-- 依据名称、模板或 fingerprint 相似性接管用户 server。
+- 依据名称、模板或 fingerprint 相似性接管用户 Server。
 - 在 ownership 不确定时准备 mutation 或删除 sidecar 证据。
 
 ### 验证义务与证据
 
 | 验证义务 | 代表性证据测试 | 状态 |
-|---|---|---|
+| --- | --- | --- |
 | JSONC merge 保留周围注释与字段 | `ora_utils::jsonc::tests::preserves_jsonc_around_nested_updates` | `Covered` |
-| literal `.` 不会被 workspace context 替换 | `ora_effect_mcp::template::tests::workspace_context_does_not_replace_a_literal_dot_argument` | `Covered` |
+| literal `.` 不会被 Workspace context 替换 | `ora_effect_mcp::template::tests::workspace_context_does_not_replace_a_literal_dot_argument` | `Covered` |
 | sidecar drift/collision/JSONC override 形成整文件 blocking | `name_and_ownership_collisions_block_the_whole_resource`、`managed_entry_drift_requires_manual_recovery`、`mismatched_sidecar_claim_does_not_grant_mutation_authority` | `Covered` |
 | 安装、重复收敛、卸载删除与崩溃重放 | `shared_file_lifecycle_preserves_user_jsonc_and_replays_idempotently` | `Covered` |
 
 ### 决策依据
 
-- 基础 ADR 的 Desired/Managed/Observed/Preserved 与 journal 不变量。
-- MCP ADR 的 shared-file ownership 决策。
+- MCP Effect 根决策 D4、D5：Agent Resource 路径固定，shared file 只能凭精确 ownership 修改。
+- MCP Effect 根决策不变量 5、7、8：mutation authority、清理范围与 filesystem compatibility boundary
+  必须保持稳定。
+- Effect 系统基础决策的 Desired/Managed/Observed/Preserved 与 journal 不变量。
 
 ## One Target Projection Must Coordinate Skills and MCP Once
 
@@ -112,7 +115,7 @@ worker 对 Target 执行完整 projection 与 reconcile。
 ### 验证义务与证据
 
 | 验证义务 | 代表性证据测试 | 状态 |
-|---|---|---|
+| --- | --- | --- |
 | Agent 注册同时声明精确双 Resource | OpenCode/Claude `tests/host-simulator.ts` registration assertions | `Covered` |
 | 双 Resource 共享一次 barrier/restart | OpenCode/Claude `tests/host-simulator.ts` spawn-count assertions | `Covered` |
 | composite/kind planner 按 binding kind 精确路由 | `ora_effect_skill::tests::skill_planner_routes_only_skill_effects_to_skill_bindings` | `Covered` |
@@ -120,5 +123,7 @@ worker 对 Target 执行完整 projection 与 reconcile。
 
 ### 决策依据
 
-- 基础 ADR 的 Generic Target 与 complete generation 决策。
-- MCP ADR 的 shared composite reconciler 决策。
+- MCP Effect 根决策 D6：一个完整 Target projection 精确路由 Skill 与 MCP，并统一协调 lifecycle。
+- MCP Effect 根决策不变量 1、4、6：materialization、Agent lifecycle 与 readiness 必须通过完整
+  generation 收敛。
+- Effect 系统基础决策的 Generic Target、complete generation 与 ready watermark 规则。
