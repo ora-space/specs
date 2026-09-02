@@ -12,6 +12,12 @@ Ora 的插件目录（marketplace）由一个或多个 **Git 仓库源**分发�
 `ora-plugin-manifest`（`orax.toml` 校验）、`ora-plugin-manager`（release 选择与安装）与
 `crates/backend`（源配置、契约端点）落地。本文记录稳定的边界与不变量；字段细节以实现为准。
 
+**namespace 的来源与派生规则已由
+[来源派生 Namespace 决策](20260831-source-derived-namespace.md) 修改**：清单不再声明
+`namespace`，条目唯一标识、跨源去重与安装目录归属均以该决策为准。本文下述涉及
+`namespace` 的段落保留是为了说明分发拓扑本身未变的部分（多源、检出、同步、发布资产、
+索引缓存），身份归属细节请以后者为准，不在本文重复。
+
 ## 分发拓扑
 
 ### Marketplace Source
@@ -21,8 +27,9 @@ Ora 的插件目录（marketplace）由一个或多个 **Git 仓库源**分发�
 
 - 首次打开后端且配置为空时，种子写入默认源 `https://github.com/ora-space/marketplace` 的 `main`
   分支（[marketplace_sources.rs](crates/backend/src/marketplace_sources.rs)）。
-- 源按 `position` 形成**优先级顺序**（source precedence）。列表、README 与安装解析都按同一顺序
-  遍历，先命中者胜出，因此重复的 `namespace/identifier` 在任何路径上都解析到同一个条目。
+- 源按 `position` 形成**优先级顺序**（source precedence），决定列表与扫描的遍历次序。它不再是
+  重复 id 的仲裁规则：`namespace` 由发布该条目的源派生，同一 `identifier` 在不同源下天然是不同
+  id，安装与更新解析的是 id 自带的那个源，与列表顺序无关（详见来源派生 Namespace 决策 D6）。
 - URL 必须是 HTTPS（`RepositoryUrl`），分支必须是合法的短分支名（`GitBranchName`）；两者在写入
   配置前校验，而不是等到 Git 命令失败。
 - 每个源独立携带 `use_proxy`。开启时，该源的 Git 网络操作使用代理环境变量，其条目的 `.orax`
@@ -30,7 +37,9 @@ Ora 的插件目录（marketplace）由一个或多个 **Git 仓库源**分发�
 
 ### 本地检出布局
 
-检出目录由 URL 派生：去掉 scheme 后按路径段逐级拼接在 `~/.ora/plugins/sources/` 下。
+检出目录由**规范化后的 URL**（大小写、默认端口、尾部斜杠、`.git` 后缀均已归一，规则见来源派生
+Namespace 决策 D2）派生：去掉 scheme 后按路径段逐级拼接在 `~/.ora/plugins/sources/` 下，因此同一
+仓库的不同写法共享一份检出。
 
 ```
 ~/.ora/plugins/sources/github.com/ora-space/marketplace/            # 源检出
@@ -75,10 +84,9 @@ Ora 的插件目录（marketplace）由一个或多个 **Git 仓库源**分发�
 ```toml
 resolver = 1
 
-# 1. 身份与元数据
+# 1. 身份与元数据（namespace 不是清单字段，见下）
 identifier = "ora-space.weather"
 title = "Weather"
-namespace = "official"
 kind = "workbench"
 version = "1.2.0"
 description = "获取实时天气信息的 Ora 插件"
@@ -100,11 +108,12 @@ ora = ">=0.3"
 
 字段规则（[manifest.rs](crates/plugin-manifest/src/manifest.rs)）：
 
-- `resolver` 必须为 `1`；清单结构使用 `deny_unknown_fields`，未知字段直接报错并给出 TOML 路径。
+- `resolver` 必须为 `1`；未知字段被忽略而不报错，使增量式 schema 变化不会让旧版本 Ora 因一个新
+  可选字段丢弃整条 listing（断裂性变化仍由 `resolver` 版本号承担）。必填字段缺失依旧是硬错误。
 - 名字段拼写为 **`identifier`**（不是 `name`），与安装包内的清单保持一致：1–2 个 slug 段、
   以 `.` 分隔、总长 ≤128 字节，如 `weather`、`ora-space.weather`。
-- `namespace` 在 resolver 1 下是封闭集合，当前只接受 `official`；条目唯一标识为
-  `<namespace>/<identifier>`。
+- `namespace` 不是清单字段：条目唯一标识为 `<namespace>/<identifier>`，但 namespace 段由发布该
+  条目的 marketplace source 派生，不由作者声明（见来源派生 Namespace 决策）。
 - `kind` 是封闭集合：`workbench`、`agent`、`webview`、`skill`、`mcp`、`hook`。
   `[webview]` 是 `webview` 的必需且专属段；`[workbench]` 是 `workbench` 的专属可选段
   （纯静态页面可以不声明方法）。
@@ -195,8 +204,9 @@ sha256 = "2222222222222222222222222222222222222222222222222222222222222222"
 - 扫描不跟随符号链接，缺失目录不报错；路径先排序，保证结果与文件系统枚举顺序无关。
 - 无法读取或解析的 `orax.toml` 被跳过并记 warning，同时通过 `RegistryBuild::skipped()` 报告，
   单个坏文件永远不会让整次构建失败。
-- 条目按 `namespace/identifier` 排序后去重，**同 id 保留先出现者**（源顺序 → 路径顺序），因此合并
-  列表与安装解析对同一 id 的选择完全一致。
+- 条目按 `namespace/identifier` 排序，**去重只发生在同一个源内部**（同源同 id 保留路径序更靠前
+  的一个）：不同源发布同一 `identifier` 时 namespace 不同，天然是不同 id，两条都保留在列表中，
+  互不遮蔽（见来源派生 Namespace 决策 D6）。
 - `logo.svg` 经安全校验后内联进索引：≤50 KiB、良构 XML、禁止 `<script>` / `<foreignObject>`、
   事件处理属性以及指向外部网络资源的 `href`/`xlink:href`（`ora_utils::svg`）。图标缺失是常态且
   静默；图标不安全或不可读只记 warning 并按“无图标”索引，绝不因此把插件从列表中移除。
@@ -240,8 +250,8 @@ sha256 = "2222222222222222222222222222222222222222222222222222222222222222"
 | --- | --- | --- |
 | 打开插件市场 | `listAvailablePlugins` | 只读缓存索引；文件不存在时返回空目录与 `updatedAt = 0`，不触发网络 |
 | 手动刷新 | `syncAvailablePlugins` | 同步全部源 → 重建索引 → 原子覆盖 → 直接返回新结果 |
-| 详情页文档 | `readPluginReadme` | 按源顺序读取条目目录下的 `README.md`（≤256 KiB、必须是 UTF-8）；条目存在但无文档返回 `null`，id 不存在返回 `PluginNotFound` |
-| 安装 / 更新 | `installPlugin` / `updatePlugin` | 按源顺序重新解析 `orax.toml` → 选择 release → 按胜出源的代理策略下载校验并解包到 `installed/` |
+| 详情页文档 | `readPluginReadme` | 读取 id 所属源（namespace 段决定，见来源派生 Namespace 决策 D6）条目目录下的 `README.md`（≤256 KiB、必须是 UTF-8）；条目存在但无文档返回 `null`，id 不存在返回 `PluginNotFound` |
+| 安装 / 更新 | `installPlugin` / `updatePlugin` | 重新解析 id 所属源的 `orax.toml` → 选择 release → 按该源的代理策略下载校验并解包到 `installed/` |
 
 主机兼容性不写入缓存文件，而是在每次把条目投影成 `AvailablePlugin` 时由 `release_targets` 与
 当前宿主 triple 计算，序列化为封闭枚举 `{ compatibility: "compatible" }` /

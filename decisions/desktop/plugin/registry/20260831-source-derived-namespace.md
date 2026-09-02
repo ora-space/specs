@@ -1,5 +1,5 @@
 ---
-status: approved
+status: implemented
 ---
 
 # 来源派生 Namespace：用 Marketplace Source 身份替代清单自述的 namespace
@@ -9,10 +9,11 @@ schema 中移除，`<namespace>/<identifier>` 中的 namespace 段由宿主从**
 定长、文件系统安全的标识，并在 source 首次绑定时持久化。同时清单解析从「拒绝未知字段」改为
 「忽略未知字段」，使清单 schema 具备向前兼容能力。
 
-本决策处于 `proposed` 阶段：派生规则已选定，决策本身尚未接受，也尚未实现。若被接受，将由
-`ora-domain`（namespace 类型与长度边界）、`ora-plugin-manifest`（schema 策略与字段移除）、
-`ora-plugin-registry`（索引按源归属）、`ora-plugin-manager`（安装目录与发现）和 `crates/backend`
-（派生与持久化）共同拥有。
+本决策处于 `implemented`：下文描述的是最终系统承诺，不是实现过程。承担该承诺的模块为
+`ora-domain`（namespace 类型、长度与字母表边界、派生函数）、`ora-utils`（与领域无关的仓库 URL
+规范化）、`ora-plugin-manifest`（schema 策略与字段移除）、`ora-plugin-registry`（索引按源归属与
+来源标注）、`ora-plugin-manager`（安装目录写入与发现回读）、`crates/backend`（绑定持久化与 agent
+标识）。实现与 approved 版本的偏离集中记录在文末「与 approved 决策的偏离」。
 
 **本决策不承担向后兼容义务。** 已发布的清单、已安装的包与既有本地布局不在考虑范围内；下文的
 兼容性讨论只针对本决策生效**之后**的身份稳定性。
@@ -24,18 +25,21 @@ schema 策略相关的部分：
 
 | 前一决策的约定 | 本决策 |
 |---|---|
-| 多源、优先级顺序、检出布局、同步方式 | 继承，不变 |
+| 多源、同步方式、安装目录形状 `installed/<namespace>/<identifier>/<version>/` | 继承，不变 |
 | 清单使用 `deny_unknown_fields`，未知字段报错并给出 TOML 路径 | **修改**：未知字段被忽略 |
 | 清单声明 `namespace`，resolver 1 下封闭为 `official` | **修改**：字段移除，改由 source 派生 |
 | 条目唯一标识为 `<namespace>/<identifier>` | 继承标识形状，**修改**其中 namespace 的来源 |
 | 跨源同 id 去重，先出现的源胜出 | **修改**：不同源的同一插件天然是不同 id，不再互相遮蔽 |
+| 源顺序决定重复 id 解析到哪个源 | **修改**：id 自带 namespace，安装与更新只由拥有该 namespace 的源解析；源顺序只影响列表与扫描次序 |
+| 检出目录按 URL 原文逐段派生 | **修改**：改按 canonical URL 派生，等价写法共用一份检出 |
+| 源配置以 URL 原文判重 | **修改**：按 canonical URL 判重，同一仓库的两种写法不能被配置成两个源 |
 | 安装身份完全由包内清单决定 | **修改**：identifier/version/kind 归清单，namespace 归安装目录 |
 | 发布资产、target 选择、索引缓存、README/Logo | 继承，不变 |
 
 ## 背景
 
-`PluginNamespace` 目前是封闭枚举，resolver 1 下只接受 `official`，所有条目、所有源、所有安装
-产物的 namespace 都是同一个常量。namespace 恒为常量，等于身份空间里没有「来源」这一维：
+在本决策之前，`PluginNamespace` 是封闭枚举，resolver 1 下只接受 `official`，所有条目、所有源、
+所有安装产物的 namespace 都是同一个常量。namespace 恒为常量，等于身份空间里没有「来源」这一维：
 
 - **枚举无法容纳用户自建源。** 新增一个 namespace 取值意味着改 Rust 封闭枚举并发版，而允许用户
   自行添加 marketplace source，恰恰要求身份空间在运行期可扩展。
@@ -77,8 +81,13 @@ namespace 不是 URL 原文，而是从 canonical URL 派生的定长标识：
 ```
 <repo-slug 截断至 24 字节>.<canonical URL 的 sha256 前 8 位十六进制>
 
-https://GitHub.com/Acme/Awesome-Plugins.git/  ⇒  awesome-plugins.3f9a1c2d
+https://GitHub.com/Acme/Awesome-Plugins.git/
+  ⇒ canonical: https://github.com/acme/awesome-plugins
+  ⇒ namespace: awesome-plugins.2aa64f48
 ```
+
+上例中的摘要是真实值，不是示意值：任何版本的 Ora 对该 canonical URL 都必须得出
+`awesome-plugins.2aa64f48`。
 
 **规范化**（决定摘要输入，因此是兼容性契约的一部分）：去 userinfo、去默认端口、去尾部 `/`、
 去尾部 `.git`，整串转小写。转小写对 host 是规范要求，对路径是一处**有意为之的有损选择**：
@@ -163,16 +172,15 @@ https://GitHub.com/Acme/Awesome-Plugins.git/  ⇒  awesome-plugins.3f9a1c2d
 
 - 列表必须显示条目来源，否则用户会看到两张几乎一样的卡片：卡片上能看到的 title、描述与图标
   全部来自条目清单，而清单可以被照抄。
-- 索引条目必须记录归属的 source。当前的多源合并在合并后就丢掉了归属，索引与前端契约都需要
-  补上来源标识。
+- 索引条目记录归属 source 的 canonical URL，并随前端契约一起下发；合并后不得丢弃归属。
 - namespace 自身含摘要后缀，对用户没有可读性，只用于身份与搜索，不应直接展示。
 
 ### D7 namespace 的类型归属
 
-`PluginNamespace` 移出 `ora-plugin-manifest`，与 `PluginId` 同住于 `ora-domain`：它已不是清单
-概念，而是宿主生成的身份片段。移动同时补上一处既有缺口 —— `PluginId` 的 namespace 段目前只校验
-字符集、**没有长度上限**，而它是文件系统路径的一级目录名。类型化之后，长度与字母表约束有唯一
-归属，D2 的 33 字节上界由类型本身保证。
+`PluginNamespace` 与 `PluginId` 同住于 `ora-domain`，不再属于 `ora-plugin-manifest`：它不是清单
+概念，而是宿主生成的身份片段。类型化同时闭合了一处缺口 —— namespace 段此前只校验字符集而没有
+长度上限，却是文件系统路径的一级目录名。长度与字母表约束因此有唯一归属，D2 的 33 字节上界由
+类型本身保证，`.` 与 `..` 也在同一处被拒绝。
 
 ### D8 agent 标识使用 canonical Plugin ID
 
@@ -180,9 +188,9 @@ https://GitHub.com/Acme/Awesome-Plugins.git/  ⇒  awesome-plugins.3f9a1c2d
 其中的 `identifier`（历史上的 name 段）。因此，两个 source 发布相同 `identifier` 的 agent 时，仍然
 拥有不同的 agent 标识，可以同时安装、监督和绑定会话；不再因为 name 段相同而在安装期拒绝。
 
-这项变更不承担向后兼容义务：既有只保存 name 段的 `agent_cli` 数据不在本决策范围内，实施时直接按
-canonical Plugin ID 写入和读取。相同 canonical Plugin ID 表示同一个 agent，按正常的更新语义处理；
-只有 canonical Plugin ID 不同的 agent 才是不同实例。
+这项变更不承担向后兼容义务：既有只保存 name 段的 `agent_cli` 数据不在本决策范围内，读写一律按
+canonical Plugin ID 进行，匹配不到的旧值表现为该 agent 未安装。相同 canonical Plugin ID 表示同一个
+agent，按正常的更新语义处理；只有 canonical Plugin ID 不同的 agent 才是不同实例。
 
 这样，运行期监督表、agent 选择器和会话绑定都以完整插件身份为键，namespace 不会在身份匹配时被
 丢弃。D6 关于不同 source 的同名条目可以并存的规则也因此对 `agent` kind 成立，不需要额外的安装期
@@ -225,9 +233,12 @@ plugin id 的一半，而 plugin id 是五处持久化状态的匹配键：
   丢失，恢复既有会话时按持久化的 agent session id 加载会失败；MCP 与插件配置表现为用户填写的
   内容凭空消失。
 
-`sessions`、`workflows`、`agents`、会话历史文件**不在这个清单里**：会话持久化的 `agent_cli` 是完整
-canonical Plugin ID，历史路径只由 Ora 自己的 session UUID 分片，workflow 与 agent definition 的
-namespace 恒为 `local` 且插件不向这两张表贡献任何行。
+`sessions`、`workflows`、`agents`、会话历史文件**不在这个清单里**，但理由各不相同。`workflows`、
+`agents` 与历史文件确实不受影响：前两张表的 namespace 恒为 `local` 且插件不向它们贡献任何行，历史
+路径只由 Ora 自己的 session UUID 分片。`sessions.agent_cli` 在 D8 之后同样存完整 canonical Plugin
+ID，因此 namespace 一变它也会失配 —— 但它的后果只是该会话报告 agent 未安装，这是一个既有的、可
+恢复的运行期状态（重新选择 agent 即可），而不是上表那种无人认领的 ownership 残留。区别在于能否
+被清理，不在于是否失配。
 
 在 D3 + D5 之下，即便 source 配置发生变化，已安装插件的最坏后果也只是**与来源脱钩**（市场显示
 未安装、无法更新、可被重复安装一份），不会损坏任何持久化状态。
@@ -253,14 +264,37 @@ namespace 恒为 `local` 且插件不向这两张表贡献任何行。
 10. `agent` 的运行期标识与 `sessions.agent_cli` 使用完整 canonical Plugin ID；不同 source 的同名
     agent 可以并存，只有相同 canonical Plugin ID 才表示同一个 agent。
 
-## 落地顺序
+## 与 approved 决策的偏离
 
-分两步，第一步可独立验收：
+实现落地时相对 approved 版本有以下偏离，均为已采用的最终决策：
 
-1. **把 namespace 从清单概念改为宿主参数。** schema 策略改为忽略未知字段并移除该字段，身份类型
-   迁入 domain 并带上长度边界，索引构建、安装与发现改为由调用方提供 namespace —— 此步一律提供
-   `official`，系统行为不变。
-2. **接入派生与持久化。** source 绑定时派生并落库，索引与安装改用绑定值，本地导入改用 `local`，
-   并让 agent 标识与 `sessions.agent_cli` 使用完整 canonical Plugin ID。
+**派生函数归 `ora-domain`，而非 approved 版指定的 `crates/backend`。** 保留字判定与 namespace 的
+长度、字母表边界属于身份类型本身，把纯函数放在类型旁边，兼容性契约才能脱离后端装配被单独判定。
+`crates/backend` 仍然独占绑定与持久化，两者的职责边界没有变化。URL 规范化不含任何 Ora 领域词汇，
+按仓库约定落在 `ora-utils`。
 
-这样拆的目的是让派生规则本身可以被单独评审，而不必同时审身份来源的迁移。
+**D2 的示例摘要值更正。** approved 版把示例写作 `awesome-plugins.3f9a1c2d`，该值不是对应 canonical
+URL 的真实 sha256 前缀。真实值为 `awesome-plugins.2aa64f48`，D2 已更正。派生规则本身未变，只是示例
+从示意值改为契约值。
+
+**检出目录与源判重同时改用 canonical URL。** approved 版只规定 canonical URL 决定摘要输入，未涉及
+这两处。若不一并改：同一仓库的两种写法会克隆两份检出，并被配置成两条源记录，而这两条记录会绑定
+到同一个 namespace —— 一个源被列成两个，却共享身份与检出。这是不变量 2 的直接后果，不是独立选择。
+
+**两处身份仲裁随规则消失而删除。** 二者都是 D5 与 D8 的推论，但会改变宿主对外可观察的行为，故在此
+记录：
+
+- discovery 不再报告 `duplicate_plugin_id`。id 的两段都成为目录层级后，遍历对每个
+  `<namespace>/<identifier>` 只访问一次，两个包无法占用同一个 id。散落在别处目录的副本改由「清单
+  identifier/version 与所在目录不一致」报告。
+- agent 监督不再做身份仲裁。标识改为完整 canonical Plugin ID 后，已安装集合内不可能重名，监督
+  集合恒等于已安装的 agent 集合，不存在「谁先被监督谁获胜」。
+
+## 本决策未解决的问题
+
+- **namespace 迁移没有工具。**「namespace 一旦落盘就不可改变」给出的安全路径是旧 id 完整卸载 + 新
+  id 重新安装，需要用户手动完成，配置也随卸载一并丢失。是否提供一条保留配置的迁移路径，留给后续
+  决策；本决策只保证不发生需要迁移的漂移。
+- **source 迁移（换域名、换托管平台、组织改名）不被支持。** 这是「为什么不是这些替代方案」中
+  `index.toml` 方案唯一独有的优势，本决策明确用它换取唯一性与信任模型。等价 URL 归一只覆盖同一
+  仓库地址的不同写法，不覆盖仓库真正搬家。
