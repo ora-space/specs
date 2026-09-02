@@ -1,4 +1,4 @@
-# MCP 插件静态包与 Effect Source
+# MCP 插件静态包与配置资格
 
 ## Invalid MCP Package Must Fail Closed Without Starting A Plugin Process
 
@@ -50,12 +50,12 @@
 - MCP 插件根决策 D1、D2、D5：MCP 是无进程单一静态贡献，所有安装期验证 fail closed。
 - MCP 插件根决策不变量 1、2、4、8：包 shape、command containment 与权限边界必须稳定。
 
-## Transport Bindings Must Remain Unambiguous And Secret Free
+## Transport Bindings Must Remain Unambiguous Before Runtime Resolution
 
 ### 风险
 
 如果 transport shape 能混合、Setting 引用悬空、HTTP literal 能携带凭据，或绑定文本允许控制字符，
-发布后的模板可能产生注入、秘密泄漏或不同消费端解释不一致。
+session setup 可能在读取用户值后才发现声明不可解释，并产生注入或秘密泄漏风险。
 
 ### 前置状态
 
@@ -64,8 +64,7 @@
 
 ### 触发
 
-配置编译器将 JSON 编译为 `CompiledMcpConfiguration`，后续模板解析器生成 secret-free Agent-specific
-materialization input。
+配置编译器将 JSON 编译为 `CompiledMcpConfiguration`，供后续运行边界绑定精确 Configuration revision。
 
 ### 必须成立
 
@@ -73,14 +72,14 @@ materialization input。
 - 所有 Setting 引用都指向本文件声明的 Setting，绑定文本拒绝控制字符。
 - HTTP 只接受无 userinfo、query、fragment 的 HTTPS URL，header 值只接受 Setting 引用。
 - stdio 环境变量名遵守 portable grammar，workspace context 与普通 literal 保持不同语义。
-- 编译及模板结果只保存 Setting identity/binding，不保存用户值；不同 Agent 所需编码在消费端生成。
+- 编译结果只保存 Setting identity/binding，不读取或保存用户 Setting 实值。
 
 ### 禁止结果
 
 - 同一文件同时声明 `transport` 与 `hook`，或同时承载 stdio/HTTP 字段。
 - 将未声明 Setting、literal API key 或 CR/LF 注入 transport。
 - 把 `.` literal 参数自动解释为 Workspace context。
-- 将 Setting 实值写入 immutable MCP template。
+- 在静态验证或资格判断期间解析、复制或记录 Setting 实值。
 
 ### 验证义务与证据
 
@@ -90,60 +89,56 @@ materialization input。
 | 未知结构、跨 transport 字段及 MCP/Hook 混合失败 | `ora_plugin_config::mcp::tests::rejects_unknown_fields_versions_and_transport_types`; `rejects_cross_transport_field_combinations`; `rejects_a_mixed_transport_and_hook_declaration` | `Covered` |
 | HTTP URL、header、Setting 引用和控制字符策略生效 | `rejects_http_url_policy_violations`; `rejects_invalid_header_names_and_header_literals`; `rejects_references_to_undeclared_settings`; `rejects_control_characters_in_stdio_literals` | `Covered` |
 | command path 与环境变量 grammar 可移植 | `rejects_commands_outside_the_package_assets_directory`; `rejects_invalid_environment_variable_names` | `Covered` |
-| 模板不含秘密并为 Agent 产生正确编码 | `ora_effect_mcp::template::tests::http_templates_are_secret_free_while_each_agent_receives_its_required_encoding` | `Covered` |
-| workspace context 不与普通 literal 混淆 | `ora_effect_mcp::template::tests::workspace_context_does_not_replace_a_literal_dot_argument` | `Covered` |
+| 编译结果保持 Setting 引用且不读取用户配置值 | compiler 输入只包含插件包声明，尚无直接断言序列化结果不含配置值的专属测试 | `Partial` |
+| workspace context 不与普通 literal 混淆 | parser 分别产生 `WorkspaceContext` 与 `Value`，尚无脱离运行时 renderer 的完整行为测试 | `Partial` |
 
 ### 决策依据
 
 - MCP 插件根决策 D2–D4：配置使用封闭 schema、同源 Setting binding 与互斥 transport。
-- MCP 插件根决策不变量 2、3、5：shape、秘密边界和 HTTP 安全策略不得由消费端猜测。
+- MCP 插件根决策不变量 2、3、5：shape、秘密边界和 HTTP 安全策略不得由运行时猜测。
 
-## Only Complete Configuration May Publish The Current MCP Source
+## Configuration Completeness Must Not Claim Agent Availability
 
 ### 风险
 
-如果未配置的 MCP 也进入 Desired State，Agent 项目会出现不可启动的半成品 Server；如果插件版本或配置
-变化原地改写 revision，已有 Workspace 无法可靠判断是否需要收敛或退役旧配置。
+如果配置完整性被解释为 Agent 已接受 MCP 或 Server 已在线，设置界面会在真正的 session setup 之前给出
+无法证明的可用性承诺；如果 required Setting 缺失仍获得资格，运行边界只能制造半配置 Server。
 
 ### 前置状态
 
 - 一个静态有效的 MCP 插件已安装。
-- 该插件可能不需要 Settings，或声明了未填写、完整、随后修改/清除的 Settings。
-- SQLite 中可能存在同一 Plugin ID 的旧 MCP Source revision。
+- 插件可能不需要 Settings，或声明了缺失、完整、随后修改或清除的 Settings。
+- Configuration Store 可能损坏或包含与当前声明不兼容的旧值。
 
 ### 触发
 
-后端启动、安装/更新、本地 import、配置保存/清除或卸载触发 MCP Source 同步。
+宿主读取插件配置详情，或安装、保存、清除配置后重新计算 Configuration summary。
 
 ### 必须成立
 
-- 无 Settings 的 MCP 以配置 revision `0` 发布；有 Settings 的 MCP 仅在配置 `Complete` 时发布。
-- revision key 同时包含插件版本与配置 revision，且相同 key 的 definition 不可变。
-- 配置保存产生新 revision 并推进受影响 Workspace；配置清除、不完整、插件缺失或卸载退役当前 Source。
-- Effect Definition 只包含 transport 模板和 Setting binding，不包含用户 Setting 实值。
-- 启动同步以完整 installed MCP snapshot 清理不再存在的 active MCP Source。
+- 无 Settings 的 MCP 使用配置 revision `0`，配置状态为 `Complete`。
+- 有 Settings 的 MCP 只有所有 required 值存在且类型正确时才为 `Complete`。
+- 保存、清除和恢复损坏配置保持 revision 单调，并重新计算完整性。
+- 配置 DTO 只报告未配置完整、配置完整或配置损坏，不从该状态推断 Agent capability、setup 成功或
+  Server 健康。
+- Setting 引用值在配置详情 DTO 中按既有 redaction 规则处理，不因 MCP 资格判断泄漏。
 
 ### 禁止结果
 
-- 用默认空字符串填补 required Setting 并发布 Source。
-- 配置值变化后继续把旧 revision 报告为 current。
-- 卸载插件后保留 active MCP Source，或删除其他 Plugin ID 的 Source。
-- 因项目物化失败而改写 installed package 的静态有效性。
+- 用默认空字符串填补 required Setting 并报告 `Complete`。
+- 把 configuration complete 命名为 `MCP Ready`、`Applied` 或其他运行时状态。
+- 配置损坏时退化为 revision `0` 或无配置插件。
 
 ### 验证义务与证据
 
 | 验证义务 | 代表性证据测试 | 状态 |
 | --- | --- | --- |
-| 本地 import 后未配置 MCP 为 incomplete，保存配置后变 complete | `ora_backend::bootstrap::tests::tavily_mcp_local_import_and_configuration` | `Covered` |
-| marketplace install 与配置复用同一 contract | `ora_backend::bootstrap::tests::tavily_mcp_marketplace_install_and_configuration` | `Covered` |
-| 配置保存使用 desktop plugin home 并推进 revision | `ora_backend::bootstrap::tests::tavily_mcp_save_configuration_in_desktop_plugin_home` | `Covered` |
-| Source revision key 绑定插件版本与配置 revision，配置不完整时退役 | 当前由 `persist_discovered_plugin_mcp` 实现并被后端流程间接覆盖，缺少 repository 级直接断言 | `Partial` |
-| 启动 snapshot 退役已不存在插件的 Source | 当前有实现路径，尚无删除 installed package 后重启的直接集成测试 | `Missing` |
-| 配置清除、插件更新与显式卸载分别推进所有受影响 Workspace | Effect repository 与 API 有分层覆盖，尚无一组 MCP 专属端到端生命周期测试 | `Partial` |
+| required Setting 缺失与完整值产生不同 summary | `ora_plugin_config::service::tests` 的 configuration completeness 覆盖；backend Tavily 配置流程提供高层证据 | `Covered` |
+| 保存、清除与损坏恢复保持 revision 语义 | `ora_plugin_config::service::tests` 的 save/reset/recovery 用例 | `Covered` |
+| 本地 import 和 marketplace install 复用同一配置 contract | `ora_backend::bootstrap::tests::tavily_mcp_local_import_and_configuration`; `tavily_mcp_marketplace_install_and_configuration` | `Covered` |
+| MCP 绑定 Setting 在配置 DTO 中脱敏并可显式保留 | typed redaction + `preserveSettingIds` backend/frontend tests | `Covered` |
 
 ### 决策依据
 
-- MCP 插件根决策 D3、D6：配置完整性控制 Source publication，版本与配置 revision 共同定义不可变身份。
-- MCP 插件根决策不变量 6、7：静态有效性与运行可用性分离，Source 生命周期必须可收敛。
-- Agent 项目文件 ownership、原子 mutation、单次重启和 readiness 证据由 MCP Agent Effect 决策及其核心
-  用例继续验证。
+- MCP 插件根决策 D3、D6：Configuration revision 决定配置完整性与后续解析资格，不构成运行时状态。
+- MCP 插件根决策不变量 3、6、7：静态有效、配置完整与 Agent 消费必须保持为不同事实。

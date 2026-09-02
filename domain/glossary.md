@@ -1,14 +1,16 @@
 # Glossary
 
-## MCP Effect
+## Session MCP
 
-`MCP Desired` 表示 Scope 希望某个已配置 MCP 插件对符合能力的 Consumer 可用；它不表示项目文件已经
-写入或 Agent 已加载。`MCP Projected` 表示 secret-free server template 已进入 Target/Resource
-projection；`MCP Applied` 表示 shared project file mutation 已验证；只有完整 Target 的 readiness
-receipt 推进后才称该 Agent 在此 Workspace 中 `MCP Ready`。
+`Effective MCP Set` 是一次 Agent session setup 可以选择的完整 MCP 集合，来源是当前 installed snapshot
+中静态有效且配置完整的 MCP 插件。它不表示 Agent 已接收、Server 已连接或工具可用。
 
-`MCP Ownership Sidecar` 是 Resource Adapter 的有限 ownership evidence，不是 Desired、配置存储或
-独立授权。它必须与数据库 Managed ledger、server semantic fingerprint 和配置 revision 精确匹配。
+`Session MCP Snapshot` 是 Host 针对一个 Agent、一个 Workspace `cwd` 和一次 ACP `session/new` 或
+`session/load` 解析出的有序 `mcpServers`。它是只在内存与该次 setup 帧中存在的运行输入，不是 Effect
+Desired State、持久化 Session 属性或 Workspace Resource。
+
+`Active Session MCP Set` 是 Agent 已从一次成功 setup 接受的集合。插件或 Settings 的后续变化不会热
+更新正在运行的会话；新的 `session/new`、`session/load` 或失效 warm session 重建会使用新的 Snapshot。
 
 ## Plugin
 

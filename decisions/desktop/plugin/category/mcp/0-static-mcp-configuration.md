@@ -2,18 +2,17 @@
 status: implemented
 ---
 
-# MCP 插件：以静态配置包声明可物化的 Server 模板
+# MCP 插件：以静态配置包声明可解析的 Server 配置
 
 Ora 的 MCP 插件是一个不启动插件进程的静态配置包。插件用 `orax.toml` 声明
 `kind = "mcp"`，并在唯一的 `assets/config.json` 中声明一个 `stdio` 或 Streamable HTTP
 transport，以及可选的用户 Settings。宿主在发现阶段编译并整包验证该声明；只有配置完整的已安装
-MCP 插件才发布 secret-free `ora/mcp` Effect Source，供 Agent Consumer 在 Workspace 中物化。
+MCP 插件才有资格进入一次 Session MCP Snapshot，并在 ACP session setup 时解析为 Server 配置。
 
 该决策已经由 `ora-plugin-manifest`、`ora-plugin-config`、`ora-plugin-manager`、
-`ora-plugin-lifecycle`、`ora-effect-mcp`、SQLite Effect repository 与 `crates/backend` 落地。本文固定
-MCP 插件从静态包声明、安装期验证到 Effect Source 发布的系统承诺。Agent 项目配置文件、ownership
-sidecar、Target reconciliation、重启协调和运行时密钥注入由
-`desktop/core/effect/mcp/0-plugin-mcp-source.md` 定义，不在本决策中重复。
+`ora-plugin-lifecycle` 与 `crates/backend` 落地。本文固定 MCP 插件从静态包声明、安装期验证到配置完整性
+判断的系统承诺。如何选择完整集合、解析 Setting 实值并交给 Agent，由 proposed 决策
+`desktop/core/agent/session/mcp/0-acp-session-setup-delivery.md` 定义，不在本决策中重复。
 
 ## 术语与边界
 
@@ -23,9 +22,10 @@ sidecar、Target reconciliation、重启协调和运行时密钥注入由
   组成。
 - **Installed MCP Descriptor** 只证明包及声明在安装时有效；它不证明用户已经填写 Settings、远端
   endpoint 可访问或任何 Agent 已加载该 MCP。
-- **Configured MCP Source** 是配置完整后由宿主发布的 immutable、secret-free `ora/mcp` Effect
-  Revision。
-- Ora 负责声明、配置、投影与启动边界，不代理 MCP 协议流量，也不在安装阶段连接 Server 做健康检查。
+- **Configured MCP Eligibility** 表示 installed MCP 的当前 Configuration revision 完整，因而可以在
+  session setup 时被重新解析；它不是持久化 Source，也不证明 Agent 已接受或 Server 在线。
+- Ora 负责声明、配置与 session setup 输入边界，不代理 MCP 协议流量，也不在安装阶段连接 Server 做
+  健康检查。
 
 ## 决策
 
@@ -65,7 +65,7 @@ MCP shape 只能由 `kind = "mcp"` 的包携带，其他 kind 声明 transport �
 MCP 的 `settings` 成员复用普通插件配置声明的字段、校验、编辑器与 host-owned `store.json`。显式空的
 `settings` 对象非法；省略 `settings` 表示该 MCP 无需用户配置。schema version 1 不接受保留的
 `secret`、`file` 和 `directory` Setting type，敏感值当前仍以受宿主保护的普通标量 Setting 保存，不能
-因此被复制进静态插件包或 Effect Revision。
+因此被复制进静态插件包或其他声明式持久化状态。
 
 transport 中的 Setting 引用采用：
 
@@ -76,9 +76,9 @@ transport 中的 Setting 引用采用：
 每个引用必须指向同一文件中声明的 Setting；`prefix` 与 `suffix` 以及所有可绑定文本均拒绝控制字符。
 数字和布尔 literal 在编译时规范化为字符串，因为参数、环境变量和 header 的最终位置都是字符串。
 
-配置记录的 revision 是可观察身份的一部分。带 Settings 的 MCP 只有在配置状态为 `Complete` 时才能发布
-Source；配置修改、清除、损坏或变为不完整时必须重新发布新 revision 或退役当前 Source。无 Settings 的
-MCP 使用稳定的配置 revision `0`，安装完成即可参与发布。
+配置记录的 revision 是一次运行时解析的精确输入。带 Settings 的 MCP 只有在配置状态为 `Complete` 时
+才具备 session setup 资格；配置修改、清除、损坏或变为不完整时，后续解析必须观察到新的 revision 或
+失去资格。无 Settings 的 MCP 使用稳定的配置 revision `0`，安装完成即具备资格。
 
 ### D4：transport 用枚举隔离 `stdio` 与 Streamable HTTP
 
@@ -108,26 +108,22 @@ command containment 中任一项非法，整个最高 installed version 都产�
 issue，不回退到同一 Plugin ID 的较低版本，也不产生部分 descriptor。
 
 验证不会执行 stdio command、发起 HTTP 请求、读取用户 Setting 实值或判断 Agent 兼容性。这样安装
-过程保持确定且无外部副作用；远端不可用、运行时鉴权失败和 Agent 消费失败由 Effect/Agent 运行边界
-报告，不能反过来改变 installed package 的静态有效性。
+过程保持确定且无外部副作用；Agent capability 不匹配、远端不可用、运行时鉴权失败和 Agent 消费失败由
+session setup 或 Agent 运行边界报告，不能反过来改变 installed package 的静态有效性。
 
-### D6：只有配置完整的 installed MCP 才发布 secret-free Effect Source
+### D6：只有配置完整的 installed MCP 才具备 Session MCP Snapshot 资格
 
-宿主在启动发现、marketplace 安装/更新、本地 `.orax` import、配置保存/清除和显式卸载后同步 MCP
-Source。Source identity 由完整 Plugin ID 拥有，revision key 由插件版本与配置 revision 共同派生：
+宿主判断一个 MCP 是否可被 session setup 选择时，必须同时绑定当前 installed package version 与
+Configuration revision。资格由完整 canonical Plugin ID 拥有；无 Settings 的 MCP 使用配置 revision
+`0`，有 Settings 的 MCP 必须是 `Complete`。
 
-```text
-<plugin-version>:<configuration-revision>
-```
+Configured MCP Eligibility 是从 installed/configuration 事实得出的分类，不是 Server 在线或 Agent
+已接受配置的证据。marketplace 安装/更新、本地 `.orax` import、配置保存/清除和显式卸载都会改变后续
+读取到的资格。任何消费端都必须重新读取精确 version/revision；两次读取之间发生变化时，不能把旧声明
+与新 Setting 拼接为一个有效输入。
 
-发布的 Effect Definition 只包含 transport 模板、稳定 Server identity 和指向 Setting 的绑定元数据，
-不包含 Setting 实值。相同 revision key 的定义内容必须保持 immutable；内容变化但 key 不变视为持久化
-状态损坏，而不是原地覆盖。
-
-配置不完整、插件不再可发现、贡献 shape 改变或显式卸载时，宿主退役该 Plugin ID 当前 Source，并推进
-受影响 Workspace 的完整 Desired generation。启动同步还会依据完整 installed MCP snapshot 退役不再
-存在的旧 Source。具体如何合并 Agent 配置、处理同名 Server ownership、协调一次重启和验证 ready
-watermark，继续由 Effect 领域决策负责。
+Setting 实值仍只存在于 host-owned Configuration Store，资格判断不得读取或暴露值。具体的完整集合、
+ACP Server name、transport capability、Setting 解析与秘密边界由 Session MCP 决策定义。
 
 ## 为什么不是这些替代方案
 
@@ -137,9 +133,9 @@ watermark，继续由 Effect 领域决策负责。
 | 在 `orax.toml` 中重复声明 transport 或配置清单 | 产生 manifest 与 `assets/config.json` 两份事实来源，需要定义漂移时的优先级 |
 | 允许一个包同时贡献 MCP、Hook 或普通进程能力 | Plugin ID/version 不再对应单一生命周期与权限模型，宿主可能只理解或只执行部分贡献 |
 | 允许 `npx`、`uvx` 或 PATH command | 安装结果依赖宿主 PATH 与可变网络解析，命令身份、版本和 package containment 都无法由插件包证明 |
-| HTTP header 接受 literal | 凭据会进入发布包、registry checksum 覆盖内容和 immutable revision，无法安全轮换或按用户配置隔离 |
+| HTTP header 接受 literal | 凭据会进入发布包和 registry checksum 覆盖内容，无法安全轮换或按用户配置隔离 |
 | 安装时连接 endpoint 或执行 stdio command | 给无副作用的包发现引入网络、代码执行和环境依赖；短暂不可用还会错误改变 installed snapshot |
-| Settings 不完整时仍发布占位 Source | Agent 项目可能出现不可启动的半配置 Server，且后续无法区分“尚未配置”与“运行失败” |
+| Settings 不完整时仍赋予运行资格 | session setup 只能制造缺值或占位 Server，且无法区分“尚未配置”与“运行失败” |
 
 ## 不变量
 
@@ -147,14 +143,14 @@ watermark，继续由 Effect 领域决策负责。
    `assets/config.json` MCP shape。
 2. 一个 MCP Configuration 必须恰好包含一个 `stdio` 或 HTTP transport；MCP、Hook 和 Settings-only
    shape 不得在同一配置文件中混合。
-3. 每个 Setting 引用必须解析到同一声明中的 Setting，任何用户 Setting 实值都不得进入插件包、
-   Effect Revision 或 discovery issue。
+3. 每个 Setting 引用必须解析到同一声明中的 Setting，任何用户 Setting 实值都不得进入插件包、资格
+   状态或 discovery issue。
 4. `stdio.command` 必须是当前 installed package `assets/` 内的普通文件；PATH lookup、路径穿越和链接
    escape 不构成有效 command。
 5. HTTP endpoint 必须使用 HTTPS 且不含 userinfo、query 或 fragment；header 值必须来自 Setting 引用。
 6. Installed MCP Descriptor 只证明静态包有效，不能被解释为配置完整、Server 在线或 Agent 已加载。
-7. 只有无 Settings 或 Settings 完整的 installed MCP 才拥有 active Effect Source；插件、版本或配置
-   revision 的变化必须通过新的 immutable revision 或 Source retirement 表达。
+7. 只有无 Settings 或 Settings 完整的 installed MCP 才具备 Session MCP Snapshot 资格；每次消费必须
+   绑定当时的 installed version 与 Configuration revision。
 8. MCP 插件不创建插件 runtime、不注册 host method，也不获得插件进程权限。
 
 ## 当前未解决的问题
@@ -163,12 +159,12 @@ watermark，继续由 Effect 领域决策负责。
   类型需要同时定义存储、编辑、redaction、revision 和升级语义。
 - HTTP transport 当前不支持开发模式 localhost HTTP、query 参数或旧 SSE transport；这些能力不能由
   作者通过未知字段提前启用。
-- stdio command 的安装期 canonical containment 不能消除验证后文件被外部替换的 TOCTOU 风险；更强的
-  内容身份或执行时重新验证需要后续决策。
-- 第三方 Agent 如何声明 MCP materialization contract、不同 Agent 格式如何扩展，以及运行中热重载
-  是否可用，属于 Agent Consumer 与 Effect Target 领域。
+- stdio command 的安装期 canonical containment 不能消除验证后文件被外部替换的 TOCTOU 风险；session
+  setup 是否以及如何重复验证由 Agent Session 决策约束。
+- Agent 如何接收 MCP、不同 transport capability 如何协商，以及运行中热更新是否可用，属于 Agent
+  Session 领域。
 
 ## 核心测试依据
 
-见 `specs/test-cases/desktop/plugin/category/mcp/static-package-and-source.md`；Agent 项目物化的跨 Resource
-风险另见 `specs/test-cases/desktop/core/effect/mcp/plugin-mcp-materialization.md`。
+见 `specs/test-cases/desktop/plugin/category/mcp/static-package-and-configuration.md`。Session MCP 决策仍为
+`proposed`，按 ADR 生命周期尚不维护对应核心测试用例。
