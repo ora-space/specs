@@ -11,7 +11,7 @@ MCP 插件才有资格进入一次 Session MCP Snapshot，并在 ACP session set
 
 该决策已经由 `ora-plugin-manifest`、`ora-plugin-config`、`ora-plugin-manager`、
 `ora-plugin-lifecycle` 与 `crates/backend` 落地。本文固定 MCP 插件从静态包声明、安装期验证到配置完整性
-判断的系统承诺。如何选择完整集合、解析 Setting 实值并交给 Agent，由 proposed 决策
+判断的系统承诺。如何选择完整集合、解析 Setting 实值并交给 Agent，由
 `desktop/core/agent/session/mcp/0-acp-session-setup-delivery.md` 定义，不在本决策中重复。
 
 ## 术语与边界
@@ -167,5 +167,5 @@ ACP Server name、transport capability、Setting 解析与秘密边界由 Sessio
 
 ## 核心测试依据
 
-见 `specs/test-cases/desktop/plugin/category/mcp/static-package-and-configuration.md`。Session MCP 决策仍为
-`proposed`，按 ADR 生命周期尚不维护对应核心测试用例。
+见 `specs/test-cases/desktop/plugin/category/mcp/static-package-and-configuration.md`。Session MCP 的核心测试
+用例见 `specs/test-cases/desktop/core/agent/session/mcp/acp-session-setup-delivery.md`。

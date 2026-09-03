@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: implemented
 ---
 
 # MCP 通过 ACP Session 注入并令运行中会话收敛到最新配置
@@ -14,10 +14,11 @@ MCP 不发布 Effect Source、不进入 Workspace Desired State，也不创建�
 协调 seam；这样 Skill Resource mutation 与 MCP 变化并发时可以安全串行和合并恢复，而不会把瞬时会话
 输入伪装成需要 filesystem ownership、journal 和 recovery 的 Effect Resource。
 
-本文是尚未实现的提案，涉及 `ora-plugin-manager`、`ora-plugin-config`、`crates/backend` 的 Agent
-Runtime、Effect Agent adapter，以及 Agent 插件现有的透明 ACP relay。MCP 静态包和 Settings 规则继续
-由 `desktop/plugin/category/mcp/0-static-mcp-configuration.md` 定义；Skill 仍按 Effect 决策物化。
-当前 MCP 文件物化只存在于未发布的开发分支，因此本文不承担已发行版本的旧文件迁移义务。
+该决策已经由 `ora-plugin-config`、`ora-plugin-manager`、`crates/backend` 的 Session Setup 与 Agent
+Runtime、Effect Agent adapter，以及 Agent 插件现有的透明 ACP relay 落地。本文固定 MCP 作为 Session
+Runtime Input 的系统承诺。MCP 静态包和 Settings 规则继续由
+`desktop/plugin/category/mcp/0-static-mcp-configuration.md` 定义；Skill 仍按 Effect 决策物化。
+未发布的文件物化方案没有进入正式版，因此本文不承担已发行版本的旧文件迁移义务。
 
 ## 术语与边界
 
@@ -259,16 +260,6 @@ Active revision，显式 load 必须重新建立事实。
 - ACP 后续若提供标准的会话内 MCP update，是否采用及如何协商 capability 留给后续决策；本文的
   Desired/Active 收敛与 prompt admission 语义保持不变。
 
-## 落地顺序
+## 核心测试依据
 
-1. 建立纯 Session MCP resolver 与 ACP 映射，以 exact package/configuration revision、capability、排序和
-   全量失败测试证明 Snapshot 边界；此阶段不接入真实 Session。
-2. 把 resolver 接入 `session/new` 和所有 `session/load` 路径，并让 prompt admission 校验 Desired 与
-   Active revision；完成后新建、显式恢复与 Workflow Session 获得一致 MCP。
-3. 建立 level-triggered MCP wakeup、Live Session refresh 和内存 convergence 状态，以空闲、busy、连续
-   revision、失败重试和 unsupported load 测试证明热更新承诺。
-4. 将 Effect Agent adapter 的 session-detach 能力收敛到共享 Agent Session Barrier，证明 Skill mutation、
-   Agent replacement 与 MCP refresh 并发时不会绕过 fencing 或遗漏最新 Snapshot。
-5. 删除 MCP Effect publication、Resource/adapter、文件 ownership、环境占位符和 materialization UI，
-   保留 Skill Effect；完成秘密扫描、文件不变性和端到端 ACP setup/refresh 验证后，再推进本文状态并
-   补充对应核心测试用例。
+见 `specs/test-cases/desktop/core/agent/session/mcp/acp-session-setup-delivery.md`。
