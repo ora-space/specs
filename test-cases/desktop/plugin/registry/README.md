@@ -6,7 +6,8 @@
 
 架构边界和不变量来自
 [插件分发根决策](../../../../decisions/desktop/plugin/registry/0-registry-distribution.md) 与
-[来源派生 Namespace 决策](../../../../decisions/desktop/plugin/registry/20260831-source-derived-namespace.md)。
+[来源派生 Namespace 决策](../../../../decisions/desktop/plugin/registry/20260831-source-derived-namespace.md)，
+以及 [Source 级插件包获取决策](../../../../decisions/desktop/plugin/registry/20260904-source-configured-artifact-retrieval.md)。
 namespace 相关的身份、绑定与去重规则以后者为准。
 
 ## 阅读与维护规则
@@ -30,6 +31,13 @@ namespace 相关的身份、绑定与去重规则以后者为准。
 证据表；删除或弱化代表性测试时也必须同步更新。
 
 ## 当前基准用例
+
+### [artifact-retrieval.md](artifact-retrieval.md)
+
+- [Existing Sources Migrate to Direct HTTPS Without Changing Their Identity](artifact-retrieval.md#existing-sources-migrate-to-direct-https-without-changing-their-identity)
+- [Retrieval Mode and Release Locator Must Form One Valid Download Source](artifact-retrieval.md#retrieval-mode-and-release-locator-must-form-one-valid-download-source)
+- [S3 SigV4 Requests Stay Source-Scoped and Keep Integrity Verification](artifact-retrieval.md#s3-sigv4-requests-stay-source-scoped-and-keep-integrity-verification)
+- [Source Editing Must Treat the S3 Credential Pair as Write-Only State](artifact-retrieval.md#source-editing-must-treat-the-s3-credential-pair-as-write-only-state)
 
 ### [identity-and-namespace.md](identity-and-namespace.md)
 

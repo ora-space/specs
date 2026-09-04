@@ -18,6 +18,11 @@ Ora 的插件目录（marketplace）由一个或多个 **Git 仓库源**分发�
 `namespace` 的段落保留是为了说明分发拓扑本身未变的部分（多源、检出、同步、发布资产、
 索引缓存），身份归属细节请以后者为准，不在本文重复。
 
+**发布资产定位与下载认证已由
+[Source 级插件包获取决策](20260904-source-configured-artifact-retrieval.md) 修改**：Marketplace Source
+新增互斥的 Direct HTTPS / S3 SigV4 获取配置，release `url` 可表达 HTTPS locator 或对象 key。
+本文下述把 release 地址统称为 URL、只按代理策略下载的段落，以后者为准。
+
 ## 分发拓扑
 
 ### Marketplace Source
