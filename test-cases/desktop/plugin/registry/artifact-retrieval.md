@@ -19,20 +19,21 @@ Ora 会无法启动、无法识别既有安装，或把公开市场误判成私�
 ### 必须成立
 
 - 旧行得到完整的 `{"type":"direct_https"}` 默认配置。
-- JSON 必须是对象且 discriminator 只能是已知形态；损坏配置不得静默回退。
+- JSON 必须是对象且存在 discriminator；数据库允许未来新增形态，当前 repository 仍须拒绝无法解码
+  的形态且不得静默回退。
 - 迁移不修改 source URL、namespace 绑定、检出目录或安装目录。
 
 ### 禁止结果
 
 - 旧行需要伪造 S3 字段才能启动。
-- 非法或未知 JSON 被当成 Direct HTTPS。
+- 非法或当前版本未知的 JSON 被当成 Direct HTTPS。
 - 获取方式参与 namespace 或文件系统路径派生。
 
 ### 验证义务与证据
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 旧行取得 Direct HTTPS 默认值，数据库拒绝缺少已知 discriminator 的 JSON | `ora_db::tests::marketplace_artifact_retrieval_migration_has_a_safe_default` | `Covered` |
+| 旧行取得 Direct HTTPS 默认值；数据库拒绝缺少 discriminator 的对象但允许未来 tagged variant | `ora_db::tests::marketplace_artifact_retrieval_migration_has_a_safe_default` | `Covered` |
 | 迁移前后真实 source 绑定、检出和已安装插件均保持可用 | 尚无跨版本文件数据库与插件目录的端到端升级测试 | `Missing` |
 
 ### 决策依据

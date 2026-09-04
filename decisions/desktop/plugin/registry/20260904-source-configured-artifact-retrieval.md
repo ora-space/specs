@@ -74,12 +74,11 @@ S3 兼容对象存储签名下载，二者的凭据和失败互不影响。
 artifact_retrieval TEXT NOT NULL
     DEFAULT '{"type":"direct_https"}'
     CHECK (
-        CASE WHEN json_valid(artifact_retrieval)
-            THEN json_type(artifact_retrieval) = 'object'
-                AND COALESCE(json_extract(artifact_retrieval, '$.type'), '')
-                    IN ('direct_https', 's3_sigv4')
-            ELSE 0
-        END
+            CASE WHEN json_valid(artifact_retrieval)
+                THEN json_type(artifact_retrieval) = 'object'
+                    AND json_extract(artifact_retrieval, '$.type') IS NOT NULL
+                ELSE 0
+            END
     )
 ```
 
@@ -110,9 +109,10 @@ S3 SigV4 的完整持久化形态为：
 - S3 SigV4 的 endpoint、bucket、region 和两项凭据必须同时存在，不允许半配置状态。
 - repository 读写 JSON 时必须反序列化为带关联数据的 Rust enum；业务层不得把它展开成一组
   `Option<String>` 后再猜测当前模式。
-- SQLite 的 `CHECK` 守住合法 JSON、对象形态和已知 discriminator；字段完整性、字符串策略与未知
-  字段拒绝由 repository 的严格解码和验证类型守住。损坏或未知的 JSON 必须作为 source 配置错误
-  暴露，不得静默回退为 Direct HTTPS。
+- SQLite 的 `CHECK` 只守住合法 JSON、对象形态和 discriminator 存在，不枚举具体形态，避免以后新增
+  variant 时必须重建列约束；字段完整性、字符串策略、未知 variant 与未知字段拒绝由 repository 的
+  严格解码和验证类型守住。当前运行时遇到损坏或尚不认识的 JSON 必须作为 source 配置错误暴露，
+  不得静默回退为 Direct HTTPS。
 
 迁移把所有既有行保留为列默认值 `direct_https`。down migration 只移除本列，不改写其它 source
 字段、namespace 绑定或文件系统内容。
