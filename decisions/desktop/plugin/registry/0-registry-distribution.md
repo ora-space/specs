@@ -106,7 +106,10 @@ branch = "main"
 ora = ">=0.3"
 ```
 
-字段规则（[manifest.rs](crates/plugin-manifest/src/manifest.rs)）：
+字段规则（[manifest.rs](crates/plugin-manifest/src/manifest.rs)）。**清单 schema 本身的权威定义
+已移交 [插件清单根决策](../manifest/0-versioned-dual-form-manifest.md)**：下面的列表是分发视角的
+摘要，字段语义、两种清单形态的边界与校验顺序以该决策为准，本文只保留与索引构建、发布资产选择
+直接相关的部分。
 
 - `resolver` 必须为 `1`；未知字段被忽略而不报错，使增量式 schema 变化不会让旧版本 Ora 因一个新
   可选字段丢弃整条 listing（断裂性变化仍由 `resolver` 版本号承担）。必填字段缺失依旧是硬错误。

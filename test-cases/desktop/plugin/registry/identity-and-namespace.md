@@ -237,3 +237,6 @@
 
 - 来源派生 Namespace 决策 D1：未知字段被忽略而不是被拒绝；断裂性变化仍由 `resolver` 版本承担。
 - 来源派生 Namespace 决策不变量 8。
+- 本用例只守住未知字段与必填字段这一对边界。`resolver` 判定顺序、两种清单形态与完整 schema
+  演进义务见
+  [Schema Evolution Must Stay Compatible Within One Resolver Version](../manifest/schema-and-validation.md#schema-evolution-must-stay-compatible-within-one-resolver-version)。
