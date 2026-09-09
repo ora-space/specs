@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: approved
 ---
 
 # 插件图标：本地文件是唯一来源，主题变体走目录约定，契约只承载资产 URL
@@ -10,10 +10,11 @@ JPEG。图标的来源、角色与格式**完全由文件名决定**：清单不
 网络请求，也不向包目录或条目目录写入任何字节。因为契约不再承载内容，图标格式对契约层完全透明，
 位图随之得到支持。
 
-本决策处于 `proposed`，尚未实现。影响范围包括 `ora-plugin` 资产协议、marketplace 索引构建、
-`InstalledPlugin` / `AvailablePlugin` 契约的 `logo` 字段、`ora-utils` 新增的图像头部解析模块，
-以及全部渲染图标的前端 surface。**清单 schema 与 `resolver` 完全不变**：本决策不新增、不修改、
-不废弃任何清单字段。
+本决策处于 `approved`，尚未实现；核心测试用例见
+[插件图标资产](../../../../test-cases/desktop/plugin/manifest/logo-assets.md)。影响范围包括
+`ora-plugin` 资产协议、marketplace 索引构建与其缓存的版本校验、`InstalledPlugin` /
+`AvailablePlugin` 契约的 `logo` 字段、`ora-utils` 新增的图像头部解析模块，以及全部渲染图标的
+前端 surface。**清单 schema 与 `resolver` 完全不变**：本决策不新增、不修改、不废弃任何清单字段。
 
 兼容性边界有三处。**清单**：无变化。作者若写了 `[logo]` 之类的 table，按根决策 D2（未知字段在
 任何层级被忽略）静默跳过。**文件系统**：包目录与 registry 条目目录的布局不变，十五个候选文件名
