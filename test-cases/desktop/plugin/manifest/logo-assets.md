@@ -5,9 +5,15 @@
 清单字段本身的解析与校验用例在[插件清单 schema 与校验](schema-and-validation.md)，本文不重复：
 该决策不新增任何清单字段，图标信息完全不经过清单。
 
-该决策处于 `approved` 但尚未实现，因此下列证据状态以 `Missing` 为主。标记为 `Partial` 的行只出现
-在会被直接复用的既有下层策略上（`ora_utils::svg` 的安全校验与字节上限），它们证明的是被复用的
-那一层，不证明本决策新增的语义。
+该决策已实现。候选名表、判定表、逐候选校验与图标 URL 由 `ora-plugin-asset` 独占实现，registry
+索引构建与包发现共用同一份；协议的图标分支在 `apps/desktop/src-tauri/src/surface/logo_assets.rs`。
+
+实现相对决策文本有一处偏离。D2 的示例 JSON 把变体记作「角色到扩展名」（`{"light": "svg"}`），但
+判定表第三、五行用 `universal` 补齐主题对的另一半，而那一半在磁盘上的文件名是 `logo.{ext}` 而非
+`logo.{角色}.{ext}`。若只记扩展名、由 key 反推角色，被补齐的一半会指向作者从未提供的文件名。因此
+每一半记录的是**候选**（角色加扩展名）而非仅扩展名，索引 JSON 相应为
+`{"light": {"role": "light", "extension": "svg"}, "dark": {"role": "universal", "extension": "png"}}`。
+不变量 13（URL 只由 id、角色与扩展名三段构成，后两段取自封闭集合）不受影响。
 
 ## Logo Resolution Must Be Total and Yield the Same Variant in Market and After Install
 
@@ -50,13 +56,13 @@ registry 索引构建扫描条目目录；包发现扫描已安装包根。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 | --- | --- | --- |
-| 八种角色存在组合各自产生确定变体 | 尚未实现 | `Missing` |
-| 扩展名优先级确定且与枚举顺序无关 | 尚未实现 | `Missing` |
-| 单侧主题角色由 `universal` 补齐，双侧缺失时退回 `Universal` | 尚未实现 | `Missing` |
-| 主题对两半允许不同扩展名 | 尚未实现 | `Missing` |
-| 解析结果记录扩展名而非格式 | 尚未实现 | `Missing` |
-| 索引构建与包发现对同一磁盘状态给出相同映射 | 尚未实现 | `Missing` |
-| 图标解析路径不产生任何写入 | 尚未实现 | `Missing` |
+| 八种角色存在组合各自产生确定变体 | `ora_plugin_asset::logo::variants::tests::every_role_combination_resolves_to_a_defined_variant` | `Covered` |
+| 扩展名优先级确定且与枚举顺序无关 | `ora_plugin_asset::logo::resolve::tests::picks_extensions_in_a_fixed_priority_order` | `Covered` |
+| 单侧主题角色由 `universal` 补齐，双侧缺失时退回 `Universal` | `ora_plugin_asset::logo::variants::tests::every_role_combination_resolves_to_a_defined_variant`; `a_completed_half_addresses_the_universal_file_it_came_from` | `Covered` |
+| 主题对两半允许不同扩展名 | `ora_plugin_asset::logo::variants::tests::allows_a_pair_whose_halves_use_different_extensions`; `ora_plugin_asset::logo::resolve::tests::resolves_a_pair_whose_halves_use_different_formats` | `Covered` |
+| 解析结果记录扩展名而非格式 | `ora_plugin_asset::logo::candidate::tests::keeps_the_two_jpeg_extensions_apart`; `ora_plugin_asset::logo::variants::tests::round_trips_through_json_without_losing_the_extension_spelling` | `Covered` |
+| 索引构建与包发现对同一磁盘状态给出相同映射 | `ora_backend::plugin::listing::tests::the_market_and_the_installed_package_agree_on_the_icon` | `Covered` |
+| 图标解析路径不产生任何写入 | `ora_plugin_asset::logo::resolve::tests::scanning_writes_nothing_and_stays_silent_about_absent_candidates` | `Covered` |
 
 ### 决策依据
 
@@ -100,11 +106,11 @@ registry 索引构建与包发现读取候选文件。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 | --- | --- | --- |
-| 六类失败各自等同于该候选不存在 | 尚未实现 | `Missing` |
-| 失败候选被跳过后同角色的次优扩展名胜出 | 尚未实现 | `Missing` |
-| 单个角色的失败不影响其他角色的解析结果 | 尚未实现 | `Missing` |
-| 图标失败不改变插件的可见性、可安装性与可运行性 | 尚未实现 | `Missing` |
-| 每次失败产生一条可观测的 warning | 尚未实现 | `Missing` |
+| 六类失败各自等同于该候选不存在 | `ora_plugin_asset::logo::resolve::tests::every_failure_class_is_equivalent_to_an_absent_candidate` | `Covered` |
+| 失败候选被跳过后同角色的次优扩展名胜出 | `ora_plugin_asset::logo::resolve::tests::falls_through_a_damaged_candidate_to_the_next_extension` | `Covered` |
+| 单个角色的失败不影响其他角色的解析结果 | `ora_plugin_asset::logo::resolve::tests::a_failed_role_does_not_cost_the_plugin_its_icon` | `Covered` |
+| 图标失败不改变插件的可见性、可安装性与可运行性 | `ora_plugin_manager::tests::an_unsafe_logo_neither_hides_the_plugin_nor_reports_an_issue`; `ora_plugin_registry::index::tests::indexes_a_plugin_whose_logo_is_unsafe` | `Covered` |
+| 每次失败产生一条可观测的 warning | `ora_plugin_asset::logo::resolve::tests::every_failure_class_is_equivalent_to_an_absent_candidate` | `Covered` |
 
 ### 决策依据
 
@@ -154,14 +160,14 @@ registry 索引构建与包发现读取候选文件并判定其格式与尺寸�
 
 | 验证义务 | 代表性证据测试 | 状态 |
 | --- | --- | --- |
-| 格式由 magic bytes 判定，扩展名不参与 | 尚未实现 | `Missing` |
-| 扩展名与判定格式不符的候选按不存在处理 | 尚未实现 | `Missing` |
-| 白名单封闭，GIF 与其余格式被拒绝 | 尚未实现 | `Missing` |
-| WebP 三种子格式都能读出尺寸，ANIM 被拒绝 | 尚未实现 | `Missing` |
-| JPEG 由 SOF 段读出尺寸 | 尚未实现 | `Missing` |
-| 字节上限统一为 50 KiB 且先于格式判定 | 尚未实现 | `Missing` |
-| 像素上限独立于字节上限生效 | 尚未实现 | `Missing` |
-| SVG 分支复用既有安全策略（脚本、外部引用、畸形 XML、字节上限） | `ora_utils::svg::tests::rejects_script_element`; `rejects_foreign_object`; `rejects_external_reference`; `rejects_event_handler`; `rejects_malformed_xml`; `rejects_oversized_svg` 覆盖被复用的策略本身，但不覆盖它作为五个候选格式之一时的失败语义 | `Partial` |
+| 格式由 magic bytes 判定，扩展名不参与 | `ora_utils::image::tests::detects_every_supported_format_by_magic_bytes` | `Covered` |
+| 扩展名与判定格式不符的候选按不存在处理 | `ora_plugin_asset::logo::read::tests::refuses_a_candidate_whose_bytes_contradict_its_extension` | `Covered` |
+| 白名单封闭，GIF 与其余格式被拒绝 | `ora_utils::image::tests::refuses_formats_outside_the_whitelist`; `ora_plugin_asset::logo::read::tests::refuses_formats_outside_the_whitelist` | `Covered` |
+| WebP 三种子格式都能读出尺寸，ANIM 被拒绝 | `ora_utils::image::tests::reads_dimensions_of_every_webp_sub_format`; `refuses_an_animated_webp` | `Covered` |
+| JPEG 由 SOF 段读出尺寸 | `ora_utils::image::tests::reads_jpeg_dimensions_past_leading_segments` | `Covered` |
+| 字节上限统一为 50 KiB 且先于格式判定 | `ora_plugin_asset::logo::read::tests::refuses_an_oversized_candidate_of_any_extension` | `Covered` |
+| 像素上限独立于字节上限生效 | `ora_plugin_asset::logo::read::tests::refuses_an_oversized_canvas_that_passes_the_byte_ceiling` | `Covered` |
+| SVG 分支复用既有安全策略（脚本、外部引用、畸形 XML、字节上限） | `ora_utils::svg::tests::rejects_script_element` 等覆盖被复用的策略本身；`ora_plugin_asset::logo::read::tests::refuses_an_unsafe_svg` 覆盖它作为五个候选格式之一时的失败语义 | `Covered` |
 
 ### 决策依据
 
@@ -210,11 +216,11 @@ registry 索引构建与包发现读取候选文件并判定其格式与尺寸�
 
 | 验证义务 | 代表性证据测试 | 状态 |
 | --- | --- | --- |
-| 非主窗口调用方被拒绝 | 尚未实现 | `Missing` |
-| 越界的主题角色与扩展名被拒绝 | 尚未实现 | `Missing` |
-| 携带路径片段或穿越序列的 URL 被拒绝，且只解码一次 | 尚未实现 | `Missing` |
-| id 只解析到两个根之一，且经 `CanonicalPathRoot` 收敛 | 尚未实现 | `Missing` |
-| content-type 由扩展名得出，应答不读索引、不嗅探字节 | 尚未实现 | `Missing` |
+| 非主窗口调用方被拒绝 | `app_lib::surface::logo_assets::tests::refuses_every_caller_but_the_main_window` | `Covered` |
+| 越界的主题角色与扩展名被拒绝 | `app_lib::surface::logo_assets::tests::refuses_requests_outside_the_closed_sets`; `ora_plugin_asset::logo::url::tests::refuses_everything_outside_the_closed_sets` | `Covered` |
+| 携带路径片段或穿越序列的 URL 被拒绝，且只解码一次 | `app_lib::surface::logo_assets::tests::refuses_requests_outside_the_closed_sets`; `ora_plugin_asset::logo::url::tests::refuses_percent_encoded_traversal_without_decoding_it` | `Covered` |
+| id 只解析到两个根之一，且经 `CanonicalPathRoot` 收敛 | `app_lib::surface::logo_assets::tests::refuses_an_absent_candidate_and_an_unknown_plugin`; `cannot_reach_a_package_file_that_is_not_an_icon_candidate`; `ora_plugin_registry::index::tests::resolves_an_entry_directory_only_in_the_owning_source` | `Covered` |
+| content-type 由扩展名得出，应答不读索引、不嗅探字节 | `app_lib::surface::logo_assets::tests::serves_each_half_of_a_pair_with_the_type_its_extension_maps_to`; `ora_plugin_asset::scheme::tests::content_types_are_a_closed_table` | `Covered` |
 
 ### 决策依据
 
@@ -260,11 +266,11 @@ registry 索引构建与包发现读取候选文件并判定其格式与尺寸�
 
 | 验证义务 | 代表性证据测试 | 状态 |
 | --- | --- | --- |
-| `load` 比对 `INDEX_VERSION`，不等即视为缓存不可用 | 尚未实现；该字段今天只被写入，`version()` 的唯一调用方是 `ora_plugin_registry::index::tests` 中的构建断言 | `Missing` |
-| 缓存不可用与文件不存在走同一条降级路径 | 尚未实现 | `Missing` |
-| 降级响应携带 `updated_at = 0`，与"已同步但为空"可区分 | 尚未实现；前端已有 `updatedAt === 0n` 的独立分支，但无断言证明缓存不可用时会到达该分支 | `Missing` |
-| 同步一次后索引以新形状重写且后续读取正常 | 尚未实现 | `Missing` |
-| 打开市场的读取路径不触发网络 | 尚未实现 | `Missing` |
+| `load` 比对 `INDEX_VERSION`，不等即视为缓存不可用 | `ora_plugin_registry::index::tests::refuses_a_cache_written_under_another_schema_version` | `Covered` |
+| 缓存不可用与文件不存在走同一条降级路径 | `ora_plugin_registry::index::tests::classifies_every_unreadable_cache_as_one_that_must_be_rebuilt` | `Covered` |
+| 降级响应携带 `updated_at = 0`，与「已同步但为空」可区分 | `ora_backend::plugin::listing::tests::a_stale_index_cache_degrades_to_not_yet_synced` | `Covered` |
+| 同步一次后索引以新形状重写且后续读取正常 | `ora_plugin_registry::index::tests::a_rebuilt_index_reads_back_normally` | `Covered` |
+| 打开市场的读取路径不触发网络 | `ora_backend::plugin::listing::tests::a_stale_index_cache_degrades_to_not_yet_synced`（降级后缓存文件原样保留，读取路径不重建也不取回） | `Covered` |
 
 ### 决策依据
 
