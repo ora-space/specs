@@ -8,12 +8,18 @@
 该决策已实现。候选名表、判定表、逐候选校验与图标 URL 由 `ora-plugin-asset` 独占实现，registry
 索引构建与包发现共用同一份；协议的图标分支在 `apps/desktop/src-tauri/src/surface/logo_assets.rs`。
 
-实现相对决策文本有一处偏离。D2 的示例 JSON 把变体记作「角色到扩展名」（`{"light": "svg"}`），但
-判定表第三、五行用 `universal` 补齐主题对的另一半，而那一半在磁盘上的文件名是 `logo.{ext}` 而非
-`logo.{角色}.{ext}`。若只记扩展名、由 key 反推角色，被补齐的一半会指向作者从未提供的文件名。因此
-每一半记录的是**候选**（角色加扩展名）而非仅扩展名，索引 JSON 相应为
-`{"light": {"role": "light", "extension": "svg"}, "dark": {"role": "universal", "extension": "png"}}`。
-不变量 13（URL 只由 id、角色与扩展名三段构成，后两段取自封闭集合）不受影响。
+实现期间发现决策文本有两处不自洽，决策已相应修订，本文按修订后的文本编写。
+
+其一，D2 的示例 JSON 把变体记作「角色到扩展名」（`{"light": "svg"}`），但判定表第三、五行用
+`universal` 补齐主题对的另一半，而那一半在磁盘上的文件名是 `logo.{ext}` 而非 `logo.{角色}.{ext}`。
+若只记扩展名、由 key 反推角色，被补齐的一半会指向作者从未提供的文件名。现在每一半记录的是
+**候选**（角色加扩展名）。
+
+其二，D1 原本要求 URL 只有 id、角色、扩展名三段，同时又让 handler「把 id 解析到两个根之一」而
+未规定优先级。两个根各自独立解析、可以给出不同的变体构成，于是一侧铸出的 URL 会由另一侧的目录
+应答——这在真实数据上立刻发生：某插件的市场条目已发布 `logo.light.svg` + `logo.dark.svg`，而已
+安装的那一版包里仍只有 `logo.svg`，卡片因此画裂图。现在**根是 URL 的第一段**（`installed` /
+`registry`），谁解析的目录谁铸 URL，应答只读回同一个根、不回退。
 
 ## Logo Resolution Must Be Total and Yield the Same Variant in Market and After Install
 
@@ -187,8 +193,8 @@ registry 索引构建与包发现读取候选文件并判定其格式与尺寸�
 ### 前置状态
 
 - 一个 `ora-plugin` 协议请求，调用方可能是主窗口，也可能是某个插件的 workbench 或 webview。
-- URL 可能携带越界的主题角色、越界的扩展名、路径分隔符，或 percent 编码的穿越序列。
-- 请求的插件 id 可能已安装、只存在于某个源检出、或完全不存在。
+- URL 可能携带越界的根、越界的主题角色、越界的扩展名、路径分隔符，或 percent 编码的穿越序列。
+- 请求的插件 id 可能已安装、只存在于某个源检出、两者皆有但图标构成不同、或完全不存在。
 
 ### 触发
 
@@ -197,9 +203,11 @@ registry 索引构建与包发现读取候选文件并判定其格式与尺寸�
 ### 必须成立
 
 - 只有主窗口 label 的调用方被接受。
-- URL 只由插件 id、主题角色与扩展名三段构成。
-- 主题角色取自 `universal` / `light` / `dark`，扩展名取自五个允许值，两者都先经封闭集合校验。
-- id 解析到两个根之一：已安装包根，或该 id 所属源检出下的条目目录。
+- URL 只由根、插件 id、主题角色与扩展名四段构成。
+- 根取自 `installed` / `registry`，主题角色取自 `universal` / `light` / `dark`，扩展名取自五个
+  允许值，三者都先经封闭集合校验。
+- id 按 URL 指名的根解析：`installed` 是已安装包根，`registry` 是该 id 所属源检出下的条目目录。
+- 指名的根对该 id 没有目录时直接拒绝，绝不回退到另一个根。
 - 两个根都经 `CanonicalPathRoot` 收敛，且 percent 解码只发生一次。
 - 文件名由角色与扩展名拼出，从不取自 URL 中的任意字符串。
 - content-type 由扩展名查表得出；应答既不嗅探字节，也不读取索引。
@@ -210,6 +218,7 @@ registry 索引构建与包发现读取候选文件并判定其格式与尺寸�
 - URL 中出现路径片段并被用于定位文件。
 - percent 编码的穿越序列在收敛之前被二次解码。
 - 一个插件的 id 解析到另一个插件的目录，或解析到两个根之外。
+- 应答从 URL 未指名的那个根读取，无论是按优先级挑选还是作为找不到时的回退。
 - 应答时回头查索引以确定文件名或 content-type。
 
 ### 验证义务与证据
@@ -217,14 +226,15 @@ registry 索引构建与包发现读取候选文件并判定其格式与尺寸�
 | 验证义务 | 代表性证据测试 | 状态 |
 | --- | --- | --- |
 | 非主窗口调用方被拒绝 | `app_lib::surface::logo_assets::tests::refuses_every_caller_but_the_main_window` | `Covered` |
-| 越界的主题角色与扩展名被拒绝 | `app_lib::surface::logo_assets::tests::refuses_requests_outside_the_closed_sets`; `ora_plugin_asset::logo::url::tests::refuses_everything_outside_the_closed_sets` | `Covered` |
+| 越界的根、主题角色与扩展名被拒绝 | `app_lib::surface::logo_assets::tests::refuses_requests_outside_the_closed_sets`; `ora_plugin_asset::logo::url::tests::refuses_everything_outside_the_closed_sets` | `Covered` |
+| 应答只读回 URL 指名的根，不按优先级挑选也不回退 | `app_lib::surface::logo_assets::tests::answers_from_the_root_the_url_names_rather_than_by_precedence`; `ora_plugin_asset::logo::url::tests::addresses_the_two_roots_separately` | `Covered` |
 | 携带路径片段或穿越序列的 URL 被拒绝，且只解码一次 | `app_lib::surface::logo_assets::tests::refuses_requests_outside_the_closed_sets`; `ora_plugin_asset::logo::url::tests::refuses_percent_encoded_traversal_without_decoding_it` | `Covered` |
 | id 只解析到两个根之一，且经 `CanonicalPathRoot` 收敛 | `app_lib::surface::logo_assets::tests::refuses_an_absent_candidate_and_an_unknown_plugin`; `cannot_reach_a_package_file_that_is_not_an_icon_candidate`; `ora_plugin_registry::index::tests::resolves_an_entry_directory_only_in_the_owning_source` | `Covered` |
 | content-type 由扩展名得出，应答不读索引、不嗅探字节 | `app_lib::surface::logo_assets::tests::serves_each_half_of_a_pair_with_the_type_its_extension_maps_to`; `ora_plugin_asset::scheme::tests::content_types_are_a_closed_table` | `Covered` |
 
 ### 决策依据
 
-- 图标决策 D1：图标分支自成一路，URL 只承载 id、角色与扩展名。
+- 图标决策 D1：图标分支自成一路，URL 只承载根、id、角色与扩展名。
 - 图标决策不变量 1、13。
 
 ## A Logo-Shaped Index Cache Change Must Degrade to Not-Yet-Synced Instead of Failing the Marketplace
