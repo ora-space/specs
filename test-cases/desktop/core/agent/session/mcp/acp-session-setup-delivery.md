@@ -1,5 +1,49 @@
 # Session MCP 通过 ACP 注入与热更新
 
+## Workflow MCP Selection Must Remain Explicit
+
+### 风险
+
+如果工作流空选择回退到普通聊天的自动发现，Ora 会把用户禁用的 MCP 再次发送给 Agent。草稿变化如果覆盖已有运行，也会破坏运行快照的可重放性。Agent 是否真正撤销旧 MCP 是独立的 provider 一致性义务，不能由 Host payload 测试冒充已经覆盖。
+
+### 前置状态
+
+- 同一 Agent 连续承载两个工作流节点或运行；第一个显式启用 Tavily，第二个显式集合为空。
+- 普通聊天仍使用自动选择。
+- 已有运行与可修改草稿引用不同的节点 MCP 开关。
+
+### 触发
+
+创建、恢复、重建或刷新这些 Session，并在之后发送 prompt。
+
+### 必须成立
+
+- 工作流空集合在所有 setup 路径都发送空 `mcpServers`，普通聊天仍自动选择。
+- 已有运行始终从冻结图恢复选择；关系异常时 fail closed。
+- 不同节点和普通聊天的选择互不扩大。
+- ACP 发送前日志只包含 secret-free 选择和 revision 身份。
+
+### 禁止结果
+
+- Ora 为禁用 Tavily 的节点发送包含 Tavily 的 `mcpServers`。
+- 空集合回退到全部已安装 MCP。
+- 草稿修改改变已有运行或 Actor 重建后扩大选择。
+- 日志出现命令参数、env、header、URL 或 Setting 实值。
+
+### 验证义务与证据
+
+| 验证义务 | 代表性证据测试 | 状态 |
+| --- | --- | --- |
+| 空、禁用、混合选择及普通聊天彼此隔离 | `ora_desktop_tests::desktop::core::session::tests::workflow_mcp::workflow_mcp_allowlists_survive_restore_rebuild_and_refresh` | `Covered` |
+| 草稿修改不改变已有运行，恢复和重建沿用冻结选择 | 同上 | `Covered` |
+| OpenCode 执行时严格遵守当前 Session 的完整 `mcpServers` 集合 | 尚无；OpenCode 1.18.30 存在进程级 MCP 注册缺口 | `Missing` |
+| 发送边界日志包含 revision 身份且不包含 Setting 实值 | `ora_backend::agent_runtime::start::tests::session_mcp_log_contains_revision_identity_and_omits_secrets` | `Covered` |
+
+### 决策依据
+
+- 工作流显式选择决策 D1–D3。
+- 该决策不变量 1–5。
+
 ## Session Setup Snapshots Must Be Complete Ordered And Secret-Free
 
 ### 风险
