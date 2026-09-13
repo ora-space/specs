@@ -4,7 +4,7 @@
 
 ### 风险
 
-如果工作流空选择回退到普通聊天的自动发现，Ora 会把用户禁用的 MCP 再次发送给 Agent。草稿变化如果覆盖已有运行，也会破坏运行快照的可重放性。Agent 是否真正撤销旧 MCP 是独立的 provider 一致性义务，不能由 Host payload 测试冒充已经覆盖。
+如果工作流空选择回退到普通聊天的自动发现，Ora 会把用户禁用的 MCP 再次发送给 Agent。草稿变化如果覆盖已有运行，或 Actor 恢复依赖可能损坏的节点运行关系，也会破坏已冻结权限的可重放性。Agent 是否真正撤销旧 MCP 是独立的 provider 一致性义务，不能由 Host payload 测试冒充已经覆盖。
 
 ### 前置状态
 
@@ -19,7 +19,8 @@
 ### 必须成立
 
 - 工作流空集合在所有 setup 路径都发送空 `mcpServers`，普通聊天仍自动选择。
-- 已有运行始终从冻结图恢复选择；关系异常时 fail closed。
+- 创建时把冻结图产生的选择持久化到 Session；恢复、重建、刷新与 Agent 替换直接读取该值。
+- 历史迁移只在升级时读取冻结图；关系、节点或图异常时回填空 `Explicit`，不能扩大为 `Automatic`。
 - 不同节点和普通聊天的选择互不扩大。
 - ACP 发送前日志只包含 secret-free 选择和 revision 身份。
 
@@ -27,7 +28,7 @@
 
 - Ora 为禁用 Tavily 的节点发送包含 Tavily 的 `mcpServers`。
 - 空集合回退到全部已安装 MCP。
-- 草稿修改改变已有运行或 Actor 重建后扩大选择。
+- 草稿修改、节点运行关系损坏或 Actor 重建扩大已有 Session 的选择。
 - 日志出现命令参数、env、header、URL 或 Setting 实值。
 
 ### 验证义务与证据
@@ -35,14 +36,16 @@
 | 验证义务 | 代表性证据测试 | 状态 |
 | --- | --- | --- |
 | 空、禁用、混合选择及普通聊天彼此隔离 | `ora_desktop_tests::desktop::core::session::tests::workflow_mcp::workflow_mcp_allowlists_survive_restore_rebuild_and_refresh` | `Covered` |
-| 草稿修改不改变已有运行，恢复和重建沿用冻结选择 | 同上 | `Covered` |
+| Session 选择持久化并在仓储读取后保持不变 | `ora_db::repository_tests::session_round_trip_persists_workspace_and_mcp_selection` | `Covered` |
+| 历史工作流 Session 回填冻结选择，异常关系与损坏图回填空显式集合 | `ora_db::migration::schema::schema_v0011::tests::backfills_session_owned_mcp_selection_and_rolls_back` | `Covered` |
+| 草稿修改不改变已有运行，恢复和重建沿用 Session 自身选择 | `ora_desktop_tests::desktop::core::session::tests::workflow_mcp::workflow_mcp_allowlists_survive_restore_rebuild_and_refresh` | `Covered` |
 | OpenCode 执行时严格遵守当前 Session 的完整 `mcpServers` 集合 | 尚无；OpenCode 1.18.30 存在进程级 MCP 注册缺口 | `Missing` |
 | 发送边界日志包含 revision 身份且不包含 Setting 实值 | `ora_backend::agent_runtime::start::tests::session_mcp_log_contains_revision_identity_and_omits_secrets` | `Covered` |
 
 ### 决策依据
 
-- 工作流显式选择决策 D1–D3。
-- 该决策不变量 1–5。
+- 工作流显式选择决策 D1–D4。
+- 该决策不变量 1–6。
 
 ## Session Setup Snapshots Must Be Complete Ordered And Secret-Free
 
@@ -257,7 +260,7 @@ Host 在发送 `session/new` 或 `session/load` 前校验 capability 并解析�
 | 缺少 HTTP capability 时 fail closed | `ora_backend::session_setup::mcp::tests::fails_closed_when_http_capability_is_missing` | `Covered` |
 | 非空集合缺少 load capability 时在发送前失败 | `ora_backend::session_setup::mcp::tests::fails_before_send_when_load_capability_is_missing_for_a_non_empty_set` | `Covered` |
 | 空集合不要求 load capability | `ora_backend::session_setup::mcp::tests::empty_set_does_not_require_load_capability` | `Covered` |
-| PublicError 使用稳定 `session_mcp_setup_failed` 且参数不含 Setting 实值 | 契约枚举与 resolver 错误映射存在，尚无断言错误链不含原值的专属测试 | `Partial` |
+| PublicError 使用稳定 `session_mcp_setup_failed`，包含 transport 且不含 Setting 实值 | `ora_backend::session_setup::mcp::selection_tests::selected_missing_or_incomplete_plugins_fail_without_a_partial_set`；`ora_backend::session_setup::mcp::tests::fails_closed_when_http_capability_is_missing` | `Covered` |
 
 ### 决策依据
 
