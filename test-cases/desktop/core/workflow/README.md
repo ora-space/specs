@@ -6,18 +6,27 @@
 架构边界和不变量来自
 [节点运行时编排决策](../../../../decisions/desktop/core/workflow/0-node-runtime-orchestration.md)。
 
+## 阅读与维护规则
+
+- 核心用例按业务风险组织，不按单元测试、集成测试或 crate 组织。
+- 一个核心用例可以由纯状态测试、repository 测试和跨 adapter 测试共同证明。
+- 只有在测试失败会直接说明某项验证义务不成立时，才把该测试列为代表性证据。
+- 文件路径与用例标题共同构成稳定引用；代表性测试可以在 doc comment 中引用它们。
+
 ## 当前状态
 
-根决策尚处于 `proposed`。按 ADR 生命周期，核心测试用例在该决策评审通过并标记为 `approved`
-后，依据最终同意的不变量补充；在此之前本目录不登记任何用例。
+根决策已评审通过（`approved`），核心测试用例依据最终同意的不变量登记如下。代码实现尚未开始，
+多数证据状态为 `Missing`，少量 `Partial` 表示既有测试已固定重构前基线；各落地阶段（Stage 1~3）
+完成后按同一用例回填证据。
 
-预计首批核心用例将覆盖的风险面（以决策评审结论为准）：
+| 文件 | 覆盖的风险面 |
+|---|---|
+| [engine-parity.md](engine-parity.md) | Stage 1 重构行为等价；调度层无节点类型字面量 |
+| [region-and-loop.md](region-and-loop.md) | 区域黑盒与结构校验；DAG 不变量；迭代持久化；`max_iterations` 硬上限 |
+| [stateless-recovery-and-hitl.md](stateless-recovery-and-hitl.md) | 崩溃后从持久化续算循环；循环体内 HITL 停靠与推进 |
+| [runtime-forms.md](runtime-forms.md) | 快执行器锁内无 IO；session 归属；回报幂等 |
+| [variable-pool-boundary.md](variable-pool-boundary.md) | 一切节点形态经声明 owner 与类型校验写入 |
+| [invalidation-events.md](invalidation-events.md) | 失效事件不携带工作流状态，重查收敛 |
 
-- 快执行器在 per-run 排他锁内不执行 IO 或无界等待。
-- 复合节点的区域内部节点不进入外层投影的 ready 集合。
-- Loop 到达 `max_iterations` 上限时进入失败终态，不无限运行。
-- 不含新节点类型的冻结图行为与重构前一致。
-- 失效事件不携带工作流状态；事件丢失或乱序只导致过期视图，由重查收敛。
-- 节点级错误策略生效时，失败节点不终止 run，且失败归因能区分真实失败节点与受连带影响的节点
-  （依赖失败语义修订后生效）。
-- 并行迭代下循环体各轮写入互不覆盖，聚合后下游单变量引用完整。
+"未解决的问题"中的预留项（节点级错误策略、并行迭代、嵌套循环、Code 沙箱、远程子工作流细节）
+不登记核心用例：它们尚未构成系统承诺，待各自后续 ADR 批准后随其义务登记。

@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: approved
 ---
 
 # 工作流编排：以注册的节点运行时取代引擎核心的节点类型分支
@@ -13,11 +13,14 @@ Agent 的 `NodeExecutor` 分发改成一等抽象：每种节点类型注册一�
 观察者重查持久化状态（D7）；同时以组件级对照显式否决重建 Dify 式事件驱动内存编排引擎（见
 "为什么不是这些替代方案"）。
 
-本 ADR 处于 `proposed`：记录问题、约束、决策依据与不变量供评审纠偏。文中的接口名与代码片段只
-用于固定语义，不构成实现契约；按 ADR 生命周期，核心测试用例在本决策 `approved` 后补充。涉及
-模块为 `crates/application/src/workflow_run/engine`（`engine.rs`、`branch_projection.rs`、
-`node_type.rs`、`variable_pool.rs`、`ports.rs`）、`crates/backend/src/workflow/run`
-（`executor.rs`、`interactive/`）、`crates/backend/src/app_event.rs`（`AppEventHub`）、
+本 ADR 已完成评审并标记为 `approved`：评审期间的修正（D7 失效事件、以节点级错误策略取代并行
+容器预留、并行迭代语义吸收 Dify 实践验证）均已并入正文；核心测试用例已依据最终同意的不变量
+补充于 `test-cases/desktop/core/workflow/`，证据缺口如实标记，待各落地阶段的代码实现后回填。
+文中的接口名与代码片段只用于固定语义，不构成实现契约；`implemented` 待"落地顺序"各阶段的代码
+实现完成并验证后再标记。涉及模块为 `crates/application/src/workflow_run/engine`（`engine.rs`、
+`branch_projection.rs`、`node_type.rs`、`variable_pool.rs`、`ports.rs`）、
+`crates/backend/src/workflow/run`（`executor.rs`、`interactive/`）、
+`crates/backend/src/app_event.rs`（`AppEventHub`）、
 `crates/db/src/repository/workflow_run_engine.rs`、`ora-contracts`（`AppEvent`）与前端工作流
 编辑器/运行视图。
 
