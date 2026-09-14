@@ -33,7 +33,8 @@
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 状态转移事务提交后发布不含工作流状态的失效事件 | `ora_backend::workflow::run::engine::tests::scheduling_waves_publish_one_invalidation_per_committed_transition`（纯快执行器 run 的每次提交转移各发布一个只携带 run_id 的事件）、`ora_backend::workflow::run::engine::tests::invalidation_bridge_publishes_the_contract_event`（桥接到应用事件流）、`ora_contracts::app_event::tests::serializes_app_event_wire_shape`（wire 形状只含 run_id） | `Verified` |
+| 状态转移事务提交后发布不含工作流状态的失效事件 | 引擎内转移：`ora_backend::workflow::run::engine::tests::scheduling_waves_publish_one_invalidation_per_committed_transition`（纯快执行器 run 的每次提交转移各发布一个只携带 run_id 的事件）、`ora_backend::workflow::run::engine::tests::invalidation_bridge_publishes_the_contract_event`（桥接到应用事件流）、`ora_contracts::app_event::tests::serializes_app_event_wire_shape`（wire 形状只含 run_id）。引擎外交互转移（经共享的 `WorkflowRunTransitions` 提交入口）：`ora_backend::workflow::run::interactive::session::tests::beginning_a_human_turn_publishes_one_run_invalidation`（人工追问 Pending→Running 发布一个事件）、`ora_backend::workflow::run::interactive::session::tests::ending_a_human_turn_publishes_one_run_invalidation`（追问结束 Running→Pending 发布一个事件）、`ora_backend::workflow::run::transitions::tests::committed_transitions_publish_one_invalidation`（停靠转移提交即发布） | `Verified` |
+| 幂等拒绝的转移不发布（拒绝即无事件） | `ora_backend::workflow::run::engine::tests::duplicate_completion_reports_are_idempotent_no_ops`（引擎侧重复回报）、`ora_backend::workflow::run::interactive::session::tests::a_rejected_turn_end_publishes_nothing`（追问结束时节点已离开 Running，守卫拒绝后零事件）、`ora_backend::workflow::run::transitions::tests::rejected_transitions_publish_nothing`（状态不符的守卫拒绝零事件） | `Verified` |
 | 事件丢失后重查收敛（无第二事实源） | `packages/app-shell/src/state/hooks/use-app-events.test.ts` 的 `re-queries the run detail and lists for run invalidation events`（前端只触发重查、不写入事件负载）；运行视图轮询作为丢失兜底保留；`ora_backend::workflow::run::engine::tests::engines_without_a_publisher_drop_invalidations`（无事件总线时行为不变） | `Verified` |
 
 ### 决策依据

@@ -74,7 +74,7 @@ Agent 运行时。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 引擎核心无节点类型字面量的静态约束 | `ora_application::workflow_run::engine::engine::tests::run_schedule_contains_no_node_type_literals`（源码扫描测试：提取 `run_schedule` 函数体并断言无 `NodeType::` 字面量） | `Verified` |
+| 引擎核心无节点类型字面量的静态约束 | `ora_application::workflow_run::engine::tests::scheduling_core_contains_no_node_type_literals`（源码扫描测试：剥离测试模块与注释后扫描整个引擎核心模块 `engine.rs` 与注册表面 `node_runtime.rs`，豁免四处政策缝隙——注册表装配、按持久化字符串的注册表查找、运行时自身实现、开工图结构校验——断言其余部分无 `NodeType::` 字面量；不再只扫描 `run_schedule` 单个函数体，run-output 选择已改为运行时声明的 `run_output_rank` 元数据） | `Verified` |
 
 ### 决策依据
 

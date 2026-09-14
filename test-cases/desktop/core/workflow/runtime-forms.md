@@ -33,7 +33,7 @@
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 快执行器实现无 IO 的静态或测试约束 | `SwiftNodeRuntime` trait 设计约束：`complete_running` 只接收内存态 `SwiftCompletion`（node-run 行、变量池、run 输入），无任何仓库句柄或异步能力，静态上不可发起 IO；调用点在 `run_schedule` 的锁内同步路径 | `Verified` |
+| 快执行器实现无 IO 的静态或测试约束 | 两层约束：(1) `SwiftNodeRuntime` trait 设计约束——`complete_running` 只接收内存态 `SwiftCompletion`（node-run 行、变量池、run 输入），不向实现递入任何仓库句柄或异步能力，杜绝"顺手"IO；(2) 可执行源码约束 `ora_application::workflow_run::engine::tests::node_runtime_module_performs_no_io_or_waiting`——扫描 node_runtime 模块全部源文件（含未来新增的运行时文件），断言无 `std::fs`/`std::net`/`std::process`/`std::thread`/`tokio`/`block_on`/`sleep`/持久化句柄等 IO 与等待原语。签名不构成静态保证（Rust 无法阻止实现自行调用 std 的 IO），该保证由源码扫描测试承担；有界工作量仍属评审义务 | `Verified` |
 
 ### 决策依据
 
