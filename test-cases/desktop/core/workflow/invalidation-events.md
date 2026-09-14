@@ -33,8 +33,8 @@
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 状态转移事务提交后发布不含工作流状态的失效事件 | 尚无直接证据（`AppEvent` 尚无工作流变体） | `Missing` |
-| 事件丢失后重查收敛（无第二事实源） | 尚无直接证据 | `Missing` |
+| 状态转移事务提交后发布不含工作流状态的失效事件 | `ora_backend::workflow::run::engine::tests::scheduling_waves_publish_one_invalidation_per_committed_transition`（纯快执行器 run 的每次提交转移各发布一个只携带 run_id 的事件）、`ora_backend::workflow::run::engine::tests::invalidation_bridge_publishes_the_contract_event`（桥接到应用事件流）、`ora_contracts::app_event::tests::serializes_app_event_wire_shape`（wire 形状只含 run_id） | `Verified` |
+| 事件丢失后重查收敛（无第二事实源） | `packages/app-shell/src/state/hooks/use-app-events.test.ts` 的 `re-queries the run detail and lists for run invalidation events`（前端只触发重查、不写入事件负载）；运行视图轮询作为丢失兜底保留；`ora_backend::workflow::run::engine::tests::engines_without_a_publisher_drop_invalidations`（无事件总线时行为不变） | `Verified` |
 
 ### 决策依据
 

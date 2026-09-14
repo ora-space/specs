@@ -37,8 +37,8 @@ Stage 1 重构合入后，同一批既有引擎测试不修改断言地重新执
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 扇入节点在全部前驱完成前不就绪，任一 active 即就绪的行为不变 | `ora_application::workflow_run::engine::tests::fan_in_is_not_ready_until_every_predecessor_completes`、`ora_application::workflow_run::engine::tests::ready_set_handles_fan_in` | `Partial`（证明重构前基线；等价性待 Stage 1 后同一测试原样通过） |
-| 其余既有引擎测试（分支、HITL、恢复）在 Stage 1 后原样通过 | 既有 `engine/tests.rs` 全量 | `Missing`（待重构合入后执行） |
+| 扇入节点在全部前驱完成前不就绪，任一 active 即就绪的行为不变 | `ora_application::workflow_run::engine::tests::fan_in_is_not_ready_until_every_predecessor_completes`、`ora_application::workflow_run::engine::tests::ready_set_handles_fan_in` | `Verified`（Stage 1 重构后同一测试原样通过） |
+| 其余既有引擎测试（分支、HITL、恢复）在 Stage 1 后原样通过 | 既有 `engine/tests.rs` 全量 + `ora-backend` `workflow::run` 全量（含 operations/interactive/recovery 测试）未修改断言地通过（`cargo test -p ora-application -p ora-backend`） | `Verified`（Stage 1 后执行） |
 
 ### 决策依据
 
@@ -74,7 +74,7 @@ Agent 运行时。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 引擎核心无节点类型字面量的静态约束 | 尚无直接证据；候选形式为专项测试或 lint 检查 | `Missing` |
+| 引擎核心无节点类型字面量的静态约束 | `ora_application::workflow_run::engine::engine::tests::run_schedule_contains_no_node_type_literals`（源码扫描测试：提取 `run_schedule` 函数体并断言无 `NodeType::` 字面量） | `Verified` |
 
 ### 决策依据
 

@@ -33,7 +33,7 @@
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 快执行器实现无 IO 的静态或测试约束 | 尚无直接证据；候选形式为专项测试或 trait 设计约束 | `Missing` |
+| 快执行器实现无 IO 的静态或测试约束 | `SwiftNodeRuntime` trait 设计约束：`complete_running` 只接收内存态 `SwiftCompletion`（node-run 行、变量池、run 输入），无任何仓库句柄或异步能力，静态上不可发起 IO；调用点在 `run_schedule` 的锁内同步路径 | `Verified` |
 
 ### 决策依据
 
@@ -69,7 +69,7 @@
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 非 Agent 运行时的 node-run 行 session_id 为 NULL | 尚无直接证据 | `Missing` |
+| 非 Agent 运行时的 node-run 行 session_id 为 NULL | `ora_backend::workflow::run::engine::tests::control_node_runs_keep_their_session_id_null`（start→condition→output 全部快执行器完成的 run，所有 node-run 的 session_id 为 NULL） | `Verified` |
 
 ### 决策依据
 
@@ -105,7 +105,7 @@ sink 收到晚到/重复回报。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 晚到/重复完成回报被幂等拒绝 | 既有 repository 幂等拒绝行为已存在，但无以测试名固定的直接证据引用 | `Missing` |
+| 晚到/重复完成回报被幂等拒绝 | `ora_backend::workflow::run::engine::tests::duplicate_completion_reports_are_idempotent_no_ops`（第二次 complete_node 无状态变更、无失效事件；既有 operations 测试 `concurrent_completions_commit_once_and_leave_the_session_read_only` 亦覆盖并发完成仅提交一次） | `Verified` |
 
 ### 决策依据
 
