@@ -5,6 +5,10 @@
 namespace 归属与安装目录身份匹配的核心用例在
 [registry 核心测试用例](../registry/identity-and-namespace.md)，本文不重复。
 
+已批准的 pack 扩展（非空成员集合、kind/形态约束与普通 release 可见性）见
+[pack 清单与可见性校验](pack-manifest-and-visibility.md)。下述既有六种 kind 的证据不覆盖新增
+pack 行为，新增义务的证据状态在该文件独立维护。
+
 ## One Manifest Text Must Yield a Fully Validated Domain Object or a Stable Field Path
 
 ### 风险

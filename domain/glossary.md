@@ -32,6 +32,24 @@ seam。它等待已经开始的 prompt 到达安全点，并阻止新 prompt 穿
 插件相关术语必须区分“插件叫什么”“插件属于谁”和“插件的完整身份”。除非明确讨论某个旧版
 schema 或外部字段，否则不要用 `name` 泛指这些概念。
 
+### Plugin Manifest（插件清单）
+
+`Manifest`（清单）是插件通过 `orax.toml` 声明自身 identifier、版本、kind、元数据与 kind 专属
+内容的领域文档。清单有 release 和 installed 两种形态，共用 schema 与语义校验，但发布侧字段
+的允许范围不同；清单本身不等同于插件安装包、派生索引或宿主记录的安装状态。
+
+### Release Manifest（发布清单）
+
+`release` 形态是 Marketplace Source 的 registry 中使用的插件清单，描述对外发布的插件版本，
+可按插件 kind 的规则包含发布资产信息与 marketplace 展示声明。它不表示插件已经安装，也不必然
+意味着存在可下载制品；例如 Plugin Pack 决策中的 pack 从 registry 本地创建安装态，无需发布下载制品。
+
+### Installed Manifest（安装清单）
+
+`installed` 形态是插件包内及安装后版本目录中使用的插件清单，自述这一份物理插件的身份、版本
+与 kind 专属内容，不承载可下载 release 的语义。这里的 `installed` 指清单形态，不等同于
+Installed Plugin 实体或整体安装操作的成功状态；例如 pack 已有安装清单，不代表成员编排已完成。
+
 ### Plugin Identifier
 
 `identifier` 是插件声明的、用于标识该插件的稳定名称，也是 Plugin ID 的 name 段。它应当在同一

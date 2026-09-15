@@ -1,43 +1,48 @@
 ---
-status: proposed
+status: approved
 ---
 
-# 插件集合包：Plugin Pack 是非运行时插件，可整体安装与卸载
+# 插件集合包：从 registry 本地创建 pack，以持久化状态机完成成员安装与失败回滚
 
-Ora 的 marketplace 新增一种条目形态：Plugin Pack（插件集合包）。pack 用一份 `kind = "pack"` 的
-清单声明一组成员插件（`[[pack.members]]`），自身不携带任何运行时贡献物与 `assets/` 目录。用户
-安装一个 pack 时，宿主在 preflight 通过后按声明顺序逐个安装成员、复用既有单插件安装链路，并把
-每个新安装的成员登记进 pack 的数据目录；pack 自身作为无进程的非运行时插件随之落盘，进入已安装
-模型——前端可以像对待其他插件一样，对 pack 独立地整体安装与整体卸载，而卸载 pack 只卸载登记
-在案的成员。同时新增 release 形态可选字段 `marketplace_visible`（缺省 `true`）：声明为 `false`
-的条目不进入派生索引、不在 marketplace 前端独立展示，但仍保留在源仓库中、可按 identifier 解析、
-可被 pack 安装，安装后是真实 Installed Plugin。
+Plugin Pack 是 `kind = "pack"` 的非运行时插件。宿主在 preflight 通过后，先从所属源的本地
+registry 检出复制清单、创建 pack 的安装态，再顺序安装成员；pack 自身不发布或下载 `.orax`
+制品。完整安装状态机由 pack 自身 `installed/<namespace>/<identifier>/staging/` 下的文件承载。
+全部成员安装成功或按 V1 规则跳过后，记录保留所有新安装成员，整体安装成功；成员在有限重试后
+仍失败，则回滚本次新安装的成员，最后移除本次创建的 pack，并通知前端。
 
-本 ADR 处于 `proposed`：决策与需求尚未确认，正文保留示例与推测以帮助评审纠偏。文中的 TOML 与
-契约形状只用于固定语义，不构成实现契约；按 ADR 生命周期，核心测试用例在本决策 `approved` 后
-补充。涉及模块为 `ora-plugin-manifest`（清单 schema）、`ora-plugin-registry`（索引构建）、
-`crates/backend`（安装与卸载编排）、`ora-plugin-manager`（成员安装复用）、`ora-plugin-lifecycle`
-（per-plugin 数据目录）、`ora-contracts` 与 `packages/app-shell`（聚合结果与前端呈现）。
+同时为普通插件（`kind != "pack"`）的 release 清单新增字段 `marketplace_visible`（缺省 `true`），
+pack 禁止声明该字段。新构建的派生索引排除隐藏条目，旧缓存允许在成功刷新前暂时保留它们；
+隐藏条目仍可从源 registry 解析并安装。成员“已安装任意
+版本则跳过”仅是第一版行为，所有插件的更新策略由后续 ADR 统一决定。
 
-兼容性边界：pack 条目在旧宿主上整条消失（未知 kind 硬拒绝的既定行为），隐藏成员在旧宿主上
-仍然可见（未知字段忽略的既定保护），两者的不对称是接受的代价而非需要迁移的状态（见 D9）。
-本决策不承担插件依赖求解与安装前成员预览——各自见"本决策未解决的问题"；成员的 `agents`
-适配范围声明被评审确认为必要能力，但同样留待后续追加 ADR，不在本决策展开。
+本 ADR 处于 `approved`，已完成评审，尚未实现。示例和状态名称用于固定行为语义，不构成最终字段或
+文件格式契约；核心用例与证据缺口见[核心测试用例](../../../../../test-cases/desktop/plugin/category/pack/README.md)。
+涉及 `ora-plugin-manifest`（清单规则）、
+`ora-plugin-registry`（源解析与索引）、`ora-plugin-manager`（本地安装态、成员安装与卸载）、
+`crates/backend`（编排与恢复）、`ora-contracts` 和 `packages/app-shell`（进度、结果与通知）。
+
+文件系统是硬兼容边界：新增的 `staging/` 与版本目录同级，是宿主管理的持久状态目录，不能被
+当作临时解包目录或插件版本清理。本决策不把 pack 状态存入 `data/`，也不授权覆盖或删除旧路径
+中的用户文件。旧宿主与已有目录的处置见 D9。本决策不包含依赖求解、成员预览与 `agents` 适配。
 
 ## 术语与边界
 
-- **Listing（marketplace 条目）**是 marketplace 源仓库 `registry/**/orax.toml` 中的一份
-  release 清单；**派生索引（Registry Index）**是宿主扫描全部源后写出的展示缓存
-  `registry_index.json`；**Installed Plugin**是 `installed/<namespace>/<identifier>/<version>/`
-  下真实落盘的包。三者是不同层，本文显式区分。
-- **Plugin Pack**是 `kind = "pack"` 的插件；**成员**是它的 `[[pack.members]]` 声明的插件
-  identifier；**隐藏条目**是声明 `marketplace_visible = false` 的 listing。
-- **成员登记（membership record）**是 pack 数据目录中记录"由该 pack 新安装的成员"的登记，
-  是 pack 卸载时确定卸载集合的唯一事实来源。
-- **Agent Plugin**是 `kind = "agent"` 的已安装插件；其运行期身份是完整 canonical Plugin ID
-  `<namespace>/<identifier>`（来源派生 Namespace 决策 D8），会话把它持久化在 `agent_cli`。
+清单（Manifest）、release 与 installed 形态的定义见
+[Glossary 的 Plugin 术语](../../../../../domain/glossary.md#plugin)。
 
-一个 pack 条目与其隐藏成员的示例：
+- **Listing**：源检出 `registry/**/orax.toml` 中的 release 清单，是安装解析的事实来源。
+- **派生索引（Registry Index）**：用于 marketplace 展示的 `registry_index.json` 缓存。
+- **Installed Plugin**：在 `installed/<namespace>/<identifier>/<version>/` 中落盘并通过校验的
+  插件。pack 有相同的身份与安装态，但其成员编排是否完成由持久化状态机确定。
+- **Plugin Pack**：声明 `[[pack.members]]` 的非运行时插件；成员以裸 `identifier` 引用。
+- **安装记录**：pack 的 `staging/` 下承载整体阶段、逐成员状态、重试、归属与清理进度的宿主
+  文件。成功后仍保留，其中的成员登记是整体卸载的事实来源。
+- **新安装成员**：本次操作开始时不存在、由本次操作实际提交的插件实例。预先已安装且跳过的
+  成员不因被清单引用而转为 pack 所有。
+- **隐藏条目**：普通插件的 release 清单声明 `marketplace_visible = false` 的 listing，不表示
+  禁用或拒绝安装；pack 不支持此声明。
+
+最小 release 示例（pack 无 `url`、`sha256`、`[[targets]]`）：
 
 ```toml
 # registry/o/ora-space.python-extension-pack/orax.toml
@@ -47,228 +52,284 @@ title = "Python Extension Pack"
 kind = "pack"
 version = "0.1.0"
 description = "Python 开发所需的技能与 MCP 集合"
-url = "…"        # pack 包只含 orax.toml，体积极小且全平台一致
-sha256 = "…"
 
 [[pack.members]]
 identifier = "ora-space.python-core"
 
 [[pack.members]]
 identifier = "ora-space.python-mcp"
+```
 
-# registry/o/ora-space.python-core/orax.toml（隐藏成员，节选）
-# resolver = 1 / identifier = "ora-space.python-core" / kind = "skill"
+隐藏成员仍按其 kind 声明正常的发布资产：
+
+```toml
+# registry/o/ora-space.python-core/orax.toml
+resolver = 1
+identifier = "ora-space.python-core"
+kind = "skill"
+version = "0.1.0"
 marketplace_visible = false
-url = "…"
-sha256 = "…"
+url = "https://example.com/python-core.orax"
+sha256 = "1111111111111111111111111111111111111111111111111111111111111111"
 ```
 
 ## 与相邻决策的边界
 
-本文固定 Plugin Pack 能力本身的系统承诺，沿用既有分工而不复制权威规则：
+本文与清单、registry 的配套 ADR 均已批准，分别由对应领域拥有规则；三者尚未实现，批准状态
+不表示相邻领域的代码已经具备新行为。
 
-- `orax.toml` 字段级 schema（`pack` 进入 kind 封闭集合、`[[pack.members]]` 的类型策略与双形态
-  约束、`marketplace_visible` 的类型策略）的权威定义属于
-  [插件清单根决策](../../manifest/0-versioned-dual-form-manifest.md)，需以该链的日期决策登记；
-  本文 D1、D3 只固定能力视角的规则。
-- 索引构建与缓存机制的权威定义属于
-  [插件分发根决策](../../registry/0-registry-distribution.md)，可见性过滤需以该链的日期决策
-  登记；本文 D3 只固定过滤语义与"resolve 不受影响"的承诺。
-- [来源派生 Namespace 决策](../../registry/20260831-source-derived-namespace.md)不变：namespace
-  由宿主派生并持久化、agent 身份是 canonical Plugin ID（该决策 D8）；本文在其之上引用。
-- per-plugin 数据目录（`<data-dir>/plugins/data/<namespace>/<name>/`，按插件身份键控、随卸载
-  删除）是 `ora-plugin-lifecycle` 的既有约定；本文 D6 只固定 pack 对它的复用方式，不改变其
-  所有权与生命周期规则。
+| 规则所有者 | 继承与配套决策 |
+| --- | --- |
+| [插件清单](../../manifest/0-versioned-dual-form-manifest.md) | 继承双形态和封闭 kind；[pack 清单与可见性字段](../../manifest/20260915-pack-manifest-and-marketplace-visibility.md)（`approved`）细化非空成员集合、无下载资产及普通插件 release 可见性约束 |
+| [插件分发](../../registry/0-registry-distribution.md) | 继承源检出是事实来源、索引是缓存；[pack 本地安装与隐藏条目索引](../../registry/20260915-local-pack-installation-and-hidden-listings.md)（`approved`）细化构建期过滤、pack 本地安装及可安装性投影 |
+| [来源派生 Namespace](../../registry/20260831-source-derived-namespace.md) | 继承，不变；canonical Plugin ID 为 `<namespace>/<identifier>`，namespace 由宿主派生并持久化 |
+| [Source 级插件包获取](../../registry/20260904-source-configured-artifact-retrieval.md) | 成员继承所属源的获取与校验规则；pack 自身不进入制品获取链路 |
+| per-plugin 数据目录 | 继承普通插件的数据生命周期；pack 安装记录由安装编排拥有，不复用 `data/<namespace>/<identifier>/` |
 
 ## 决策
 
-### D1：pack 是 `kind = "pack"` 的非运行时插件，包内不携带 `assets/`
+### D1：pack 从 registry 本地创建安装态，不下载制品
 
-`kind = "pack"` 进入清单 kind 封闭集合，与其他 kind 一样拥有完整的插件身份：完整 canonical
-Plugin ID、SemVer 版本、已安装目录与已安装快照条目。pack 不承载任何运行时贡献物：禁止
-`[workbench]`/`[webview]`，不携带 `main.js`，不创建 Deno runtime、不参与 plugin handshake、
-不能注册 host methods，也不获得任何插件权限；`[[targets]]` 与 `[artifact]` 对 pack 禁止（与
-"只有可能内含原生可执行文件的 kind 允许 target 形态"的既有规则一致），release 形态使用顶层
-`url`/`sha256` 通用资产——pack 包内只有一份 `orax.toml`，天然全平台一致。`[[pack.members]]`
-对 pack 必需且独占，对其余 kind 禁止，且在两种清单形态下都必须存在：pack 的自述身份就是成员
-集合。宿主包校验对 pack 拒绝 `assets/` 目录与 `main.js`："这个插件没有任何运行时内容"必须能
-从包内容一眼判定，而不是靠"恰好没写"的组合推断。
+`kind = "pack"` 进入封闭 kind 集合，拥有 canonical Plugin ID、SemVer 版本、版本目录和已安装
+快照条目。`[[pack.members]]` 对 pack 必需且独占，在 release 与 installed 两种形态下均保留，
+按已批准的清单配套决策至少包含一个成员。
+pack 禁止 `marketplace_visible`、`url`、`sha256`、`[[targets]]`、`[artifact]`，也禁止 `[workbench]`、`[webview]`、
+`main.js`、`assets/` 及其他运行时贡献物；不创建 runtime、不进行 handshake、不注册 host methods。
 
-pack 之所以是"真插件"而不是编排指令，是因为前端需要能对它独立地整体安装与整体卸载：只有进入
-已安装模型，marketplace 的已安装列表、卸载入口与卸载结果才有统一的承载。它的"非运行时"与
-Skill、MCP 插件同类——无进程不是无生命周期；差别只在 Skill/MCP 的贡献物在包内，pack 的
-"贡献物"是它的成员登记。
+宿主从已解析的 registry 条目复制 pack 清单，在本地形成 installed 形态并校验身份和版本。
+复制保持成员声明与普通元数据一致；pack 清单不允许包含 `marketplace_visible`，声明时在解析期
+报错，不通过复制时删字段来接受非法清单。两种形态的解析与校验由清单所有者提供，调用方不重建
+字段规则。不递归复制 registry 条目中的任意文件，也不接受源条目提供宿主安装记录。
 
-让非法组合在解析期失败（pack 带被禁止的 section、非 pack 带 `[[pack.members]]`），保持了
-清单根决策 D4"清单不能是半个两种 kind"的承诺。
+pack 的本地安装产物先于任何成员安装提交。创建失败时没有新成员需要清理；成员完成后也不再有
+“下载 pack 自身”的失败步骤。这消除了成员装好后 pack 制品下载失败造成的孤儿窗口，但本地
+写盘和状态提交仍可能失败，必须按 D5、D6 回滚与恢复，不能假定本地操作不会失败。
 
-### D2：成员用裸 `identifier` 声明，并解析在 pack 所属的同一个 Marketplace Source 内
+无下载资产对 pack 表示可本地创建，不能沿用普通 listing 的“没有可下载 release，因此不可安装”
+判定。registry 与前端须按 kind 呈现可安装性；成员兼容性仍由 preflight 判定。其他 kind 的资产
+要求和下载校验不变。
 
-`[[pack.members]]` 的 `identifier` 是 `PluginName` 形态的裸标识符；成员的完整 Plugin ID 由宿主
-组装为 `<pack 的 namespace>/<member identifier>`，成员解析永远发生在 pack 自己的源检出内。
-V1 不支持跨源成员。
+### D2：成员在 pack 所属源内解析，V1 已安装任意版本则跳过
 
-namespace 由宿主从 source canonical URL 派生并在首次绑定时持久化，作者无法预知第三方源派生出
-的 namespace（来源派生 Namespace 决策 D2/D3 的同一逻辑）：让 pack 作者书写完整 canonical ID，
-等于让不可验证的自述参与引用。裸 identifier 还使 pack 在官方源与 fork 源之间原样可用——这正是
-"fork marketplace 仓库后作为自己的源使用"的工作流所要求的。跨源引用需要成员级依赖求解与多源
-顺序语义，超出 V1 边界。
+成员使用 `PluginName` 形态的裸 `identifier`，完整 ID 由宿主组装为
+`<pack namespace>/<member identifier>`。解析只访问 pack 所属源的 registry，不依赖展示索引，
+因此隐藏成员仍可安装。V1 禁止跨源引用、自引用、重复成员和嵌套 pack。
 
-### D3：`marketplace_visible = false` 的条目不进入派生索引，但保持可解析、可安装
+namespace 由源身份派生，作者不能预知第三方源的 namespace；裸 identifier 使官方源与 fork 源
+可以复用同一份成员声明，也避免让作者自述参与宿主身份归属。
 
-`marketplace_visible` 是 release 形态的展示意图声明：`false` 的唯一语义是"该条目不作为独立
-listing 进入 marketplace 前端的浏览、搜索与详情入口"。它不表示 disabled、不可安装或不可解析——
-条目仍在源仓库 registry 中，仍可按 identifier 解析，仍可被 pack 安装，安装后是真实 Installed
-Plugin。缺省 `true`；installed 形态出现该字段直接报错（与 `[[targets]]` 不允许出现在 installed
-形态同一先例）：可见性是 marketplace listing 的属性，已落盘的包没有展示面。
+**“同一 canonical Plugin ID 已安装任意版本则跳过”仅是第一版安装行为。** 被跳过的成员不下载、
+不升级、不降级、不计为失败，也不新增归属登记。其他 namespace 中的同名插件不满足跳过条件。
+是否跟随 registry 升级、采用版本约束、同步 pack 与成员版本，均留给后续所有插件更新策略 ADR；
+本决策不把 V1 跳过规则固化为长期更新政策。
 
-过滤发生在索引构建期、生成索引条目之前，而不是投影或前端：隐藏条目不可能通过任何派生路径泄漏
-给前端，每一层消费者都不需要理解和转发一个可见性标志。索引 schema 不因此新增字段，缓存版本
-不变；旧宿主（或升级前）写出的缓存可能短暂包含后来变为隐藏的条目，到下一次同步自然清除——为
-一个无害的临时可见性去作废整份缓存、让市场在用户手动刷新前显示为空，不值得。
+### D3：新构建的派生索引排除隐藏条目，旧缓存允许刷新前暂时保留
 
-字段放在清单而不是 registry 侧的旁路元数据里，是因为索引构建与安装 resolve 解析的是同一份
-`orax.toml`；旁路元数据会让"列表里看不到"与"安装时读到的声明"成为两个可漂移的事实。命名上
-否决 `listed`（会被误读为"是否存在于 registry"——隐藏条目恰恰存在于 registry）与
-`hidden = true`（否定式默认要求读者先计算"未写即可见"）。
+`marketplace_visible` 只允许普通插件（`kind != "pack"`）的 release 清单声明，类型为布尔值，
+缺省 `true`。pack 的 release 与 installed 清单均禁止该字段，即使值为 `true` 也报错；其他
+插件的 installed 清单出现该字段同样报错。pack 条目按正常索引规则展示，不提供隐藏开关。
+普通插件声明 `false` 只控制独立 listing 展示，不控制源内解析、安装、运行或已安装列表。
 
-### D4：安装一个 pack = preflight + 顺序安装成员 + 安装 pack 自身
+过滤发生在索引构建期、生成条目之前。**按新规则成功构建并写出的索引不包含隐藏条目**，其浏览、
+搜索与详情入口自然不再产生这些 listing；不要求投影层与前端维护额外的可见性过滤副本。
 
-安装入口复用既有 `installPlugin` 契约（`pluginId` = pack 的 canonical ID）。宿主 resolve 出
-清单后发现 `kind = "pack"`，转入编排而不是直接落盘：
+索引 schema 不为该标志新增字段，缓存版本不变。旧宿主或升级前生成的缓存允许在成功刷新前暂时
+包含隐藏条目；不强制作废缓存，也不承诺历史索引从未包含隐藏条目。刷新成功后原子替换为过滤后
+的新索引；刷新失败继续保留旧缓存。隐藏不是访问控制，旧入口或已知 identifier 仍可解析条目。
 
-1. **preflight**（下载任何字节之前）：成员 `identifier` 去重校验、自引用校验（成员 identifier
-   等于 pack identifier）、逐成员在 pack 所属源内解析清单（成员不存在即失败）、成员清单
-   `kind = "pack"` 即失败（V1 禁止嵌套）、对每个成员执行纯函数的 release 选择（当前 host triple
-   不兼容即失败）。
-2. **顺序安装成员**：按声明顺序对每个成员执行既有单插件安装（下载 → SHA-256 → staging → 包
-   校验 → 原子提交，全部既有校验不变）。成员已安装（任意版本）则记为 `skipped` 并继续，不报
-   错，既有版本不被改动或降级；每个新安装的成员在提交后立即登记（见 D6）。
-3. **安装 pack 自身**：全部成员处理完毕后，pack 按既有单插件安装链路落盘到
-   `installed/<namespace>/<identifier>/<version>/`，成为真实的 Installed Plugin。
-4. **结果**：返回聚合 outcome（见 D5）；进度事件沿用现有 `plugin-install-progress`，以 pack 的
-   pluginId 发出，进度按"已完成成员数 + 当前成员内部进度，除以成员总数"聚合。
+这里的旧缓存保留限于版本与格式仍可读取的缓存；可见性过滤本身不触发作废。
+[图标资产决策](../../manifest/20260909-plugin-logo-as-themed-asset.md)规定的格式变化、版本校验与
+不可读缓存降级继续生效，不能为保留隐藏条目而绕过它们。
 
-pack 自身最后安装：pack 的安装完成即代表全部成员就绪，失败的安装不会留下"已安装但成员残缺"的
-pack；已安装成员按 D5 保留，重新安装即可补齐（见 D8）。
+字段与 release 清单放在同一事实来源，避免 registry 旁路元数据与安装解析声明漂移。
 
-顺序而非并行安装：复用单插件安装的全部原子性与错误定位，进度与失败一一对应；V1 成员数量小，
-并行的收益不值得引入并发编排。
+### D4：preflight → 创建 pack 与记录 → 顺序安装及重试 → 提交整体成功
 
-### D5：preflight 失败零下载；成员失败停止且不回滚，结果逐成员可辨
+入口复用 `installPlugin`，`pluginId` 为 pack 的 canonical ID。一次安装固定使用 preflight 时读取
+的源清单与所选成员 release，不因过程中刷新 registry 而混用不同成员集合或版本。
 
-preflight 任一失败即整包失败，返回 typed 错误且不产生任何下载与落盘。成员重复、自引用、成员
-不存在、嵌套 pack、成员与当前 host 不兼容，复用或新增封闭的 public error 变体；host 兼容性
-判定发生在 preflight 而非首个成员安装中途。
+1. **preflight**：校验 pack 与成员声明，拒绝重复、自引用、缺失成员、嵌套 pack。确定已安装
+   成员与待安装成员；对待安装成员执行 release 选择和当前 host 兼容性校验。已安装而跳过的成员
+   不因 registry 的新版本缺少当前平台资产而失败。此阶段只解析本地检出与安装状态，不下载制品，
+   不修改安装树；失败返回 typed 错误。
+2. **本地准备**：先在 pack 的 `staging/` 持久化操作身份、基线与成员计划，再从 registry 创建
+   并校验 pack 版本目录。只有 pack 安装态与恢复记录均已持久化后，才允许开始成员安装。
+   已安装模型可识别 pack，但前端显示“安装中”，不能把物理落盘当作整体成功。
+3. **顺序安装**：按声明顺序跳过已有成员，对缺失成员复用单插件的下载、SHA-256、解包、包校验、
+   原子提交与生命周期处理。每次副作用前后持久化状态；成功提交的成员立即记入本次新增集合。
+4. **有限重试**：失败成员按错误类别进行有界重试；仅重试允许重试的失败，不重装成功成员，不
+   在每次重试时重新解析一份新清单。当前成员未成功前不推进后续成员；不可重试错误立即耗尽。
+   最大尝试次数、退避与已用次数由编排策略显式提供并记录，恢复后不重置预算。
+5. **提交成功**：全部成员成功或跳过后，持久化 `installed` 及完整新增成员登记，再发布整体
+   成功结果。记录保留在 `staging/`；此后没有 pack 制品下载或第二次 pack 安装。
 
-preflight 通过后的成员安装中，任一成员失败：已安装的成员保留（每个成员的安装本身已是原子
-事务），剩余成员不再尝试，不自动回滚，pack 自身不落盘。契约 `InstallOutcome` 新增
-`PackInstalled { members, skipped, failed }`：`members` 按声明顺序携带已安装成员的
-`{ plugin_id, outcome }`（复用既有单插件 outcome 枚举，含命令别名冲突报告），`skipped` 列出
-已安装被跳过的成员，`failed` 携带首个失败成员与其错误码。用 `Ok` outcome 如实上报部分成功，
-而不是把部分成功伪装成整包失败——调用方需要知道哪些成员已装好，才能决定重试或放弃。
+进度沿用 `plugin-install-progress`，以 pack ID 关联，区分准备、成员安装、重试、回滚与完成。
+成员进度可以聚合，但不能在记录提交前显示整体成功，也不能把回滚包装为安装进度完成。
 
-### D6：新安装的成员登记进 pack 的数据目录 `data/<ns>/<identifier>/`
+顺序安装保留单插件的错误定位与提交边界；有限重试吸收暂时性失败，持久化补偿负责跨成员的整体
+失败语义。本方案不声称多个插件文件系统操作构成一次原子事务。
 
-pack 复用既有的 per-plugin 数据目录约定：成员登记写入
-`<data-dir>/plugins/data/<pack namespace>/<pack identifier>/`（即插件数据目录
-`data/<ns>/<identifier>/`）。登记按插件 ID 去重，每项携带成员的完整 Plugin ID 与安装时的
-版本；proposed 阶段以 `members.json` 固定语义，文件名与字段形状是实现细节，不构成契约。
-每个由 pack 实际新安装的成员在安装提交后立即登记；因已安装而跳过的成员不新增登记——它们不是
-pack 安装的，卸载 pack 时不属于 pack。
+### D5：重试耗尽后整体回滚，失败结果通知前端
 
-登记放在数据目录而不是 pack 安装包目录内：包目录按版本键控、随更新被整体替换，登记必须跨
-pack 版本存活；已安装树也不是插件的可写位置，per-plugin 数据目录是唯一按插件身份键控的宿主
-管理区域。登记随安装逐步写入，而不是全部完成后一次性写：安装中途失败时，已完成成员的归属
-事实不会丢失。
+任一待安装成员重试结束后仍失败，停止后续成员并持久化 `rolling_back`。按提交的逆序移除本次
+新安装成员，复用单插件卸载的生命周期清理；确认这些成员已移除后，再移除本次创建的 pack 版本
+目录，最后删除其安装记录与本次创建的空身份目录。预先已安装且跳过的插件不参与回滚。
 
-### D7：卸载 pack 只卸载登记的成员，随后移除 pack 自身
+取消安装与整体成功记录无法提交也进入相同补偿路径；宿主退出或进程崩溃不能依靠内存中的清理
+回调完成事务，而由 D6 的记录驱动恢复。取消不意味着取消必要的清理。
 
-卸载入口复用既有插件卸载。卸载 pack 的顺序固定为：读取成员登记 → 卸载 pack 自身（失败即
-中止，不动任何成员）→ 逐个卸载登记中仍存在的成员（沿用既有单插件卸载；已被用户单独卸载的
-成员直接跳过；单个成员卸载失败不阻塞其余成员，失败成员保留为普通已安装插件并在结果中报告）
-→ 删除 pack 数据目录，登记随之消失。
+卸载或文件删除也可能失败。一个成员清理失败不阻止尝试清理其余新增成员；记录保留剩余清理项，
+整体进入 `rollback_pending`。此时不能先删除 pack 及其记录、把残留成员变为无归属插件，也不能
+宣称已经回滚完成。恢复后继续清理，直到新成员与本次 pack 均移除。
 
-只卸载登记的成员是所有权语义：登记是"这个成员由该 pack 安装"的持久事实。用户在安装 pack
-之前就已独立安装的成员（安装时被跳过、未登记）不随 pack 卸载；用户在安装 pack 之后单独卸载
-过的成员自然不在登记中残留。登记不随后续 pack 版本的清单变化收缩：成员在某次 pack 更新中
-离开 `[[pack.members]]` 不等于所有权转移，它仍会随 pack 卸载移除。
+结果按整体终态区分，具体 DTO 名称在契约落地时确定：
 
-### D8：重新安装 pack 等价于补齐缺失成员
+| 结果 | 前端必须呈现的信息 |
+| --- | --- |
+| 安装成功 | pack 已安装；新安装、跳过的成员及单插件 outcome（含命令别名冲突报告） |
+| 安装失败、已回滚 | 失败成员和原因、未执行成员、已回滚成员；明确通知 pack 安装失败且新增内容已移除 |
+| 安装失败、待清理 | 原始安装错误、回滚错误、仍待移除项；明确通知安装失败且清理未完成 |
+| preflight / 本地准备失败 | 对应 typed 错误；没有成员安装，若本地准备有残留则报告待清理状态 |
 
-pack 进入已安装模型后，marketplace 已安装列表呈现 pack，卸载入口即 D7 的整体卸载。pack 条目
-的 `version` 是成员集合的内容版本，纯展示；重新安装 pack（包括同版本重复执行）合法且等价于
-补齐：缺失成员按 D4 安装并登记，已安装成员继续跳过。pack 的版本更新沿用既有更新语义（更高
-版本替换包目录、退役旧版本目录），新版本新增的成员在更新编排中补装并登记。成员被单独卸载后
-再次安装 pack 会重装该成员——这是期望行为：pack 表达的是"这套集合应该存在"，不是"曾经装过"。
+不能用 `PackInstalled` 的部分成功结果表达失败事务。通知由实际状态产生，恢复后同样须让前端
+获知失败与清理结果；只写日志不足以完成用户反馈。
 
-同版本重复执行是对既有安装入口"拒绝无操作"语义的一个显式豁免，仅对 `kind = "pack"` 成立：
-pack 的安装动作是成员编排而不仅是制品替换，"已安装"不构成"无事可做"。
+### D6：`installed/<ns>/<identifier>/staging/` 的文件承载完整状态机
 
-### D9：旧宿主对新条目的行为是确定的
+布局如下，路径均相对于 `<data-dir>/plugins/`：
 
-- **pack 条目在旧宿主上整条消失**：未知 kind 是清单根决策 D4 的显式硬错误，索引构建按既有
-  规则跳过并记 warning。这是封闭 kind 设计的既定代价；pack 消费者需要新版宿主。
-- **隐藏成员在旧宿主上仍然可见**：`marketplace_visible` 是未知字段，被旧宿主忽略，条目照常
-  进入索引。这是清单根决策 D2"未知字段忽略"对增量 schema 的既定保护。
+```text
+installed/<pack namespace>/<pack identifier>/
+  <version>/orax.toml       # 本地从 registry 创建的 installed 清单
+  staging/
+    state.json             # 示意文件名：完整状态机、成功后的成员登记
+```
 
-两者都是既有决策在新条目上的自然投影，本决策不引入版本探测、不承担对旧宿主的迁移义务。
+`staging/` 按 pack 身份键控，与版本目录同级。它是持久状态目录，不是解包临时目录；成功后不清空，
+版本退役也不能顺手删除它。该目录只由宿主安装编排写入，不向插件暴露写权限，不进入 `data/`。
+
+记录至少包括格式版本、操作 ID、pack 身份与版本、固定的成员计划、操作前基线、整体阶段、逐成员
+canonical ID 与所选版本、尝试次数和错误、提交归属凭据、安装及清理结果。成功时登记完整的新增
+成员集合，跳过成员可作为过程状态保留，但不进入卸载集合。
+
+| 整体状态 | 持久事实与允许的后续动作 |
+| --- | --- |
+| `preparing` | 计划已保存，pack 本地安装态待创建；恢复时核对落盘结果，完成准备或清理，不能先安装成员 |
+| `installing` | pack 已落盘，逐成员推进；成功后进入 `installed`，重试耗尽或取消后进入 `rolling_back` |
+| `installed` | 所有成员成功或跳过，完整归属登记已提交；可整体卸载 |
+| `rolling_back` | 只清理本次新增内容；完成后删除 pack 与记录，遇到清理失败进入 `rollback_pending` |
+| `rollback_pending` | 保存尚未完成的清理事实；恢复后继续回滚，禁止当成已成功安装 |
+| `uninstalling` | 按成功登记清理成员，再移除 pack；失败保留记录并重试清理 |
+
+逐成员状态须能区分 `pending`、`skipped`、`installing`、`retry_pending`、`installed`、`failed`、
+`removing`、`removed` 与清理失败。成员的原始安装错误和后续回滚错误分别保存，不能相互覆盖。
+
+**提交前记意图、提交后记结果。** 仅在成员提交后追加一行登记不够：进程可能在成员落盘与登记
+之间退出。成员提交必须关联操作 ID 和安装实例，恢复据此核对是否已提交；不能仅凭“该 ID 现在
+存在”就认领并删除。记录原子替换并满足崩溃恢复的持久化顺序；写入失败时停止新的安装副作用，
+保留最后有效记录以供补偿。
+
+同一 pack 的安装、恢复与卸载必须互斥；涉及成员的独立安装、更新与卸载也须经所有者协调，保证
+基线检查、提交归属和删除判定之间不被并发操作替换。多个 pack 同时请求同一成员时只能有一个
+操作认领实际新提交的实例，另一个重新检查后跳过；不能在恢复中把其他操作安装的成员当成自己的。
+
+启动时先识别非终态 pack，再恢复安装或补偿；恢复以记录中的阶段、计划与重试预算为准。状态文件
+缺失、损坏或格式未知时报告异常并保留现场，不按当前 registry 猜测归属或批量删除成员。
+
+### D7：整体卸载按成功登记清理成员，最后移除 pack
+
+正常卸载读取 `installed` 记录，持久化 `uninstalling`，逐个通过单插件卸载接口移除仍归属于该
+pack 的登记成员，最后移除 pack 版本目录和 `staging/`。成员已不存在时按已清理处理；单个成员
+失败不阻塞其余成员，但保留 pack 与记录，以便恢复剩余清理，向前端报告失败项。
+
+登记是所有权事实，当前 `[[pack.members]]` 只是作者声明，不能拿后者重建卸载集合。安装时跳过
+的成员不随 pack 卸载；成员被独立卸载时应释放其登记归属，之后独立重装的同 ID 插件不自动被
+pack 认领。删除前核对安装实例，遇到身份已被替换的情况保留插件并报告，不凭 ID 删除无关内容。
+
+正在安装或回滚的 pack 先结束或补偿当前操作，不能与正常卸载同时执行。失败回滚只移除本次新增
+集合，正常卸载则使用成功记录中的归属集合，两者不能混用。
+
+### D8：重试遵循状态机，插件更新策略留待统一 ADR
+
+未完成事务的重试是恢复同一操作，复用原计划、归属与预算；回滚完成后用户重新安装，才是从当前
+安装状态开始的新操作。两者都不能把上次未登记清楚的成员简单视为独立已安装插件而跳过清理。
+
+第一版的任意版本跳过规则不代表成员永远不更新，也不承诺 pack 的版本只是展示。原提案中“同版本
+重新安装等价于补齐”“pack 更新自动补装新增成员并永久累积登记”的规则，不在本 ADR 固定。
+成功安装后的重复安装沿用既有已安装保护；不将其默认为新的修复或更新编排。pack 及成员的版本
+更新、同版本修复、成员新增/移除后的归属迁移，由后续所有插件更新策略 ADR 统一决定。
+
+这使当前失败回滚的边界明确：本 ADR 定义首次安装所创建的 pack 与本次新增成员，不借更新流程
+删除一个操作前已经成功安装的 pack。未来更新方案必须另行定义旧版本和旧登记的恢复边界。
+
+### D9：旧缓存可保留，安装目录不能盲目改写
+
+- 旧宿主不认识 `kind = "pack"`，按封闭 kind 规则拒绝清单，索引构建跳过并记录 warning。
+- 旧宿主忽略未知 `marketplace_visible`，隐藏成员仍可进入其索引；新版读取旧缓存也允许短暂
+  保留，直到按 D3 成功刷新。两者都不影响源内解析。
+- `staging` 不是合法 SemVer，发现器必须将其识别为宿主状态目录，版本选择与退役不得扫描或
+  删除其内容。普通单插件解包 staging 与 pack 的持久 `staging/` 必须分离。
+- 创建前检测同名路径：若已存在文件、链接、未知目录或无法归属的记录，停止该 pack 安装并
+  报告可定位错误，不覆盖，不递归清空，不影响其他插件或宿主启动。只有能验证身份和记录格式的
+  自有状态才可恢复或迁移。
+- 原先使用 `data/` 的方案未经批准，本次不假设已有正式发布的成员记录需要迁移。若实现时发现旧版或试验
+  数据，必须先识别来源与格式，再定义受验证的迁移或隔离；不能将已有 pack 当作全新安装，也
+  不能把整个 `data/` 当成废弃目录删除。
 
 ## 为什么不是这些替代方案
 
 | 方案 | 否决理由 |
 | --- | --- |
-| pack 作为纯编排条目，不落盘、不进入已安装模型（本 ADR 初版方案） | 前端无法对 pack 独立整体卸载；成员归属无处登记，"卸载 pack"无从定义；已安装列表与 marketplace 状态不一致。它省去包格式的优势，不能抵消生命周期缺口 |
-| 成员登记写进 pack 安装包目录 | 包目录按版本键控且随更新被替换，登记必须跨版本存活；已安装树也不是插件的可写位置 |
-| 卸载 pack 时按当前清单的 `[[pack.members]]` 卸载 | 用户独立安装的成员会被误卸；清单是作者意图、会漂移，登记才是安装时刻的归属事实 |
-| 独立 `pack.toml` 与独立 listing 流水线 | 索引扫描、README/logo 约定、resolve 路径、前端 listing 模型都要第二套；两个条目模型漂移后"能上架"与"能安装"再次分叉 |
-| 成员引用使用完整 canonical ID | namespace 由宿主从 source URL 派生，作者不可预知；fork 源部署下所有引用都要改写，与清单不声明 namespace 的既定身份边界冲突 |
-| `marketplace_visible` 放进 registry 侧旁路元数据，由投影或前端过滤 | 索引与 resolve 读取两个事实来源，可见性声明与安装声明可漂移；每层消费者都要记得尊重标志，遗漏即泄漏 |
-| 成员并行安装 | 单插件安装的原子性与错误定位被并发编排稀释；V1 成员量小，收益不成比例 |
-| 成员失败自动回滚已装成员 | 单插件安装是独立原子事务；回滚需要新的多包事务模型，且"卸掉刚装好的可用插件"对用户是破坏性行为 |
-| 通用 plugin-to-plugin 依赖求解器 | 版本区间、拓扑排序、冲突求解是依赖系统问题；当前需求只是"一次装多个 + 整体卸载"，用编排与登记即可满足，求解器是不受支持的复杂度 |
+| 成员装好后再从 URL 下载 pack | 多出一个独立网络失败点，会留下成员成功而 pack 不存在的孤儿状态；pack 清单已在 registry，无需第二份制品 |
+| pack 仅是编排指令，不进入安装态 | 缺少统一的已安装身份、整体卸载入口与恢复锚点 |
+| 成员失败后保留已装成员并返回部分成功 | 用户请求的集合未成立，失败后的成员生命周期与归属不明确；本方案用受限重试和持久化补偿承担整体失败语义 |
+| 安装记录放 `data/<ns>/<identifier>/` | 将宿主安装事务放进插件数据生命周期，割裂 pack 安装态与恢复记录；身份级 `staging/` 可以跨版本保留而不依赖数据目录 |
+| 安装记录放 `<version>/` 或成功后删除 staging | 版本替换或临时清理会丢失成员归属，之后无法安全整体卸载 |
+| 只在成员提交后或整包成功后记录 | 提交与写记录之间的崩溃会留下不可追踪成员，无法完成可靠回滚 |
+| 先删除 pack，再尽力删除成员 | 清理失败时唯一归属和恢复记录已经消失；必须成员先清理、pack 最后删除 |
+| 用当前清单推导卸载集合 | 会误删用户预先安装的插件，并受源清单变化影响 |
+| 强制作废旧索引或逐层过滤 | 隐藏是展示偏好，允许短暂旧缓存；新构建时统一过滤即可避免多层规则漂移 |
+| 跨源引用、并行安装或通用依赖求解 | 引入多源身份、并发归属或版本约束求解，超出第一版顺序集合安装的范围 |
 
-## 不变量
+## 不变量与验收边界
 
-1. pack 安装后是真实的 Installed Plugin：进入 installed 树与已安装快照，可被列出，可被整体
-   卸载。
-2. pack 包不携带 `assets/`、`main.js` 或任何运行时贡献物；不创建 runtime、不注册 host
-   method、不获得插件进程权限。
-3. preflight 未通过时，不发生任何下载，`installed/` 与 pack 数据目录都不发生变化。
-4. 成员只在 pack 所属的 Marketplace Source 内解析；V1 不存在跨源成员与嵌套 pack。
-5. 已安装的成员在 pack 安装中被跳过且不算失败；其既有版本不被改动或降级，也不新增登记。
-6. 任一成员安装失败后，不再尝试后续成员；已安装成员保留，pack 自身不落盘，不回滚。
-7. pack 安装的结果必须逐成员可辨（已装/跳过/失败），不存在整体布尔成功。
-8. 每个由 pack 新安装的成员在安装提交后登记进 pack 数据目录；成员登记是 pack 卸载集合的唯一
-   事实来源。
-9. 卸载 pack 恰好卸载登记成员，然后移除 pack 自身与其数据目录；登记之外的已安装插件不受
-   影响。
-10. `marketplace_visible = false` 的条目不出现在任何派生索引文件中，但始终可按 identifier 在
-    其所属源内解析与被 pack 安装。
-11. 成员安装复用单插件安装的全部校验（SHA-256、staging、包校验、原子提交），不引入新的落盘
-    路径。
+1. pack 从源 registry 本地创建，不下载 pack 制品；在任何成员安装前已有可恢复的 pack 安装态。
+2. pack 无运行时贡献物，禁止 `assets/`、`main.js`、下载资产声明及 `marketplace_visible`。
+3. preflight 失败不下载制品、不修改安装树；pack 本地创建失败不启动成员安装。
+4. 成员仅在 pack 所属源内解析；隐藏成员可解析、可安装，跨源同名插件不参与跳过判断。
+5. 第一版已安装任意版本的成员均跳过，不改动版本、不新增归属；长期更新规则留待统一 ADR。
+6. 安装状态机与成功登记均在 pack 自身身份目录的 `staging/`，不在 `data/` 或版本目录中。
+7. 整体成功之前，全部成员均已成功或跳过，所有新安装成员的归属均已持久化。
+8. 成员提交与登记之间发生崩溃后仍可核对归属；重试不重复认领，恢复不重置预算。
+9. 成员重试耗尽后整体失败并回滚本次新增成员，最后移除本次 pack；跳过成员与无关文件不受影响。
+10. 回滚未完成时保留记录和待清理状态，前端收到失败通知，不将残留内容呈现为整体成功。
+11. 正常整体卸载只处理成功登记中仍归属该 pack 的成员，成员清理完毕后才移除 pack 与记录。
+12. 按新规则构建的索引不包含隐藏条目；已有旧缓存允许保留至成功刷新，刷新失败不丢弃旧缓存。
+13. 成员安装与卸载复用既有校验和生命周期；pack 本地创建不放宽成员的制品校验。
+14. 新布局不覆盖未知已有路径，不将持久 `staging/` 当作版本或临时垃圾处理。
 
 ## 本决策未解决的问题
 
-- 成员的 `agents` 字段（可选）：评审确认为必要能力——把成员标记为 agent 专属、按已安装的
-  agent 插件过滤安装集合。它涉及匹配语义、清单字段策略与"Ora 无全局当前 agent"的落地方式，
-  本决策不纳入，留待下一个追加 ADR。
-- pack 详情页与"安装前成员预览"：需要把成员的 listing 元数据经新契约暴露给前端，或为隐藏
-  条目增加另一条读取路径；留待 V1 之后的 ADR。
-- 已安装 pack 的成员分组展示（"随 pack 安装"标记）：需要登记内容经契约进入前端模型，超出
-  V1。
-- 嵌套 pack、跨源成员、成员版本区间约束：需要依赖求解语义，明确不在 V1。
+- **所有插件的统一更新策略**：版本选择、升级/降级、pack 与成员联动、同版本修复、集合变化及
+  归属迁移需要一起决策；本 ADR 只固定第一版首次安装与事务恢复。
+- **成员的 `agents` 适配声明**：需要另行决定匹配与过滤语义，尤其 Ora 没有全局当前 agent。
+- **安装前成员预览与已安装成员分组**：需要额外的成员元数据读取及前端契约，留待后续 ADR。
+- **嵌套 pack、跨源成员和版本区间约束**：属于依赖求解范围。
 
 ## 落地顺序
 
-1. **清单与索引层**：`ora-plugin-manifest` 登记 `kind = "pack"`、`[[pack.members]]`、
-   `marketplace_visible`（清单链日期决策）；`ora-plugin-registry` 索引构建过滤隐藏条目
-   （registry 链日期决策）。完成条件：pack/隐藏条目的解析、索引、resolve 行为有单元测试。
-2. **编排与契约层**：`crates/backend` 安装与卸载编排 + preflight + 成员登记 + `PackInstalled`
-   outcome；`ora-plugin-lifecycle` 数据目录复用；`ora-contracts` 与 TS 类型再生成。完成条件：
-   preflight 失败零下载、成员失败停止不回滚、登记与整体卸载的集成测试。
-3. **前端层**：marketplace 卡片对 pack 的呈现、聚合进度、已安装列表中的 pack 与整体卸载入口。
-   完成条件：安装与卸载 pack 的端到端用户路径可用。
-4. **内容层**：marketplace 仓库提交 `python-extension-pack` 及其成员条目（含
-   `marketplace_visible = false` 的隐藏成员）与 README。完成条件：真实源下完成一次完整安装与
-   整体卸载。
+1. **清单与索引**：按上述两份已批准的配套 ADR 落实 pack 无下载资产的安装语义、清单校验及
+   普通插件可见性规则。
+   完成条件：pack 声明 `marketplace_visible` 时解析失败，合法 pack 不被误判为无资产不可安装，
+   隐藏成员可 resolve；新索引过滤与旧缓存刷新边界均有验证。该阶段不改变普通插件的下载规则。
+2. **持久状态与本地安装态**：先完成布局冲突检查、原子记录、pack 本地创建和发现/清理适配。
+   完成条件：准备失败不安装成员，重启能识别非终态，版本清理不会删除持久记录。
+3. **安装、重试与补偿**：接入顺序安装、有限重试、提交归属、取消与恢复、整体卸载；通过领域
+   所有者组合接口，契约声明与生成绑定各归其主。完成条件：通过生产接口验证成功、重试耗尽、
+   提交后写记录前崩溃、回滚失败与恢复，以及并发操作和预装插件隔离。
+4. **前端与真实内容**：接入分阶段进度、整体结果和失败通知，发布无制品的 pack listing 与隐藏
+   成员。完成条件：真实源下安装、失败回滚、重启恢复与整体卸载的用户路径可用，旧缓存可刷新。
+
+以上不变量已登记为[核心用例](../../../../../test-cases/desktop/plugin/category/pack/README.md)，
+当前缺少 pack 行为的直接可执行证据，标为 `Missing`；实现时逐项补齐，不以用例文档或生成检查
+代替行为验证。配套 ADR 的核心用例分别维护在 manifest 与 registry 对应领域。
