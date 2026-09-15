@@ -149,10 +149,10 @@ enum FailurePropagation {
 
 ## 本决策未解决的问题
 
-- **while-Loop（`exit_when` 语义）**：区域机制共享，驱动源与终止判定另立 ADR。`specs/test-cases/desktop/core/workflow/region-and-loop.md` 中 Loop 专属用例（`exit_when` 上限失败）随其迁移；区域包含与轮次持久化用例保持共享。
+- **while-Loop（`exit_when` 语义）**：区域机制共享，驱动源与终止判定另立 ADR。`specs/test-cases/desktop/core/workflow/region-and-loop.md` 中 Loop 专属用例（`exit_when` 上限失败）随其迁移；区域包含与轮次持久化用例保持共享；区域内 interactive 节点"二期放开"的义务预期随本 ADR 认领（见下一条）。
 - **并行迭代**：迭代级变量隔离、在途轮的并发放行与乱序归集（账本已按轮索引，编码侧无需迁移；不变量 2 的重算承诺已与串行实现解耦）、共享 worktree 的文件边界。worktree 边界是并行 ADR 的首要立项决策——它决定并行迭代是只读批处理场景的效率优化，还是需要轮级文件隔离的执行环境工程，两者规模相差一个数量级。反馈式循环（引用上一轮产出）只能串行、批处理循环（处理独立列表项）可并行，该区分可在冻结图上静态判定，编辑器可标注。
 - **嵌套复合区域**：`iteration` 为整数列，嵌套需升级为路径形式并迁移（0 号决策已推迟，继承）。
-- **区域内 interactive 节点**：机制免费（0 号决策 D5 的停靠 + 自动续算），但"数组多长就打断人多少次"需要配套 UX（批量审核队列），且 advance × HITL × 崩溃恢复 × 取消的组合测试面在首版翻倍。v1 结构禁止，二期放开。Dify 同样不支持容器内 Human Input，这是 Ora 的差异化机会而非追赶项。
+- **区域内 interactive 节点**：机制免费（0 号决策 D5 的停靠 + 自动续算），但"数组多长就打断人多少次"需要配套 UX（批量审核队列），且 advance × HITL × 崩溃恢复 × 取消的组合测试面在首版翻倍。v1 结构禁止，二期放开；预期归属 while-Loop ADR——反馈式循环（引用上一轮产出、人工打回重改）是区域内 HITL 的自然场景，其串行语义与停靠-续算机制天然重合；若迭代区域的批量审核 UX 需先于 while-Loop 落地，另立 ADR 认领。Dify 同样不支持容器内 Human Input，这是 Ora 的差异化机会而非追赶项。
 - **失败轮重试**：v1 失败轮只记账不重跑；`retry` 与 `{iter}.last_error` 属后续。
 - **`skipped` 第三状态**：分支绕过收集目标时 v1 记为轮失败；三值判别器牵动下游 Condition 写法，留给后续。
 - **收集目标的嵌套路径**：v1 `collectSelector` 限根变量以保证 T 静态可知；嵌套路径收集需要目录跟踪对象字段的声明类型，留给后续。

@@ -88,5 +88,5 @@ D2，被打断轮的结算细节见[迭代节点核心用例](iteration-node.md)
 ### 决策依据
 
 同上决策 D5 与[迭代节点决策](../../../../decisions/desktop/core/workflow/20260915-iteration-composite-runtime.md)
-D5：v1 结构校验禁止迭代区域内 interactive 节点，机制与协调义务保留、二期放开；本用例固定
-二期放开后的承诺。
+D5：v1 结构校验禁止迭代区域内 interactive 节点，机制与协调义务保留、二期放开（预期随
+while-Loop ADR 认领，见该决策未解决条目）；本用例固定二期放开后的承诺。
