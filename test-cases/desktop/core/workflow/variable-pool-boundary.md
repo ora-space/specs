@@ -38,7 +38,7 @@
 |---|---|---|
 | 既有 `pool.set` 校验语义（未声明/错 owner/类型不符/超长即拒）在重构后不变 | 既有 `variable_pool.rs` 测试族持续通过 | `Verified`（Stage 1 重构后原样通过；新节点形态的写入路径待各自实现后补证据） |
 | Code/远程/聚合节点输出经同一校验 | 尚无直接证据 | `Missing` |
-| 迭代节点账本派生写入经同一校验路径、逐元素类型检查成立 | 尚无直接证据 | `Missing` |
+| 迭代节点账本派生写入经同一校验路径、逐元素类型检查成立 | `ora_backend::workflow::run::iteration_tests::serial_foreach_executes_every_round_and_exposes_the_ledger`（暴露变量经 `write_declared_pool_variable` 严格写入并端到端断言值与类型） | `Verified` |
 
 ### 决策依据
 

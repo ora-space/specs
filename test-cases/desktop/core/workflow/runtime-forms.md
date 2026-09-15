@@ -70,7 +70,7 @@
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
 | 非 Agent 运行时的 node-run 行 session_id 为 NULL | `ora_backend::workflow::run::engine::tests::control_node_runs_keep_their_session_id_null`（start→condition→output 全部快执行器完成的 run，所有 node-run 的 session_id 为 NULL） | `Verified` |
-| 迭代节点行（含各轮区域行）session_id 为 NULL | 尚无直接证据 | `Missing` |
+| 迭代节点行（含各轮区域行）session_id 为 NULL | `ora_backend::workflow::run::iteration_tests::serial_foreach_executes_every_round_and_exposes_the_ledger`（三轮 run 的全部 node-run 行逐一断言 session_id 为 NULL） | `Verified` |
 
 ### 决策依据
 

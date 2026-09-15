@@ -37,8 +37,8 @@
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 第 k 轮中途崩溃后恢复到第 k 轮续算，已完成轮内节点不重跑 | 尚无直接证据 | `Missing` |
-| 既有"Running 无在途节点则 resume"语义在含 Loop 的 run 上成立 | 尚无直接证据（既有 `reconcile_running_workflow_runs` 测试不含 Loop） | `Missing` |
+| 第 k 轮中途崩溃后恢复到第 k 轮续算，已完成轮内节点不重跑 | `ora_backend::workflow::run::recovery::tests::a_crashed_round_inside_a_running_iteration_is_absorbed_not_failed`（真实 boot sweep + reconcile：轮 0 已完成后崩溃于轮 1，轮 0 仅一行不重跑，轮 1 按失败结算后节点完成） | `Verified` |
+| 既有"Running 无在途节点则 resume"语义在含 Loop 的 run 上成立 | `ora_backend::workflow::run::recovery::tests::a_crashed_round_inside_a_running_iteration_is_absorbed_not_failed`（sweep 保留 Running 复合行后 `reconcile_running_workflow_runs` 经 resume 驱动 advance 续算至终态） | `Verified` |
 
 ### 决策依据
 

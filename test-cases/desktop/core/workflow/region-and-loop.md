@@ -35,7 +35,7 @@ DAG 不变量、区域边界与轮次持久化；首个复合运行时为迭代�
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| Loop Running 期间外层 ready 集合排除全部区域内部节点 | 尚无直接证据 | `Missing` |
+| Loop Running 期间外层 ready 集合排除全部区域内部节点 | `ora_application::workflow_run::engine::branch_projection::tests::outer_projection_treats_regions_as_black_boxes`（外层投影排除成员与区域行）与 `ora_backend::workflow::run::iteration_tests::region_rows_never_enter_the_outer_current_nodes_anchor`（端到端：区域行在途时 `current_nodes` 仅含迭代节点） | `Verified` |
 
 ### 决策依据
 
@@ -75,7 +75,7 @@ D1。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 六条区域校验规则各自拒绝违规图 | 尚无直接证据 | `Missing` |
+| 六条区域校验规则各自拒绝违规图 | `ora_application::workflow_run::engine::iteration::tests`（`derives_a_valid_region_from_parent_id_containment`、`rejects_a_region_without_entry_edges`、`rejects_a_member_unreachable_from_the_entry_edge`、`rejects_output_nested_composite_and_escaping_edges`、`rejects_outer_edges_targeting_members`、`rejects_parent_id_referencing_a_non_iteration_node`；第六条 maxIterations 由 `parses_iteration_config_with_defaults_and_validation` 覆盖） | `Verified` |
 
 ### 决策依据
 
@@ -153,7 +153,7 @@ D3。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 多轮执行产生带正确 iteration 的多行，且变量池解析为最新轮 | 尚无直接证据 | `Missing` |
+| 多轮执行产生带正确 iteration 的多行，且变量池解析为最新轮 | `ora_backend::workflow::run::iteration_tests::serial_foreach_executes_every_round_and_exposes_the_ledger`（三轮三行各带 iteration；`fix.output`、`iter.item`、`iter.index` 均为最新轮值） | `Verified` |
 
 ### 决策依据
 

@@ -34,7 +34,7 @@
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 空数组输入下节点立即成功且三个暴露变量为空值 | 尚无直接证据 | `Missing` |
+| 空数组输入下节点立即成功且三个暴露变量为空值 | `ora_backend::workflow::run::iteration_tests::an_empty_iterator_source_completes_with_empty_outputs`（真实 SQLite 端到端：无任何区域行、run 成功、三个暴露变量为空值） | `Verified` |
 
 ### 决策依据
 
@@ -73,7 +73,7 @@ D1 空数组语义。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| `N > maxIterations` 时启动边界失败、零轮执行、错误信息含 N 与 M | 尚无直接证据 | `Missing` |
+| `N > maxIterations` 时启动边界失败、零轮执行、错误信息含 N 与 M | `ora_backend::workflow::run::iteration_tests::a_source_exceeding_the_ceiling_fails_at_the_startup_boundary`（`continue` 策略下自身失败仍传播为 run 失败，同时覆盖下方 continue 吸收边界义务的第二行） | `Verified` |
 
 ### 决策依据
 
@@ -112,7 +112,7 @@ D1 空数组语义。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 轮开始与轮结算的原子性（含崩溃注入后重放验证无中间态） | 尚无直接证据 | `Missing` |
+| 轮开始与轮结算的原子性（含崩溃注入后重放验证无中间态） | `ora_backend::workflow::run::recovery::tests::a_crashed_round_inside_a_running_iteration_is_absorbed_not_failed`（注入进程崩溃后走真实 boot sweep + reconcile 重放：被打断轮以失败结算、已完成轮不重跑、账本与轮内行一致；轮开始/结算的单事务边界由 `workflow_run_engine/iteration.rs` 的原子操作保证） | `Verified` |
 
 ### 决策依据
 
@@ -149,7 +149,7 @@ D1 空数组语义。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 分支绕开收集目标时该轮按失败结算，陈旧池值不进入账本 | 尚无直接证据 | `Missing` |
+| 分支绕开收集目标时该轮按失败结算，陈旧池值不进入账本 | `ora_backend::workflow::run::iteration_tests::per_round_condition_decisions_settle_bypassed_rounds_as_failed`（端到端：绕开轮按 `collect target did not run this round` 失败）与 `ora_application::workflow_run::engine::node_runtime::iteration::tests::settlement_requires_the_collect_target_to_have_run_this_round`（纯函数：池中残留上一轮值也不冒充） | `Verified` |
 
 ### 决策依据
 
@@ -188,7 +188,7 @@ D1 空数组语义。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| `fail` 策略下首个失败轮终止节点与 run，后续轮不执行 | 尚无直接证据 | `Missing` |
+| `fail` 策略下首个失败轮终止节点与 run，后续轮不执行 | `ora_backend::workflow::run::iteration_tests::fail_strategy_stops_at_the_first_failed_round`（轮 1 经回调失败：迭代行与 run 失败、轮 2 零行、轮 0 提交历史保留） | `Verified` |
 
 ### 决策依据
 
@@ -229,8 +229,8 @@ D1 空数组语义。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| `continue` 策略下失败轮入账本、节点完成、三个暴露变量投影正确 | 尚无直接证据 | `Missing` |
-| 迭代节点自身失败在 `continue` 下仍传播为 run 失败 | 尚无直接证据 | `Missing` |
+| `continue` 策略下失败轮入账本、节点完成、三个暴露变量投影正确 | `ora_backend::workflow::run::iteration_tests::continue_strategy_absorbs_failed_rounds_into_the_ledger`（失败轮 error 归因入账、entries 与输入对齐、output 仅含成功轮、failed_count=1、run 成功） | `Verified` |
+| 迭代节点自身失败在 `continue` 下仍传播为 run 失败 | `ora_backend::workflow::run::iteration_tests::a_source_exceeding_the_ceiling_fails_at_the_startup_boundary`（`continue` 配置 + 超限 → run Failed） | `Verified` |
 
 ### 决策依据
 
@@ -270,8 +270,8 @@ D1 空数组语义。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 变量目录声明 `array[T]` / `array[object]` / `number` 且跨策略不变 | 尚无直接证据 | `Missing` |
-| 账本派生写入通过 `pool.set` 的逐元素类型检查 | 尚无直接证据 | `Missing` |
+| 变量目录声明 `array[T]` / `array[object]` / `number` 且跨策略不变 | `ora_backend::workflow::run::iteration_tests::exposed_variable_types_stay_fixed_across_error_strategies`（两策略下五个声明逐一断言）与前端 `packages/workflow-mock/src/variable-catalog.test.ts`（编辑器目录同一规则） | `Verified` |
+| 账本派生写入通过 `pool.set` 的逐元素类型检查 | `ora_backend::workflow::run::iteration_tests::serial_foreach_executes_every_round_and_exposes_the_ledger`（端到端断言三个暴露变量经类型化池写入后的值，含 `array[string]` 逐元素检查） | `Verified` |
 
 ### 决策依据
 
@@ -311,8 +311,8 @@ D1 空数组语义。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 跨轮不同分支选择的图上，两轮投影各自正确且互不污染 | 尚无直接证据 | `Missing` |
-| 旧 payload（无按轮字段）解析不失败 | 尚无直接证据 | `Missing` |
+| 跨轮不同分支选择的图上，两轮投影各自正确且互不污染 | `ora_backend::workflow::run::iteration_tests::per_round_condition_decisions_settle_bypassed_rounds_as_failed`（同一 Condition 三轮不同分支，按轮决策持久化、各自结算）与 `ora_application::workflow_run::engine::node_runtime::iteration::tests::the_region_round_projection_is_isolated_per_round`（轮 1 行不泄漏进轮 0 投影） | `Verified` |
+| 旧 payload（无按轮字段）解析不失败 | `ora_backend::workflow::run::iteration_tests::legacy_payloads_without_iteration_fields_parse`（旧编码单轮决策保持可读） | `Verified` |
 
 ### 决策依据
 
@@ -351,7 +351,7 @@ boot sweep 把 Running 的迭代节点行交还运行时，advance 续算。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 轮中途崩溃后按失败轮结算并续算，历史轮不重跑 | 尚无直接证据 | `Missing` |
+| 轮中途崩溃后按失败轮结算并续算，历史轮不重跑 | `ora_backend::workflow::run::recovery::tests::a_crashed_round_inside_a_running_iteration_is_absorbed_not_failed`（真实 boot sweep + reconcile：已完成轮 0 仅一行不重跑，被打断轮 1 以 `interrupted_by_restart` 结算入账本，节点完成） | `Verified` |
 
 ### 决策依据
 
@@ -387,7 +387,7 @@ boot sweep 把 Running 的迭代节点行交还运行时，advance 续算。
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 区域内 interactive 节点被结构校验拒绝 | 尚无直接证据 | `Missing` |
+| 区域内 interactive 节点被结构校验拒绝 | `ora_application::workflow_run::engine::iteration::tests::rejects_interactive_nodes_inside_the_region`（图解析期 `InvalidRegion` 拒绝并定位到违规节点） | `Verified` |
 
 ### 决策依据
 
