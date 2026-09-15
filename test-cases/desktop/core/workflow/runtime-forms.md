@@ -58,22 +58,23 @@
 ### 必须成立
 
 - 只有 Agent 运行时创建 session 并经 `bind_node_run_session` 绑定。
-- 其他运行时（聚合、Code、HTTP、远程、Loop）的 `workflow_node_runs.session_id` 保持 NULL。
+- 其他运行时（聚合、Code、HTTP、远程、迭代）的 `workflow_node_runs.session_id` 保持 NULL。
 
 ### 禁止结果
 
 - 非会话节点持有 session_id。
-- Loop 运行时为驱动区域而创建会话。
+- 迭代运行时为驱动区域而创建会话（区域内的 Agent 轮次各自由 Agent 运行时创建）。
 
 ### 验证义务与证据
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
 | 非 Agent 运行时的 node-run 行 session_id 为 NULL | `ora_backend::workflow::run::engine::tests::control_node_runs_keep_their_session_id_null`（start→condition→output 全部快执行器完成的 run，所有 node-run 的 session_id 为 NULL） | `Verified` |
+| 迭代节点行（含各轮区域行）session_id 为 NULL | 尚无直接证据 | `Missing` |
 
 ### 决策依据
 
-同上决策不变量 8 与 D2 末段。
+同上决策不变量 8 与 D2 末段；迭代运行时继承该约束，驱动区域不经会话。
 
 ## Late And Duplicate Completion Reports Are Idempotent No Ops
 

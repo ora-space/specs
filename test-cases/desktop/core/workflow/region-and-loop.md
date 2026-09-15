@@ -1,19 +1,20 @@
 # 区域包含与循环节点
 
 循环是节点的结构语义而非图上的回边：复合节点拥有一个区域，在外层投影中是黑盒。本文件守住
-DAG 不变量、区域边界与 Loop 终止保障。
+DAG 不变量、区域边界与轮次持久化；首个复合运行时为迭代节点（foreach 语义），while-Loop 的
+`exit_when` 终止用例随其 ADR 落地后迁移。
 
 ## Region Interior Nodes Never Enter The Outer Ready Set
 
 ### 风险
 
-区域内部节点泄漏进外层 ready 集合会让外层调度直接 dispatch 循环体节点，绕过 Loop 运行时的
+区域内部节点泄漏进外层 ready 集合会让外层调度直接 dispatch 区域节点，绕过复合运行时的
 迭代编号与变量作用域，产生无归属的 node-run 行与错误的 `current_nodes` 锚点。
 
 ### 前置状态
 
-- 冻结图含一个 Loop 节点，其区域由 `body` 结构边可达性推导。
-- Loop 节点行处于 Running，某轮迭代正在进行。
+- 冻结图含一个复合节点（首个实例为迭代节点），其区域由结构边可达性推导。
+- 复合节点行处于 Running，某轮迭代正在进行。
 
 ### 触发
 
@@ -39,7 +40,9 @@ DAG 不变量、区域边界与 Loop 终止保障。
 ### 决策依据
 
 [节点运行时编排决策](../../../../decisions/desktop/core/workflow/0-node-runtime-orchestration.md)
-不变量 5 与 D3。
+不变量 5 与 D3；迭代节点的落地形态见
+[迭代节点决策](../../../../decisions/desktop/core/workflow/20260915-iteration-composite-runtime.md)
+D1。
 
 ## Region Structural Validation Rejects Invalid Enclosures
 
@@ -59,7 +62,8 @@ DAG 不变量、区域边界与 Loop 终止保障。
 ### 必须成立
 
 - 六条规则各自拒绝对应违规：区域非空、无 Output、无嵌套复合节点、出边不出区域、退出边目标
-  不在区域内、`max_iterations >= 1`。
+  不在区域内、`1 ≤ maxIterations`（迭代节点语义；0 号决策的 `max_iterations` 承诺由迭代决策
+  D3 微调读法）。
 - 拒绝发生在执行前，错误信息能定位到违规节点。
 
 ### 禁止结果
@@ -75,7 +79,9 @@ DAG 不变量、区域边界与 Loop 终止保障。
 
 ### 决策依据
 
-同上决策 D3 的六条区域边界校验与不变量 7。
+同上决策 D3 的六条区域边界校验与不变量 7；第六条的迭代节点读法见
+[迭代节点决策](../../../../decisions/desktop/core/workflow/20260915-iteration-composite-runtime.md)
+D3。
 
 ## Outer Graph Remains A DAG
 
@@ -96,12 +102,12 @@ DAG 不变量、区域边界与 Loop 终止保障。
 
 - 环图仍被 `CycleDetected` 拒绝，含自环。
 - 拓扑序、可达性、闭包查询语义与重构前一致。
-- 循环表达为 Loop 节点的结构语义，不引入任何回边。
+- 循环表达为复合节点的结构语义，不引入任何回边。
 
 ### 禁止结果
 
 - 为支持循环而放宽环校验。
-- 拓扑查询在含 Loop 的图上返回区域内部与外层混合的顺序。
+- 拓扑查询在含复合节点的图上返回区域内部与外层混合的顺序。
 
 ### 验证义务与证据
 
@@ -123,8 +129,8 @@ DAG 不变量、区域边界与 Loop 终止保障。
 
 ### 前置状态
 
-- 冻结图含 Loop 节点，`workflow_node_runs` 已有 `iteration` 列。
-- 循环体节点在第 k 轮执行。
+- 冻结图含迭代节点，`workflow_node_runs` 已有 `iteration` 列。
+- 区域节点在第 k 轮执行。
 
 ### 触发
 
@@ -133,13 +139,14 @@ DAG 不变量、区域边界与 Loop 终止保障。
 ### 必须成立
 
 - 同一节点多轮执行对应多行，各带其 `iteration` 值。
-- `{loop_id}.index` 由引擎在每轮开始写入变量池，循环体模板可解析。
+- `{iter}.item` 与 `{iter}.index` 由迭代节点在每轮开始写入变量池，区域模板可解析。
 - 区域内节点输出按 selector 覆盖写，`{{#fix.output#}}` 解析为最新完成轮的值。
-- 当前轮可从区域行的 `max(iteration)` 推导，无需任何内存状态。
+- 轮次进度可从持久化行与账本重算，无需任何内存状态（v1 串行下当前轮从区域行
+  `max(iteration)` 推导）。
 
 ### 禁止结果
 
-- 轮次只存在于内存或单一 Loop 行的临时字段中。
+- 轮次只存在于内存或单一复合节点行的临时字段中。
 - 覆盖写语义被并发或恢复路径破坏。
 
 ### 验证义务与证据
@@ -150,7 +157,8 @@ DAG 不变量、区域边界与 Loop 终止保障。
 
 ### 决策依据
 
-同上决策 D4。
+同上决策 D4 与[迭代节点决策](../../../../decisions/desktop/core/workflow/20260915-iteration-composite-runtime.md)
+D2。
 
 ## Loop Fails At max_iterations Without Satisfying Exit Conditions
 
@@ -185,4 +193,7 @@ DAG 不变量、区域边界与 Loop 终止保障。
 
 ### 决策依据
 
-同上决策不变量 6 与 D4 终止条件。
+同上决策不变量 6 与 D4 终止条件。while-Loop（`exit_when`）已由
+[迭代节点决策](../../../../decisions/desktop/core/workflow/20260915-iteration-composite-runtime.md)
+D4 移至后续 while-Loop ADR（首个复合运行时改为 foreach 迭代，数组长度即轮数）；本用例随
+该 ADR 迁移，迁移前保留以记录 while 语义承诺。

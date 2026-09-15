@@ -7,12 +7,12 @@
 
 ### 风险
 
-Loop 运行时若在崩溃后无法从持久化行重建"当前第几轮、区域进行到哪"，循环要么从头重跑
+复合运行时若在崩溃后无法从持久化行重建"当前第几轮、区域进行到哪"，迭代要么从头重跑
 （浪费已完成的轮次），要么卡死在 Running。
 
 ### 前置状态
 
-- 一个 Running 的 run，其 Loop 节点行 Running，第 k 轮区域行部分完成。
+- 一个 Running 的 run，其迭代节点行 Running，第 k 轮区域行部分完成。
 - 进程在任意时刻被杀（含区域节点 dispatch 后、回调前）。
 
 ### 触发
@@ -21,9 +21,10 @@ Loop 运行时若在崩溃后无法从持久化行重建"当前第几轮、区�
 
 ### 必须成立
 
-- boot sweep 把 Running 的 Loop 行交还其运行时续算。
-- 运行时从区域行的 `max(iteration)` 推导当前轮，继续第 k 轮的调度（补齐未完成节点），不
-  重跑已 Succeeded 的轮内节点。
+- boot sweep 把 Running 的复合行交还其运行时续算（不按 `interrupted_by_restart` 一律标
+  失败，仅对复合行生效）。
+- 运行时从持久化行与账本重算轮次进度（v1 串行下从区域行的 `max(iteration)` 推导当前轮）；
+  被打断的当轮按失败轮结算后继续，不重跑已 Succeeded 的轮与轮内节点。
 - 区域内的非交互 `Pending` 行按既有 fail-closed 规则处理，不误判为可恢复。
 
 ### 禁止结果
@@ -42,7 +43,9 @@ Loop 运行时若在崩溃后无法从持久化行重建"当前第几轮、区�
 ### 决策依据
 
 [节点运行时编排决策](../../../../decisions/desktop/core/workflow/0-node-runtime-orchestration.md)
-不变量 2 与 D4 末段。
+不变量 2 与 D4 末段；迭代节点的落地语义见
+[迭代节点决策](../../../../decisions/desktop/core/workflow/20260915-iteration-composite-runtime.md)
+D2，被打断轮的结算细节见[迭代节点核心用例](iteration-node.md)。
 
 ## Interactive Nodes Inside A Region Park And Resume Through Existing Paths
 
@@ -65,8 +68,8 @@ Loop 运行时若在崩溃后无法从持久化行重建"当前第几轮、区�
 - 节点停靠 `Pending`（AwaitingInput），迭代投影 `has_in_flight` 计为在途，外层不误判 run
   结束。
 - 人工追问经既有 `begin_human_turn`/`end_human_turn` 路径，节点在 Running/Pending 间翻转。
-- 人工完成的回报经统一 sink 进入引擎，触发调度波；调度波把 Running 的 Loop 交还运行时，
-  循环自动推进决策或下一轮。
+- 人工完成的回报经统一 sink 进入引擎，触发调度波；调度波把 Running 的复合节点交还运行时
+  （advance），循环自动推进决策或下一轮。
 - 终态节点的会话只读，拒绝新 prompt。
 
 ### 禁止结果
@@ -84,4 +87,6 @@ Loop 运行时若在崩溃后无法从持久化行重建"当前第几轮、区�
 
 ### 决策依据
 
-同上决策 D5。
+同上决策 D5 与[迭代节点决策](../../../../decisions/desktop/core/workflow/20260915-iteration-composite-runtime.md)
+D5：v1 结构校验禁止迭代区域内 interactive 节点，机制与协调义务保留、二期放开；本用例固定
+二期放开后的承诺。

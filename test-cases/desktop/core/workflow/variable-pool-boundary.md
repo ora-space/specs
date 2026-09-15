@@ -11,7 +11,8 @@
 
 ### 前置状态
 
-- 变量池按冻结图声明 catalog（含 `{loop_id}.index`）。
+- 变量池按冻结图声明 catalog（迭代节点声明 `{iter}.item` / `{iter}.index`，及完成时暴露的
+  `{iter}.output` / `{iter}.entries` / `{iter}.failed_count`）。
 - 各节点形态产生输出并写入。
 
 ### 触发
@@ -22,6 +23,8 @@
 
 - 写入必须经声明的 owner；未声明 selector、类型不符、超过声明长度均使节点失败，run 终态。
 - Code 节点输出、远程子工作流返回、聚合节点选择结果全部通过同一校验路径。
+- 迭代节点完成时的暴露变量从账本派生写入，经同一校验路径；`array[T]` 的逐元素类型检查
+  对账本投影同样成立。
 - 迭代副本与聚合（预留能力）同样不得绕过。
 
 ### 禁止结果
@@ -35,8 +38,11 @@
 |---|---|---|
 | 既有 `pool.set` 校验语义（未声明/错 owner/类型不符/超长即拒）在重构后不变 | 既有 `variable_pool.rs` 测试族持续通过 | `Verified`（Stage 1 重构后原样通过；新节点形态的写入路径待各自实现后补证据） |
 | Code/远程/聚合节点输出经同一校验 | 尚无直接证据 | `Missing` |
+| 迭代节点账本派生写入经同一校验路径、逐元素类型检查成立 | 尚无直接证据 | `Missing` |
 
 ### 决策依据
 
 [节点运行时编排决策](../../../../decisions/desktop/core/workflow/0-node-runtime-orchestration.md)
-不变量 4 与 D6。
+不变量 4 与 D6；迭代节点暴露变量的声明与派生写入见
+[迭代节点决策](../../../../decisions/desktop/core/workflow/20260915-iteration-composite-runtime.md)
+D3。
