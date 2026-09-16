@@ -113,3 +113,56 @@ _Avoid_: Controller checkout, local worktree, task worktree
 周期的隔离 Git checkout。Task Workspace 与 Main Workspace 分别拥有独立的 `WorkspaceId`、
 `WorkspaceLocation` 和生命周期；删除 task worktree 不得删除或重置 main worktree。
 _Avoid_: main worktree, workspace root, task checkout as a separate identity
+
+## Node Process
+
+本节用于区分进程运行责任与上层业务身份，决策入口见
+[Node 进程运行](../decisions/node/process/README.md)。
+
+### ProcessScope
+
+`ProcessScope` 是共同控制、失联处置、资源关联和收尾的一组运行，其 `ScopeId` 不可复用。
+它不固定等于一个 Node、Workspace、worktree 路径或业务 Execution。
+_Avoid_: process group as Scope identity, workspace path as Scope identity
+
+### ProcessRun
+
+`ProcessRun` 是一次启动尝试及其受管后代，`RunId` 永久标识该次尝试。一个业务 Execution
+可以包含多个 Run；业务重试属于新的尝试。
+_Avoid_: ExecutionId as RunId, automatically restarted workload
+
+### ProcessSession
+
+`ProcessSession` 是 Node 实例以可验证授权访问运行宿主的会话，承载其观察资格与控制资格。
+它不等于插件业务会话，也不以某条物理连接的存活定义运行是否结束。
+_Avoid_: plugin session, physical connection as running state
+
+### Process Host
+
+`Process Host`（运行宿主）是一个逻辑 Node 的进程管理权威，拥有控制权、管理意图和恢复协调责任。
+它不同于承载业务编排的 Node 实例。
+_Avoid_: Node instance as Process Host, machine-wide supervisor
+
+### Scope Guardian
+
+`Scope Guardian` 是一个活跃 ProcessScope 的运行存续责任持有者，拥有该组运行的启动、I/O、
+观察和收尾事实。它不解释 Git 结果或插件命令是否达成业务目标。
+_Avoid_: legacy reaper as Scope Guardian, business result interpreter
+
+### Scope Control Generation
+
+`Scope Control Generation`（Scope 控制权代次）区分某个 scope 前后两次变更资格；旧代次撤销后
+不再有效。它不同于授权 Node 实例更替顺序的代次，也不同于运行事实版本。
+_Avoid_: Node authorization generation, fact version
+
+### Confirmed Quiescence
+
+`Confirmed Quiescence`（已确认静止）是在声明纳管范围内取得完整退出证据，并封闭后续启动／写入
+入口的清理结果。它不证明外部服务的副作用已经结束或业务操作成功。
+_Avoid_: direct process exit, business success
+
+### Best-effort Cleanup Complete
+
+`Best-effort Cleanup Complete`（尽力清理完成）表示承诺的跟踪与清理已经完成，仍不能排除未跟踪
+残留。它不同于已确认静止，也不由重试次数或等待期限到达自动产生。
+_Avoid_: Confirmed Quiescence, cleanup timeout
