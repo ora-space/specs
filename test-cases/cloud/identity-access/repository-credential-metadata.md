@@ -18,7 +18,9 @@
 （`internal/cloneauth/` 与 `internal/credentialstore/authorization.go`）与 `projects.credential_ref_id`
 权威绑定（`internal/core/repository_credentials.go`）。仍然**没有**可用的凭据执行器：授权的签发方
 （Cloud 的 `Issue`）还没有生产调用方，Node 侧认证通道未定义，因此凭据 clone 在每个执行路径上继续被
-拒绝。本文件中"元数据权威"一侧的义务多数已有直接证据，"执行绑定"一侧仍然 `Missing`。
+拒绝。本文件中"元数据权威"一侧的义务多数已有直接证据；"执行绑定"一侧在 2026-10-12 由 `internal/core`
+的定向测试补上了 Cloud 侧的准入、结算与版本冻结证据，多数由 `Missing` 升为 `Partial`，**仍缺**真实
+Store 与执行器那一段（兑换 → 执行 → 销毁）以及协议冻结后的交接故障检查。
 
 ## Credential Metadata Is The Only Authority And Secret Reference Is Not A Bearer Token
 
@@ -167,9 +169,9 @@ Project 的持久引用，以及对外错误形状。
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
 | 绑定必须成对（id 与版本同时存在或同时为空） | `core.TestAnExecutionCannotRecordHalfACredentialBindingAndRevocationLeavesItAlone`：先写入一行同时带 id 与版本的执行（证明该形态可记录），再分别尝试只带 id 与只带版本的两行，两者都必须被拒，且断言拒绝来自 `execution_credential_binding` 这个具名约束（PostgreSQL 在错误里给出约束名），从而排除"因别的原因恰好失败"。约束被删除或放宽时该测试直接失败 | Covered |
-| 轮换与冻结不重写已受理执行的绑定 | 同一测试的后半段：把引用推进版本并置为 `invalid`／`revoked_by_owner` 之后，原本记录 `credential_ref_version=1` 的执行行仍然匹配，引用侧的变更没有级联进执行记录。另有否定性核对：`clone_executions` 的全部写入点只有三处 `UPDATE`（`internal/core/clone.go`、`internal/core/credentialed_clone.go` 写 `result`，`internal/core/runtime_force_stop.go` 写 `terminated_by_force_stop_id`）与两处 `INSERT`，**没有任何代码路径或迁移改写已存在行的 `credential_ref_id`／`credential_ref_version`**。仍是 `Partial`：今天生产上没有带凭据的执行行，因此这条义务只在 schema 与守卫层面被证明，未经真实轮换 API 驱动的在途执行 | Partial |
-| 在途执行按原版本结算 | 需要真实 Store 与执行器，尚不存在 | Missing |
-| 冻结后不再签发新授权、已签发授权随到期失效 | 冻结一侧由 `integration.repository_credentials_test.go` 的归属连续性测试覆盖状态迁移。签发与到期语义仍无直接证据：授权的签发与验签本轮已实现（`internal.cloneauth`）且 Store 侧的到期与单次消费已有测试（含跨真实进程的重放拒绝与"记录损坏即读作已消费"的失败语义），但 Cloud 的 `Issue` **没有生产调用方**——它唯一的合法调用点在 `requireRepositoryAccess` 的无条件拒绝之后，因此不存在"对已冻结凭据签发授权"这条可断言的路径，也没有"已签发授权随到期失效"的端到端演练。相邻证据是 `TestResolveRejectsARevokedCredential`：即便授权本身有效，Store 也拒绝兑换已撤销凭据的秘密——这是 Store 侧的纵深防御，不等于 Cloud 侧的冻结语义 | Missing |
+| 轮换与冻结不重写已受理执行的绑定 | 同一测试的后半段：把引用推进版本并置为 `invalid`／`revoked_by_owner` 之后，原本记录 `credential_ref_version=1` 的执行行仍然匹配，引用侧的变更没有级联进执行记录。另有否定性核对：`clone_executions` 的全部写入点只有三处 `UPDATE`（`internal/core/clone.go`、`internal/core/credentialed_clone.go` 写 `result`，`internal/core/runtime_force_stop.go` 写 `terminated_by_force_stop_id`）与两处 `INSERT`，**没有任何代码路径或迁移改写已存在行的 `credential_ref_id`／`credential_ref_version`**。仍是 `Partial`：`core.TestRotatingACredentialLeavesTheAcceptedExecutionsBindingAndSettlementIntact`（2026-10-12 补，本轮实际执行）现在经**真实轮换 API**（`PUT` 把版本 1→2）驱动一条已受理执行，断言执行行的见证字节不变、`credential_ref_version` 仍为 1，并断言该执行随后正常结算；仍未消除的一半是"生产上还没有真实执行器产出的带凭据执行行"，因此不记为完整系统承诺 | Partial |
+| 在途执行按原版本结算 | **Cloud 结算侧已有直接证据（2026-10-12 补，本轮实际执行）**：`core.TestRevokingACredentialLeavesTheAcceptedExecutionAndItsSettlementIntact` 与 `core.TestRotatingACredentialLeavesTheAcceptedExecutionsBindingAndSettlementIntact` 分别在真实 `DELETE`（撤销）与真实 `PUT`（轮换）之后，断言已受理执行仍按它记录的 `credential_ref_version=1` 结算（推进基线、operation 置 `succeeded`），且执行行的结果字节与 `updated_at` 不被引用侧变更改写。**仍缺的一半**：真实 Store 与执行器那一段（兑换 → 执行 → 销毁）尚不存在，因此只升到 Partial | Partial |
+| 冻结后不再签发新授权、已签发授权随到期失效 | 冻结一侧由 `integration.repository_credentials_test.go` 的归属连续性测试覆盖状态迁移；`core.TestRevokingACredentialClosesNewCloneBindings`（2026-10-12 补，本轮实际执行）在真实撤销之后断言**新**的 clone 绑定以 `repository_credential_frozen` 在准入处被拒、执行器零调用、`clone_executions` 零行——即撤销确实关闭新绑定，且关闭发生在任何登记或派发之前。签发与到期语义仍无直接证据：授权的签发与验签本轮已实现（`internal.cloneauth`）且 Store 侧的到期与单次消费已有测试（含跨真实进程的重放拒绝与"记录损坏即读作已消费"的失败语义），但 Cloud 的 `Issue` **没有生产调用方**——它唯一的合法调用点在 `requireRepositoryAccess` 的无条件拒绝之后，因此不存在"对已冻结凭据签发授权"这条可断言的路径，也没有"已签发授权随到期失效"的端到端演练。相邻证据是 `TestResolveRejectsARevokedCredential`：即便授权本身有效，Store 也拒绝兑换已撤销凭据的秘密——这是 Store 侧的纵深防御，不等于 Cloud 侧的冻结语义。**仍缺**：Cloud 的 `Issue` 至今没有生产调用方，因此"对已冻结凭据签发授权"与"已签发授权随到期失效"两条端到端路径依旧无从断言，本行只升到 Partial | Partial |
 
 ### 决策依据
 
@@ -206,7 +208,7 @@ Project 的持久引用，以及对外错误形状。
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 既有迁移不被改写 | 尚缺显式的迁移校验和回归断言；当前依赖评审与既有迁移约定。本轮新增的 `0033_user_git_credentials.sql` 只做前向追加，`0001`／`0023` 逐字未动，但这是差异评审而非测试证据 | Missing |
+| 既有迁移不被改写 | **已有显式的校验和回归断言（2026-10-12 补）**：`core.TestTheAppliedCredentialMigrationsAreByteForByteImmutable` 把 `0001_core.sql`／`0023_repository_credential_continuity.sql`／`0033_user_git_credentials.sql` 的 sha256 钉在测试里，任何人改写这三个文件该测试即失败（本轮另用 `sha256sum` 独立核对了三点摘要，逐字一致）。仍是 `Partial`：它固定的是"当前检入的文件与钉子一致"，没有演练迁移器启动时对**已应用**迁移的校验和拒绝，且钉子与被钉的文件同仓同改——完整系统承诺仍缺这一半 | Partial |
 | 新迁移不改变既有行语义 | `integration.runtime_upgrade_test.go` 的 `TestRuntimeUpgradeOnlyBackfillsUniqueCreationEvidenceAndKeepsUnknownReferences` 断言升级不猜测 `attribution`、不重写绑定；`0033` 只增加 `name`（`NOT NULL DEFAULT ''`）与 `revoked_at`（可空）两个可加列，不需要回填，`integration.git_credentials_test.go` 的 `TestGitCredentialRevokeIsAuthoritativeAndIdempotent` 断言撤销不写语义未定义的 `deleted_at`；覆盖面仍然有限 | Partial |
 
 ### 决策依据
