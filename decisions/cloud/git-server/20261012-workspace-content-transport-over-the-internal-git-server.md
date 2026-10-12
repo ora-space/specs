@@ -289,13 +289,50 @@ Workspace 决定，请求既不需要、也不得声明自己服务哪个执行�
 3. **Git Server 骨架与镜像发布**：只读 smart HTTP、镜像的暂存—核验—原子发布、容量上限与失败清理；沙盒面向监听
    的**授权尚未启用**（此时任何沙盒请求都被拒绝）。完成条件：用真实 `git` 客户端与真实 PostgreSQL 证明只读、
    不可写、未发布镜像不可读。行为不变。
+   **代码已落地（2026-10-12），容器级测量见第 4 步**：`cloud/cmd/git-server` 默认不部署、不发布端口；沙盒面向的
+   监听只注册 `GET /mirror/v1/{name}/info/refs` 与 `POST /mirror/v1/{name}/git-upload-pack` 两条读取路径，
+   `info/refs?service=git-receive-pack` 走到同一个决定点后按"写方向不服务"被拒绝，而手写的
+   `POST .../git-receive-pack` 因为**根本没有注册这条路径**由标准库以 `404` 作答——两者都不是"写被放行"，但
+   实测表明响应**并未做到 D2 所说的"与'仓库不存在'一致"**（写路径是 `403`，不是 404；读路径的形状错误由路由
+   的 `404` 承担）。此处如实登记为与 D2 措辞的偏差，是否收紧为统一响应留待评审。`internal/mirror` 实现暂存—
+   核验—原子发布的状态机（preparing/ready/failed/revoked/destroyed），容量上限、键级锁、失败回收与孤儿扫描在
+   同一包内。生产 compose 未加入该服务，行为不变。
 4. **部署接线**：Git Server 加入 cluster 栈（默认网络 + 沙盒网络，不发布端口）；为沙盒容器挂载只含 `[http] sslCAInfo=`
    的 `clone.gitconfig` 与工作负载 uid 可读的 CA 文件。完成条件：容器内 `git ls-remote` 能对 Git Server 完成 TLS
    握手并被**拒绝**（授权未启用），证明信任链与 Node 的 Cloud 策略校验都已就位。至此仍不改变任何现有行为。
+   **隔离验收已落地（2026-10-13），部署接线未落地**：`scripts/git-read-acceptance.sh` 在三条 `--internal`
+   Docker 网络上用真实容器、真实 PostgreSQL、真实 `git` 客户端与真实 Git Server 进程跑 **29 条断言，全部通过**
+   （`29 passed, 0 failed`，退出码 0）。其中与第 4 步完成条件直接对应的是：客户端以工作负载 uid 1000 运行、
+   用 Node 的同一套环境变量与 `--config` 参数前缀执行 clone；把 CA 配置换成空值时同一次 clone 以
+   `certificate verification failed` 失败，证明生效的正是挂载进去的 CA；`http` 与 `ssh` 两种传输分别被 Node
+   自身的策略以 `transport 'http' not allowed` / `transport 'ssh' not allowed` 拒绝。**信任链与 clone 策略已就位
+   是实测结论**；把这两步接进 `compose.yaml` 属于改变部署边界，仍待裁决（见"本决策未解决的问题"）。
+   本次验收在隔离栈上以显式参数开启了读取授权并写入了镜像与克隆输入，**这些都是验收容器内的状态**：生产
+   `clone_dispatch` 仍默认关闭，Git Server 未接入生产流量，镜像存储只有单副本与本地卷（多副本见未决项）。
 5. **开启读取授权与镜像搬运**（需本 ADR 批准后进入）：Cloud 在镜像就绪后写克隆输入并钉住提交；`credentialed_clone.go`
    的仓库身份改为以 Project 的上游为准。完成条件：在隔离栈上跑通真实的 Clone → Workspace → Agent，且负向矩阵
    （D5 表）全绿。
+   **负向矩阵已在隔离验收中取得实测证据，第 5 步本身仍未进入**：授权绑定 tenant／workspace／容器／运行代次／
+   真实上游 repository／操作类型／镜像 ready 状态，逐项被真实请求触发并拒绝——同网段无沙盒身份容器 `403`；
+   另一租户访问 A 的镜像 `403`；**同租户另一 Workspace** 访问 `403`；容器与 Workspace 运行代次不符（3→4）`403`，
+   代次恢复后同一容器又能读取；准备失败、已撤销、已清理的镜像分别 `403`，而同一 Workspace 的活跃镜像照常服务。
+   写方向：客户端 push 在 receive-pack 通告处被拒 `403`，绕过通告直接 `POST git-receive-pack` 得到 `404`（该
+   监听没有注册这条路径）。拒绝的**不可区分性**也被直接测量：一个格式合法但 Cloud 没有记录的镜像摘要，与
+   "另一租户的镜像"得到**逐字节相同**的响应，因此拒绝原因只进日志、不进响应体。这里有一处**如实修正**：该
+   未记录摘要走的是 `digest_mismatch` 而不是 `mirror_unknown`——状态查询取的是**调用方所在 Workspace 自己的**
+   镜像键，摘要比对发生在容器存活与 Workspace 绑定之后、镜像状态之前，所以"库中没有这个摘要"与"这个摘要不是
+   本 Workspace 的"在实现里是同一个判定；`mirror_unknown` 只在 Workspace 自身没有可解析的镜像键时出现。
+   这不改变外部行为，但本文原先按错误码理解这处测量，现按实测更正。
+   不可用：Cloud 权威状态不可读 `503`、来源解析器不可用 `503`、Git Server 不可用则 clone 失败，三者恢复后读数
+   恢复。Git Server 日志中的拒绝原因计数为 `container_not_live 1 / digest_mismatch 5 / mirror_not_ready 2 /
+   mirror_revoked 1 / operation_not_served 2 / origin_resolver_unavailable 1 / origin_unresolvable 1 /
+   state_unavailable 1`（无 `mirror_unknown`，原因见上）。**缺的是执行侧**：真实的 Clone → Workspace → Agent
+   需要 `desktop/` 侧执行器与部署接线，本轮未做，也未以模拟测试冒充。
 6. **端到端验收与证据登记**：把 Clone → Workspace → Agent 的验收从 `Missing` 更新为实际证据，未运行项如实标注。
+   **完成条件是 Clone → Workspace → Agent，本轮未达成**：已取得的证据是上述隔离读取链路（来源解析 → Cloud
+   逐请求授权 → 只读 Git Clone）的容器级验收，执行侧的 Clone → Workspace → Agent 仍为 `Missing`。因为本 ADR
+   仍是 `proposed`，按仓库规则其核心测试用例尚未建立，故本轮的证据登记在本文内如实记录，待状态变为 `approved`
+   后再按核心用例重新登记。
 
 第 1–4 步在授权未启用时不改变任何现有行为，因此安全边界可以先于业务调用方单独评审；任何一步失败都不影响现有的
 对象存储路径与 fail-closed 语义。`desktop/` 在全部六个阶段中都不修改。
