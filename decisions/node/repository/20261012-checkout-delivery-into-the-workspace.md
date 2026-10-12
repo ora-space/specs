@@ -31,7 +31,7 @@ D2 节是需要裁决的唯一一项；其余各节记录无论选哪条通道�
 
 | # | 要求 |
 |---|---|
-| R1 | 不以 URL 持有权单独授权读取；采用受控客户端身份、逐请求服务端鉴权，或可证明等效的机制 |
+| R1 | 不以 URL 持有权单独授权读取；采用受控客户端身份、逐请求服务端鉴权，或可证明等效的机制。**已修订（2026-10-12）**：可接受的"受控客户端身份"不限于 mTLS 证书，"服务端可证明的来源容器身份 + 逐请求服务端判定"是可证明等效的机制（见不变量 13） |
 | R2 | 授权绑定 Tenant、Project、Workspace、Execution、Runtime Generation、仓库与有效期 |
 | R3 | Cloud 与 Node 的台账都不得保存可直接兑换代码的秘密 URL |
 | R4 | 服务端不可列举、不可跨执行访问；执行结束后关闭读取并清理镜像 |
@@ -158,6 +158,10 @@ T4 把取得验收的希望放在正式 [Git Server 通道](../../cloud/git-serv
 `git-access` 客户端证书只回答身份、授权逐请求读 Cloud 数据库、两个监听按网络分开、不接受口令／静态 token／匿名。
 它的 D5 规定由 **Node** 执行 Git 访问并以 `-c http.sslCert=… -c http.sslKey=… -c http.sslCAInfo=…` 出示证书，
 因此"Node 出示客户端证书"是那份决策自带的工作，不是本文新引入的信任边界。
+（**已修订（2026-10-12）**：上述 D2／D5 的客户端证书形态已被
+[工作区内容经内部 Git Server 单向下发](../../cloud/git-server/20261012-workspace-content-transport-over-the-internal-git-server.md)
+修改为"服务端解析来源容器身份 + 逐请求授权"，读方向不再要求也不接受客户端证书，`git-access` 身份不再签发；
+本段其余内容仍是对根决策的准确描述，但不再是目标通道的当前形态。）
 
 更关键的是它明确留下的下一步：D7 与"本决策未解决的问题"把**镜像上游、Node 改从 Git Server clone**
 列为需要另立 ADR 的事项，并写明它"涉及上游凭据与仓库凭据连续性"——**那正是本 Issue 的工作**。
@@ -171,7 +175,14 @@ T4 把取得验收的希望放在正式 [Git Server 通道](../../cloud/git-serv
 | 阶段 | 通道 | 授权形态 | 今天能否落地 | 前提 |
 |---|---|---|---|---|
 | **第一阶段（本文推荐先落地）** | Cloud 的只读交付端点（D2 的四条条件） | URL 中的逐次能力值 + 网络可达性 | 能：零 `desktop/` 变更、无 proto 变更、无新 effect kind | A–C 获批 |
-| **目标通道（必须并入）** | Git Server 的仓库监听：Node 以 `git-access` 证书与 `Ora-Execution-Id` 取回交付 ref | 证书回答身份、授权逐请求取 Cloud 当前状态——**不留 bearer 秘密** | 不能：等待 git-server 决策获批及其落地顺序第 1、4 步（含 Node 侧证书支持） | git-server 决策获批；其 D7 的"镜像上游"由后续 ADR 补齐 |
+| **目标通道（必须并入）** | Git Server 的仓库监听：Node 复用**现有 HTTPS clone** 取回交付 ref（**授权形态已修订 2026-10-12**） | **服务端解析的来源容器身份 + 逐请求读 Cloud 当前状态**——既不留 bearer 秘密，也不出示调用方自述标识 | 不能：等待 git-server 决策获批及其落地顺序第 1–4 步 | git-server 决策获批；其 D7 的"镜像上游"由后续 ADR 补齐 |
+
+> **已修订（2026-10-12）**：本行的授权形态原文是「Node 以 `git-access` 证书与 `Ora-Execution-Id` 取回」。
+> 该形态已被[工作区内容经内部 Git Server 单向下发](../../cloud/git-server/20261012-workspace-content-transport-over-the-internal-git-server.md)
+> 取代：证书私钥对执行 git 的身份可读，而该身份与工作负载同 uid，等于工作负载可取用；执行 ID 属调用方自述，
+> 与不变量 13 冲突。修订后由 Git Server 在服务端解析对端地址得到来源容器身份，再按 Cloud 权威状态逐请求
+> 授权，Node 侧无新增证书支持。本行的"不留 bearer 秘密"这一结论不变，且范围更大——修订后连"可传递的身份
+> 凭据"都不存在。
 
 两段的差别是**实质性的，必须摆明**：第一阶段的 URL 本身就是一个 bearer 秘密，它会落进 Node 的 clone 台账与
 Cloud 的执行记录；目标通道没有任何这一类秘密，因为它用证书回答身份、用数据库回答授权。第一阶段的缓解全部是
@@ -203,8 +214,18 @@ Cloud 的执行记录；目标通道没有任何这一类秘密，因为它用�
 | `cloud/` | `internal/core`：带凭据的 clone 派发时把 `CloneExecutionSpec.repository` 指向本次执行的交付 URL；`clone_executions` 继续记录真实仓库 | 值变更，无 schema 变更、无 proto 变更 |
 | `cluster/` | compose 增加交付端点服务与 C 导出卷（端点不发布宿主端口，只对 Node 容器可达）；setup 提供 CA 与固定配置键 | 不给 Substrate 任何卷或 Git 职责 |
 | `specs/` | 本文 + 一份承载 A 项的新决策；`20260925` 两份决策的适用性按 D2 恢复 | 不改写已批准正文 |
-| `cloud/` | **目标通道**：交付并入 Git Server 的仓库监听——镜像由 Git Server 作为只读 ref 服务，Node 以 `git-access` 证书与 `Ora-Execution-Id` 取回 | 逐条继承 git-server 决策的不变量 1–14；本文不重复设计它的鉴权 |
-| `desktop/` | **第一阶段：0 个文件**。**目标通道**需要 Node 侧出示客户端证书，那是 git-server 决策 D5 自带的工作 | 这里的 0 个文件只在第一阶段成立；目标通道的 Desktop 变更不由本文引入，也不由本文免除 |
+| `cloud/` | **目标通道**：交付并入 Git Server 的仓库监听——镜像由 Git Server 作为只读 ref 服务，Node 复用**现有 HTTPS clone** 取回（**已修订 2026-10-12**，见下方注） | 逐条继承 git-server 决策的不变量 1–14；本文不重复设计它的鉴权 |
+| `desktop/` | **第一阶段：0 个文件**。**目标通道**按本行下方注的修订形态取回，不再要求 Node 侧出示客户端证书 | 这里的 0 个文件只在第一阶段成立；目标通道的 Desktop 变更不由本文引入，也不由本文免除 |
+
+> **已修订（2026-10-12）**：上面"目标通道"两行原文要求 Node 以「`git-access` 证书与 `Ora-Execution-Id`」
+> 取回，Desktop 因此需要新增客户端证书支持。该形态已被
+> [工作区内容经内部 Git Server 单向下发](../../cloud/git-server/20261012-workspace-content-transport-over-the-internal-git-server.md)
+> 取代，理由是不变量 13 的同一条：证书私钥必须对执行 git 的身份可读，而该身份与工作负载同 uid，等于把
+> 可借用的读取权交给工作负载。修订后的形态是——读取请求**不出示任何调用方自述的标识**（含
+> `Ora-Execution-Id` 与任何 Workspace／Execution／Container／租户字段），由 Git Server 在服务端把连接的对端
+> 地址解析为**来源容器身份**，再按 Cloud 权威状态逐请求授权；Node 侧只复用既有 HTTPS clone 与部署注入的
+> CA 信任（`clone.gitconfig` 的 `sslCAInfo`）。目标通道本身（Git Server 只读服务镜像、Node 复用现有 clone
+> 取回、`desktop/` 不引入凭据执行）不变，不变量 13 与 R1 已同步修订。
 
 **无论选哪条通道，本文的不变量 1～12 都成立**，且**都不解除 fail-closed**：`repository_credential_executor_unavailable`
 继续逐位拒绝，直到 D11-B 与 D14-B 的适用义务取得直接证据（见 D7）。
@@ -459,7 +480,16 @@ Node 容器里加 sidecar（D8 理由 1）；把凭据执行搬回 Node 容器�
 
 **2026-10-12 评审的准入要求（R1–R7）——任何最终通道都必须同时满足，本文原 D3–D7 是它们的具体化：**
 
-13. 读取授权不来自 URL 持有权；由受控客户端身份与逐请求服务端鉴权给出，或给出可证明等效的机制（R1）。
+13. 读取授权不来自 URL 持有权，也不来自任何请求可自述的字段（路径、`Host`、查询串、请求头，含
+    `Ora-Execution-Id` 一类执行声明）；由**服务端可证明的来源容器身份 + 逐请求服务端判定**给出，或给出可证明
+    等效的机制（R1）。
+    **已修订（2026-10-12）**：原文写的是"受控客户端身份"，其具体化形态是 Node 出示 `git-access` 客户端证书。
+    该形态已被[工作区内容经内部 Git Server 单向下发](../../cloud/git-server/20261012-workspace-content-transport-over-the-internal-git-server.md)
+    取代：证书私钥必须对执行 git 的身份可读，而该身份与工作负载同 uid，因此工作负载可取用；改为由 Git Server
+    在**每个请求内**把对端地址向部署自有的容器状态解析，得到"这是哪一个运行中的沙盒容器"，再由 Cloud 的权威
+    状态逐请求授权。本条的实质未变——授权仍不来自调用方的自述，且仍逐请求判定；变的是"受控身份"的来源：
+    从调用方出示的秘密，变成服务端自己解析出的、调用方无法伪造的事实。相应地，R1 也不再把 mTLS 身份列为唯一
+    可接受形态（第 34 行的表述同样按此理解）。
 14. 授权绑定 Tenant、Project、Workspace、Execution、Runtime Generation、仓库与有效期；缺一项即拒绝（R2）。
 15. Cloud 与 Node 的任何台账、日志、审计记录都不保存可直接兑换代码的秘密 URL（R3）。
 16. 服务端不可列举、不可跨执行访问；执行结束后关闭读取并清理镜像（R4）。
@@ -531,9 +561,9 @@ Node 容器里加 sidecar（D8 理由 1）；把凭据执行搬回 Node 容器�
    `repository_credential_executor_unavailable`；届时先按本文实现同步前序 ADR、D14-B 与 Cloud 侧
    D11-B，再评估解禁。
 6. **并入 Git Server 通道并退役交付端点（F 项，独立验收）**：在 git-server 决策获批并落地其第 1、4 步
-   （`git-access` 身份与 Node 侧证书支持）之后，把同一份交付内容改为由 Git Server 的仓库监听只读服务、
-   Node 以证书与执行 ID 取回；**完成条件是交付端点被删除**，且 `clone_executions` 的记账口径随之收敛到
-   一个通道。这一步之前，第一阶段的 URL 能力值一直在用；这一步之后，它不存在。
+   （**2026-10-12 修订**：来源身份解析与逐请求授权，而非 `git-access` 身份与 Node 侧证书支持）之后，把同一份
+   交付内容改为由 Git Server 的仓库监听只读服务、Node 复用现有 HTTPS clone 取回；**完成条件是交付端点被
+   删除**，且 `clone_executions` 的记账口径随之收敛到一个通道。这一步之前，第一阶段的 URL 能力值一直在用；这一步之后，它不存在。
 
 保持不变的行为：`clone_dispatch` 默认关闭、带凭据的 clone 一律以
 `repository_credential_executor_unavailable` 结算、匿名 clone 与 Agent 会话链路逐位不变、旧 Desktop

@@ -1,0 +1,309 @@
+---
+status: proposed
+---
+
+# 工作区内容经内部 Git Server 单向下发：读取授权由服务端按部署自有的容器状态判定，Node 不持有任何 Git 凭据
+
+本 ADR 交付"真正的 Clone → Workspace → Agent"所需的唯一内容通道：由已获批准持有 `broker-resolver` 身份的凭据执行
+单元 C 把用户上游仓库镜像进内部 Git Server；Cloud 在镜像发布并核验之后，才把 Workspace 的克隆输入指向该镜像中
+指向目标提交的那个 ref；Node 用**既有的、匿名的 HTTPS clone 通道**执行 Clone（不出示证书、不出示凭据、不出示任何
+自述字段）；Git Server 面向沙盒的监听不接受任何请求自述，而是在**每个请求内**把连接来源向部署自有的容器状态解析，
+得到"这是哪一个运行中的沙盒容器"，再由该容器创建时由控制面写入的标签与 Cloud 的权威状态决定它只能读本 Workspace
+的镜像。关键行为变化是：内部只读读取不再需要任何客户端秘密，因此 Node 与 Agent 工作负载都不持有 Git 凭据、客户端
+证书私钥或长期令牌。影响面是 Cloud（新增 Git Server 程序与镜像发布）、cluster（Compose 接线、沙盒容器的 CA 引用、
+来源解析接口）；`desktop/` **不修改**。
+
+本 ADR 当前为 `proposed`：它记录的是尚待裁决的方案、其技术前提与替代方案，供 reviewer 在没有实现代码的情况下纠偏。
+第 1–4 阶段的落地顺序在授权开启前不改变任何现有行为，是对应的评审对象。本 ADR 不承担迁移义务：今天带凭据的 Clone
+在每条路径上都被 `repository_credential_executor_unavailable` 拒绝，不存在需要迁移的既有克隆路径，也不解除生产
+fail-closed。兼容性边界：不修改已批准决策的正文——凭据执行归 C（`node/repository/20261012-credential-executor-belongs-to-the-current-product.md`）、
+Desktop 严格只读、凭据物化不经 argv／环境（`node/repository/20261010-controlled-node-git-authentication-isolation.md` D2、D11）
+全部保持原文不变；本文只替代 `cloud/git-server/0-sandbox-scoped-git-server-over-https.md` 中"由 Node 出示 git-access
+客户端证书"的那一部分（该文同为 `proposed`）。
+
+## 继承与修改
+
+| 前序约定 | 本文处理 |
+| --- | --- |
+| [checkout 交付到 Workspace](../node/repository/20261012-checkout-delivery-into-the-workspace.md)（proposed）T4 裁决：不设中间通道、`desktop/` 保持严格只读、生产 fail-closed 不解除 | 继承 T4 的实质：仍然不修改 desktop、仍然 fail-closed、不引入临时过渡通道；修改其 R1／不变量 13 的措辞——"读取授权由受控客户端身份给出"改为"由服务端可证明的来源容器身份 + 逐请求服务端判定给出"（D3、D5） |
+| [Git Server 根决策](0-sandbox-scoped-git-server-over-https.md) D1：Cloud 仓库中的独立程序，只提供 smart HTTP | 继承，不变（D1） |
+| 同上 D2：认证只认沙盒的 git-access 证书 | **修改**：沙盒面向的读监听不要求也不接受客户端证书；认证目标由服务端解析来源容器得出，`git-access` 身份不再签发（D3）。该修改由本次裁决"Node 不持 git-access 客户端证书私钥"直接要求 |
+| 同上 D3：每个请求按证书目标、声明的执行与 Cloud 当前状态判定 | **修改**：读方向不再接受 `Ora-Execution-Id` 一类声明执行的请求头作为授权输入；判定目标只由解析出的 Workspace 决定（D5） |
+| 同上 D5：Node 执行 Git 访问，经 `-c http.sslCert/sslKey/sslCAInfo` 与 `-c http.extraHeader` 传入证书 | **修改**：Node 不执行任何带凭据或带身份的 Git 访问；内部只读通道不带凭据、不带证书、不带 header（D4、D7、D9） |
+| 同上 D6：两个监听，仓库监听只面向沙盒网络，ref 查询监听只面向默认网络 | 继承（D2、D10） |
+| 同上 D7：本阶段不改与用户上游仓库的关系 | **修改**：本文正是该文"本决策未解决的问题"里挂起的"镜像上游、Node 改从 Git Server clone"那一篇；上游凭据仍只由 C 持有，用户上游的写方向仍不开放（D1、D8） |
+| [受控 Node 的 Git 认证隔离](../../node/repository/20261010-controlled-node-git-authentication-isolation.md)（approved）D1–D4、D11 与不变量 1–13：W／C／M 三身份、凭据只对 C 开放、物化不经环境与 argv、`repository identity` 决定范围 | 继承，原文不变。本文不新增任何凭据、任何物化位置、任何身份；内部通道不物化秘密（不变量 7） |
+| [凭据执行器归属](../../node/repository/20261012-credential-executor-belongs-to-the-current-product.md)（approved）D1、D2：C 是当前产品内的独立部署单元；Desktop 严格只读、不承载凭据执行 | 继承，不变：镜像上游的带凭据 Git 执行仍然只属于 C，且发生在 C 自己的容器里（D1、D2） |
+| [Secret Store](../identity-access/20261010-user-managed-git-secret-store.md)（approved）D3：只有服务身份可兑换，单次授权、原子消费 | 继承，不变 |
+| [模型客户端身份](../../cluster/sandbox-server/20261010-model-client-identity-replaces-shared-model-key-injection.md)（approved）D1、D2：按租户、Workspace、代次另签 `clientAuth` 身份，材料只作 Docker 私有启动材料、由 entrypoint 存入管理 tmpfs | 该决策本身不变；本文**不使用**同一机制承载 Git 读取，理由见 D4 与"为什么不是这些替代方案"：该材料必须对执行 git 的身份可读，而该身份与工作负载同 uid |
+| [仓库凭据连续性](../project/20260927-repository-credential-continuity.md)（approved）D4：执行端真正按引用选择，不回退全局静态凭据 | 继承：镜像路径同样不接受口令、静态 token 或匿名访问上游（不变量 9） |
+| [Node 的最小 clone 执行契约](../../node/repository/20260918-minimal-clone-execution-contract.md)与 Node Cloud 策略：只允许 HTTPS，禁止 SSH 与静态凭据 helper | 继承，不变；本文不新增任何凭据来源，反而删去了一种（D9） |
+| [沙盒网络与 Docker 标签解析器](../../cluster/sandbox-server/0-docker-label-resolver.md)、[Agent 运行沙盒环境](../../cluster/sandbox-server/20260928-agent-run-sandbox-environment.md)：沙盒网络是非 internal bridge，容器不发布端口，控制面按标签解析沙盒 | 继承，并把它从"用于路由"扩展到"用于读取授权"（D3、D10） |
+
+## 决策
+
+### D1：内容通道只有一条，方向单一
+
+C 以受控凭据从用户上游仓库取得内容，发布为内部 Git Server 上的不可变镜像；Cloud 把 Workspace 的克隆输入指向该
+镜像；Node 用现有 HTTPS clone 执行 Clone，内容落到 Workspace 卷；Agent 的会话工作目录就是该检出（`CheckoutDirectory::workspace_cwd`
+把 workspace cwd 与 home 都指向 checkout）。除此之外没有第二条通道：不新增对象存储路径，不让 Agent 直接访问外部
+私有仓库，不为本功能修改 `desktop/`。
+
+为什么只要一条：读取授权需要且只需要一个判定点。通道越多，"谁能读什么"就要在越多地方保持一致；而今天唯一的
+替代路径（把上游凭据交给工作负载）已被已批准决策禁止。代价如实记录：每个 Workspace 的 Clone 都要先经过一次
+镜像，即使同一 Project 的第二个 Workspace 也要等镜像发布完成（缓解方式见 D6 的键复用）。
+
+### D2：镜像的写入方只有 C；沙盒面向的接口没有写权限
+
+- 镜像的创建与更新只由 C 完成——它已是被批准持有 `broker-resolver` 身份、独立部署、独立授权、独立审计的执行单元。
+  Git Server 不持有上游凭据，也不代表用户对上游做任何写操作。
+- 沙盒面向的监听只实现 `git-upload-pack`（读取）：`info/refs?service=git-receive-pack` 与 `git-receive-pack` 在该
+  监听上**没有路由**，响应与"仓库不存在"一致。内部交付接口不因为"来源是沙盒"而获得任何写权限，也不因为"来源是
+  本 Project 的 Workspace"而获得任何写权限。
+- 写方向（把成果推回内部仓库或用户上游）仍属 `node/repository/20261012-push-execution-authority.md`（proposed）
+  的范围，本文不放行、不预判其身份方案。
+
+为什么把写权限从内部通道彻底移出：只读接口一旦能写，D3 的来源判定就从"读范围"变成"写范围"，一次判定错误即可
+改写镜像，而镜像又被当作可信的克隆源。把写面留给独立路径，使本文的失败后果上界是"读到不该读的内容"。
+
+### D3：读取身份来自部署自有的容器状态，不来自请求
+
+规则：请求到达沙盒面向的监听时，服务端取连接的对端地址，在**同一次请求内**向部署自有的容器状态解析三件事——
+该地址当前是否属于一个 `running` 的沙盒容器、该容器在本网络上的地址、以及该容器创建时由控制面写入的标签
+（`space.ora.workspace.id`、`space.ora.sandbox.id`、`space.ora.effect.id`、`space.ora.sandbox.atespace`）。
+解析结果给出 Workspace；租户与 Project 由 Cloud 的权威状态给出（Workspace → Project → Tenant）。请求的路径、
+`Host`、查询串与任何请求头都**不参与**身份判定（路径只用于在已授权的范围内定位资源，见 D5）。
+
+标签字面量已收敛到 `sandbox-server/internal/labels` 一处：它们同时被路由解析、生命周期与本文的读取授权读取，
+所以是授权输入而非装饰，重命名或增加必须是一次改动被所有读者看到。四个标签必须全部存在且非空——缺少任一个即
+"这不是控制面创建的沙盒"，而不是"租户为空字符串"。注意 `space.ora.effect.id` 与 `space.ora.sandbox.id` 今天由
+生命周期写入**同一个值**，因此两者不是彼此独立的证据。
+
+为什么这在本次部署的具体形态下是可证明的，而不是"凭来源 IP 推断租户"（以下为只读核对的技术事实）：
+
+1. **沙盒容器无法伪造源地址。** 容器由 `sandbox-server` 创建，创建体把能力集合固定为 `CapDrop: ["ALL"]` 加
+   `CHOWN、DAC_OVERRIDE、FOWNER、SETUID、SETGID、KILL`，并设 `no-new-privileges:true`
+   （`sandbox-server/internal/docker/docker.go` 的 `CreateContainer`）。集合中**没有 `NET_RAW` 与 `NET_ADMIN`**，
+   因此容器内任何进程——包括以 root 身份运行的进程——都无法打开原始套接字、无法修改接口地址或 MAC、无法绑定
+   非本地地址。对端地址是内核给出的、容器无法选择的值。
+2. **容器不发布端口，且请求不经 NAT。** `ContainerSpec` 的注释即写明容器"never publish ports"，只在一个具名
+   bridge 网络（`${ORA_SANDBOX_NETWORK:-ora-sandboxes}`，由 `Taskfile.yml` 的 `docker network create` 创建）上；
+   同一网段的容器与服务之间是直接 L2 交付。因此服务端看到的是该容器自己的地址，而不是网关地址。
+3. **标签是控制面写的，容器改不了。** 容器标签在创建时由生命周期写入（`sandbox-server/internal/lifecycle/effects.go`），
+   容器自身没有 Docker API 访问权，改标签等价于取得部署 root。
+4. **解析必须实时。** 地址由 Docker 从池中动态分配，容器重建后会被复用，因此每次请求都重新解析、不缓存、不落
+   一张"地址 → Workspace"的表。`sandbox-server/internal/route/docker.go` 的既有解析器就是同一原则（每次查询都
+   重新问 Engine，注释写明 "Nothing is cached"），本文沿用它的形态而不是新造一套。
+
+必须拒绝（且不得静默放行）的情况：地址解析不到容器；解析到已停止的容器；解析到不是沙盒容器的部署服务；容器标签
+的 Workspace 与 Cloud 状态不符；对端地址是网关地址（说明请求经过了 host 端口发布或 NAT 路径）。因此本判定**不依赖
+L2 隔离**：即便沙盒网络今天是非 internal bridge、沙盒可达同网的其他服务，判定也只看"地址 → 运行中的容器"，并
+在解析失败时拒绝。
+
+已实测的两条具体事实（2026-10-12，隔离网络上的真实容器）：
+
+- **已停止的容器永远不会按地址被解析到。** Engine 在容器离开网络时清空其地址，`/containers/json` 为停止的容器
+  报告空地址；因此"解析到已停止的容器"在实现上表现为"解析不到容器"，两者都必须拒绝。
+- **对端地址是网关地址时无法解析。** 从宿主或经 NAT 到达的连接，服务端看到的对端是网桥网关（实测为
+  `172.24.0.1`），它是网络自身的地址而非任何容器的地址，因而必然落进"解析不到容器"。这条同时说明：为沙盒面向的
+  监听发布 host 端口不会让请求"看起来合法"，它只会让请求变成不可解析。
+
+已知残余，必须在评审中看见（不由本文解决）：
+
+- **部署服务与沙盒容器共用同一条网桥。** 实测主栈的 `ora-sandboxes` 上除了 8 个沙盒容器，还有 controller、
+  sandbox-server、objectstore、plugin-fixture；它们带有 Docker 默认能力集合（**含 `NET_RAW`**），且
+  sandbox-server 按设计挂载 Docker socket、objectstore 发布了端口。也就是说，"同网桥上没有任何进程能伪造源地址"
+  这条更强的性质在今天的部署里**不成立**；成立的只是"沙盒工作负载不能伪造"（8 个沙盒容器全部通过断言）。
+  本文的可证明性因此以"控制面本身处于信任边界内"为前提——把解析放在已持有 Engine 客户端的 `sandbox-server`
+  （D10）本就承认了这一点，因为能创建容器的组件已经能创建带任意标签的容器。这一残余必须被如实登记，而不是表述为
+  隔离；收紧部署服务的能力集合属于 cluster 栈的改动，不在本文范围。
+- **被信任的调用方自述了"对端地址"。** 观测连接对端的是 Git Server，它把地址报告给 `sandbox-server`；身份不是
+  调用方自述的（由部署自有状态解析），但**地址本身**是。一个被攻破或有缺陷的 Git Server 可以就任意地址提问，
+  进而把别的容器的身份当成自己的。调用方已由管理监听的 mTLS 身份固定（见 D10），因此这条残余等价于"Git Server
+  的完整性"，但它确实存在：唯一能彻底消除它的形态是让 `sandbox-server` 自己终结沙盒面向的连接（即把只读读取
+  代理进它自己的进程），本文不采用，因为它把内容通道的吞吐与可用性也压进同一个信任根，代价更大。
+
+### D4：不可伪造性是一条必须固化的前提，随容器能力集合一起被验证
+
+- 规则：沙盒容器的能力集合（drop ALL 加上述六个，其中**不得**出现 `NET_RAW`／`NET_ADMIN`）、`no-new-privileges`，
+  以及"不发布端口"，从"某一行创建参数"提升为**受保护前提**：任何放宽都必须先修订本文并同步修改 D3 的判定。
+- 为什么：D3 的可证明性完全建立在这条之上。今天它不是不变量，只是一行参数；若某次改动为了别的功能把 `NET_RAW`
+  加回，来源身份会在无人察觉的情况下变成可伪造。
+- 验证义务：检查必须能对**实际创建的容器**断言该能力集合（例如对 `docker inspect` 的 `HostConfig.CapDrop`／`CapAdd`／
+  `SecurityOpt` 断言），而不是只断言源码常量。该检查已实现为 `sandbox-server/cmd/premise-check`：它按网桥列出容器、
+  逐个读取宿主配置，把"带沙盒标签的工作负载"与"部署服务"分成两类，工作负载违规即退出码 1。它断言的不止能力集合：
+  还要求 `CapDrop` 含 `ALL`、`SecurityOpt` 设置 `no-new-privileges`、没有发布端口、没有挂载 Docker/containerd socket
+  （挂载 socket 即可创建一个带任意标签且带 `NET_RAW` 的容器，等价于绕过本条）。读取真实容器立刻暴露了两件源码常量
+  断言不会暴露的事：Engine 把能力名回读为 `CAP_CHOWN` 而创建请求写的是 `CHOWN`（直接比较字面量会把合规容器报成违规），
+  以及部署服务与沙盒容器共用同一条网桥（见 D3 的已知残余）。
+- 同时禁止：不得为沙盒面向的 Git Server 监听做 host 端口发布，也不得经 host 转发——那会把来源变成网关地址，
+  使判定必然失败（拒绝而非放行）。
+- 已知代价：本文因此把一个网络安全属性变成了一条产品级约束，未来任何"给沙盒加能力"的改动都多了一道评审门槛。
+  这是此方案为"不需要任何客户端秘密"所付的代价。
+
+### D5：逐请求授权，且判定只用到三样事实
+
+Git Server 在不持事务的只读查询中，依据 Cloud 数据库的当前状态判定：
+
+1. 解析出的容器是当前存活的沙盒，其沙盒实例是 Cloud 记录里该 Workspace 的当前实例（旧代次、已终止、已强停的实例
+   拒绝）；
+2. 请求定位到的 Project 属于该 Workspace——路径中的标识只用于**定位**，不用于授权：不匹配即拒绝，匹配也不因此
+   获得任何额外权限；
+3. 要读的 ref 属于该 Workspace 本次克隆已核验的镜像与提交。
+
+| 情况 | 响应 |
+| --- | --- |
+| 判定通过 | 交给 `git http-backend`（只读） |
+| 任一条件不满足 | `403`，不含细节；"仓库不存在"与"无权访问"返回相同响应 |
+| 来源无法解析为运行中的沙盒容器 | `403`，不区分与上一条 |
+| Cloud 状态不可读或查询超时 | `503`，不放行 |
+
+为什么不再使用 `Ora-Execution-Id` 一类声明执行的请求头（对根决策 D3 的修改）：读方向的目标完全由解析出的
+Workspace 决定，请求既不需要、也不得声明自己服务哪个执行；把授权建立在调用方自述的字段上，等于把授权交给调用方。
+
+### D6：镜像的键、上限、保留、销毁、失败清理、孤儿回收与并发
+
+- **键**：`(project, 上游仓库的规范化身份, 提交)`。镜像内容不可变，发布之后不再改写；同一 Project 的第二个
+  Workspace 复用同一键的镜像，不重复搬运。
+- **上限**：单个镜像在镜像阶段即有字节上限，超限是**终态失败**——不重试、不部分发布。存储卷总量与每租户配额
+  同样在发布前判定。
+- **保留与销毁**：镜像在"被存活 Workspace 或待结算的克隆执行引用"期间保留；最后一个引用消失后再经过宽限期才
+  销毁。Workspace 终结时不立即删除镜像，避免同一 Project 的下一代会话重复搬运；但读取权限随容器消失立即关闭
+  （不变量 13）。
+- **失败清理**：镜像先写入暂存路径，核验（对象完整性、目标提交存在、ref 唯一且只指向该提交）通过后**原子发布**
+  （rename 或等价的唯一性操作）。未核验的镜像永不进入可读集合；半成品不留成可读仓库。
+- **孤儿回收**：回收器以 Cloud 的权威引用对账存储上的镜像，只删除超过宽限期且无引用的对象；对账绝不依据 Git
+  Server 自己的记忆或本地记录。
+- **并发**：同一键的发布以排他锁串行化；并发产生的第二个请求等待，或直接复用已核验的同一镜像，不产生两份可变副本。
+
+### D7：Cloud 只在镜像就绪后写克隆输入，并钉住精确提交
+
+- Workspace 的克隆输入（记录中的 `repositoryUrl` 与 `requestedRef`）只在镜像已发布并核验之后写入；`requestedRef`
+  钉到该镜像中指向目标提交的那个 ref。镜像不含其他 ref，因此"不存在的分支"与"已经移动的分支"都不可能被克隆，
+  克隆结果对同一 Workspace 是确定的。
+- 派发侧的既有不变量沿用、不改：`internal/core/workspace_clone.go` 的 `dispatch_conflict` 要求派发输入与实际记录的
+  `repositoryUrl`／`branch` 逐字相等，`internal/controlgrpc/execution_codec.go` 的 `CloneSpec` 就从这条记录生成。
+  于是 Node 只可能克隆 Cloud 记录过的镜像地址，**上游地址从不出现在这条记录里**，Node 无法被指向上游。
+- **必须同步修改的一项**：`internal/core/credentialed_clone.go` 今天用 `w.S("repositoryUrl")` 规范化出"要绑定哪个
+  仓库"（`normalizeRepositoryScope` 与 `cloneauth.CanonicalRepository`，同时是 scope 比对与授权绑定的来源）。
+  一旦该字段变成镜像地址，凭据授权就会绑定到**镜像**而不是用户的上游仓库，授权会指向错误的仓库身份。因此 C 侧
+  的授权与 scope 校验必须改为以 Project 的上游仓库身份为准。这是安全相关的必改项，不是可选项。
+
+### D8：内部只读通道与外部 Push 是两条独立路径
+
+- 内部：只读、无凭据，方向是 C → 沙盒。
+- 外部：把成果推回用户上游仍是 proposed 的 push 执行授权范围，凭据由 C 持有，不经本文通道。
+- 内部通道的任何"顺带"扩展（例如让沙盒直接 push 到内部仓库，或让内部仓库成为上游的写代理）都被拒绝：那会把
+  只读接口变成写入面（D2），并把上游凭据的作用面扩大到容器。
+
+### D9：部署接线——服务端信任只经既有的 `clone.gitconfig` CA 入口
+
+- Node 侧现状（只读核对）：Cloud 策略只允许部署 gitconfig 出现 `[http] sslCAInfo=`（`desktop/apps/ora-node/src/repository/config.rs`
+  的 `validate_cloud_policy`），镜像里该文件的默认内容只有注释，并明说"要加 HTTPS CA 引用就挂载替换件"
+  （`desktop/docker/clone.gitconfig`）；`GIT_CONFIG_GLOBAL` 指向该文件。因此"信任内部 Git Server 的 CA"是**既有的、
+  受支持的**接线方式，**不需要修改 desktop**。
+- CA 必须是工作负载 uid 可读的普通文件（git 以工作负载 uid 运行、基础环境为空），不能用 `/run/ora`：该目录是
+  root 拥有的 `0700` tmpfs，其内文件 `0600`，工作负载 uid 既不能遍历也不能读取。
+- Node 的 clone 配置里不得出现任何凭据键、证书或 header；`sslCAInfo` 是唯一新增项。
+
+### D10：来源解析所需的最小权限
+
+- Git Server 不直接持有 Docker Engine 访问权。来源解析由 `sandbox-server` 提供：它本来就持有 Engine 客户端、本来
+  就按标签解析沙盒（`internal/route/docker.go`），新增的只是一个"按地址解析"的只读查询，走既有的管理监听与既有
+  的 mTLS 调用方身份。接口形态（已实现，`internal/origin`）：`GET /origin/v1/resolve?address=<IPv4>`，挂在与
+  `/effects/{id}` 同一个管理监听上，因此继承该监听的 `ClientCAs` 与固定调用方叶子证书；调用方身份只从 `r.TLS`
+  读取，且处理器自身再断言一次"连接确实带着已验证的客户端身份"，以免被误挂到没有 mTLS 的监听上。默认**关闭**：
+  只有显式加 `-origin-resolve` 才挂载该路径，未启用时监听上的行为与今天逐位一致。
+- 调用方身份的现状与后续义务：管理监听固定的那个叶子文件今天叫 `controller.pem`，内容是 Controller 的身份。启用
+  本接口前必须让它指向 Git Server 自己的身份（或在同一监听上再加一条独立的固定项），否则等于把 Controller 的
+  身份发给 Git Server，把两个角色合并。这一步属于第 4 阶段接线，不在解析接口本身。
+- 为什么：让一个新服务拿到 Engine 访问权，等于把"能创建容器、能给容器打标签"的能力再发一份；而标签正是 D3 的
+  授权依据。把解析放在已经拥有该能力、且已被当作信任根的组件里，新增面最小。承认的代价：Git Server 因此依赖
+  `sandbox-server` 的可用性，它不可用时读请求失败（拒绝，不放行）。
+
+## 不变量
+
+1. 沙盒容器不持有 `NET_RAW`／`NET_ADMIN`，保持 `no-new-privileges`，且不发布端口；这是来源身份可证明的前提（D4）。
+2. 读取授权不来自 URL 的持有权，也不来自任何请求可自述的字段（路径、`Host`、查询串、请求头）。
+3. 每次请求都重新解析来源；不缓存"地址 → Workspace"的映射，也不把它落库。
+4. 沙盒面向的监听只提供 `git-upload-pack`；内部通道没有写权限。
+5. 跨 Workspace、跨租户、旧代次、已停止容器、不可解析来源与匿名请求一律拒绝，且不区分"不存在"与"无权"。
+6. 镜像在被读取期间不可变；被克隆的 ref 只指向已核验的目标提交。
+7. 本通道不产生任何新的客户端秘密：Node 与工作负载都不持有 Git 凭据、客户端证书私钥或长期令牌。
+8. 未核验或未完成发布的镜像永不对外可读；镜像销毁不早于其最后一个引用消失并经过宽限期。
+9. 镜像的可用性不改变 fail-closed：镜像未就绪、Git Server 或 `sandbox-server` 不可用、Cloud 状态不可读时，相关
+   克隆被拒绝，不退化为匿名访问上游，也不回退静态凭据。
+10. 客户端证书、执行声明（`Ora-Execution-Id` 一类）、Basic／Bearer 与匿名访问都不是本通道的认证方式。
+11. 来源身份只到容器粒度：工作负载与 git 共享网络命名空间与 uid，因此本容器内的任何进程都能读本 Workspace 的
+    镜像。这是已知缺口（与凭据路径记录的同类缺口同源），不由本文解决，也不得在文档与提交说明中表述为隔离。
+12. Git Server 重启不改变任何判定；它不保存授权副本，状态变化在下一个请求生效。
+13. Workspace 终结（容器消失）即关闭读取；镜像的物理销毁另外遵循 D6 的保留与宽限期。
+
+## 为什么不是这些替代方案
+
+| 方案 | 取舍 |
+| --- | --- |
+| Node 出示 git-access 客户端证书（根决策 D2／D5 的原方案） | 身份最强，且有既有的按代签发先例；但私钥必须对执行 git 的身份可读，而该身份就是工作负载 uid，因此工作负载可窃取（原 D5 已自认此缺口）；还要把证书经 `-c http.sslCert/sslKey` 传进 argv，与已批准 D11"不经 argv 或环境传递"直接冲突；并需要修改 `desktop/` 的 `validate_cloud_policy` 与 `constrain`。收益为零：粒度仍然是容器。否决。 |
+| 复用 WSS 服务端证书 | 少签一张证书；但已批准的模型客户端身份决策已否决双用途，且同样要求把私钥交给工作负载 uid。否决。 |
+| 请求头或调用方陈述的字段（如 `Ora-Execution-Id`） | 实现最省；但沙盒内任何进程都能自造，等于把授权交给调用方，本次裁决已明确禁止。否决。 |
+| 只按来源地址判定，不约束容器能力集合 | 实现最省；但容器一旦拿到 `NET_RAW` 即可伪造源地址，属于"未经证明的来源 IP"。否决——这正是 D4 把它提升为前提的原因。 |
+| 为每个 Workspace 建独立网络，身份来自网络成员关系 | 不依赖能力集合，网络层不可伪造；但要给沙盒生命周期增加网络创建与销毁、每容器多网络接入，Engine 与 iptables 状态随 Workspace 数增长，且仍需要一个实时解析步骤。作为 D4 前提被破坏时的**唯一回退**保留，本文不采用。 |
+| 把镜像放进 Workspace 卷，Node 从本地路径克隆 | 完全不需要网络身份；但克隆目标只支持 HTTPS（`crates/node-protocol/src/domain/repository.rs` 的 `CloneRepositoryUrl::parse`），走本地路径必须修改 `desktop/`。否决。 |
+| Git Server 直接读 Docker Engine 自行解析来源 | 少一个接口；但把 Engine 访问权多发一份，而标签正是授权依据，新增面更大（D10）。否决。 |
+| 让 Agent 或沙盒直接访问外部私有仓库 | 少一次搬运；但等于把上游凭据交给工作负载，违反已批准隔离决策。否决。 |
+| 在 Git Server 前面加一个 per-Workspace 代理，由代理以部署身份转发 | 代理可以携带部署凭据，容器不持秘密；但代理自己仍要回答"进来的连接是本 Workspace 的哪一个容器"，问题原样存在，只是多了一个进程与一条链路。否决。 |
+
+## 本决策未解决的问题
+
+- **写方向的身份与授权**：把成果推回内部仓库或用户上游仍属 `20261012-push-execution-authority.md`（proposed）；
+  本文不放行任何写。该 ADR 同样需要把"声明执行 ID"改为服务端可判定的输入，否则会重复本文已否决的形态。
+- **会话级读取窗口的收束**：Agent 会话期间镜像必须保持可读（否则 `git` 命令无法工作）；更细的"执行结束后立即
+  关闭读取"留给后续 ADR，本文只做到"Workspace 终结即关闭"。
+- **镜像 ref 与 Revision 交付 ref 的命名空间**：同一 Git Server 同时承载只读镜像与交付 ref 时，两套 ref 的命名
+  空间、配额与 GC 策略如何合并。
+- **镜像的深度**：是否保留完整历史、是否支持子模块与 LFS。本文只要求"目标提交及其所需对象可用"。
+- **镜像记录存放在哪里**：为了判定"镜像已就绪"与孤儿回收，Cloud 侧需要一份权威记录（新表或既有表的列），
+  这很可能带来一次 migration；本文只指出需要，不决定形态。
+- **部署服务与工作负载共用网桥的残余**：见 D3 的已知残余。要么接受"控制面在信任边界内"，要么收紧
+  `ora-sandboxes` 上部署服务的能力集合与 socket 挂载——后者是 cluster 栈的改动，且与 `sandbox-server` 必须持有
+  Engine 客户端这一事实直接冲突，需要独立裁决，本文不自行放宽也不自行收紧。
+- **调用方自述对端地址的残余**：见 D3 的已知残余。彻底消除需要把沙盒面向的读取终结在 `sandbox-server` 进程内，
+  这是一个通道形态的改变，超出本文范围。
+- 生产部署的多副本、存储后端与 GC 阈值；会话 JSONL 仍走对象存储（根决策不变量 14 不变）。
+
+## 落地顺序
+
+1. **部署前提固化**：把"沙盒容器不持有 `NET_RAW`／`NET_ADMIN`、保持 `no-new-privileges`、不发布端口"变成可断言的
+   检查，且对**实际创建的容器**断言而非源码常量。完成条件：检查在隔离栈上对真实容器通过，并在人为加回 `NET_RAW`
+   时失败。行为不变。
+   **已落地（2026-10-12）**：`cmd/premise-check` 在隔离网络上对真实容器通过；同一个检查在加回 `NET_RAW` 的容器上
+   失败，且该容器内 `socket(AF_INET,SOCK_RAW,IPPROTO_RAW)` 与 `AF_PACKET` 原始套接字**确实打开成功**——违规不是
+   纸面上的，而是可发送伪造源地址的。对主栈 `ora-sandboxes` 只读运行：8 个沙盒容器全部通过，4 个部署服务被登记
+   为 D3 的已知残余。
+2. **来源解析接口**：`sandbox-server` 增加"按地址解析沙盒"的只读查询，复用既有管理监听与既有调用方身份。完成
+   条件：对运行中容器、已停止容器、非沙盒的部署容器分别返回正确结果或"不可解析"。此时无调用方，行为不变。
+   **已落地（2026-10-12）**：`internal/origin` 提供解析器与处理器，默认关闭，由 `-origin-resolve` 显式开启。
+   在隔离网络上以真实容器、真实 mTLS 验证：运行中的沙盒容器返回身份；已停止容器、网关地址、无人持有的地址、
+   非沙盒容器一律 `403` 且响应体逐字相同；Engine 不可读为 `503`；无客户端证书、以及 CA 可信但未被固定的证书
+   均在握手中被拒。生产 compose 未加该 flag，行为不变。
+3. **Git Server 骨架与镜像发布**：只读 smart HTTP、镜像的暂存—核验—原子发布、容量上限与失败清理；沙盒面向监听
+   的**授权尚未启用**（此时任何沙盒请求都被拒绝）。完成条件：用真实 `git` 客户端与真实 PostgreSQL 证明只读、
+   不可写、未发布镜像不可读。行为不变。
+4. **部署接线**：Git Server 加入 cluster 栈（默认网络 + 沙盒网络，不发布端口）；为沙盒容器挂载只含 `[http] sslCAInfo=`
+   的 `clone.gitconfig` 与工作负载 uid 可读的 CA 文件。完成条件：容器内 `git ls-remote` 能对 Git Server 完成 TLS
+   握手并被**拒绝**（授权未启用），证明信任链与 Node 的 Cloud 策略校验都已就位。至此仍不改变任何现有行为。
+5. **开启读取授权与镜像搬运**（需本 ADR 批准后进入）：Cloud 在镜像就绪后写克隆输入并钉住提交；`credentialed_clone.go`
+   的仓库身份改为以 Project 的上游为准。完成条件：在隔离栈上跑通真实的 Clone → Workspace → Agent，且负向矩阵
+   （D5 表）全绿。
+6. **端到端验收与证据登记**：把 Clone → Workspace → Agent 的验收从 `Missing` 更新为实际证据，未运行项如实标注。
+
+第 1–4 步在授权未启用时不改变任何现有行为，因此安全边界可以先于业务调用方单独评审；任何一步失败都不影响现有的
+对象存储路径与 fail-closed 语义。`desktop/` 在全部六个阶段中都不修改。
+
+## 核心测试用例
+
+按仓库规则，本 ADR 为 `proposed`，核心测试用例在其状态变为 `approved` 后补充到 `specs/test-cases/cloud/git-server/`。
+至少需要覆盖：来源无法解析、来源是已停止容器、来源是部署服务时被拒；跨 Workspace 与跨租户读取被拒；沙盒面向
+监听不存在写路由；未核验或半成品镜像不可读；同一键并发发布只产生一个不可变镜像；Cloud 状态不可读时 `503` 且
+不放行；容器能力集合被人为放宽时前提检查失败；工作负载能读本 Workspace 镜像这一已知缺口被如实登记为缺口而非
+被记为隔离。
