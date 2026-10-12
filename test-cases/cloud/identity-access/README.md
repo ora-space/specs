@@ -12,7 +12,9 @@
 [凭据 Secret Store](repository-credential-secret-store.md) 与
 [仓库凭据归属连续性](repository-credential-ownership-continuity.md)。能力词汇表（`clone` 的语义、空集合
 的拒绝与迁移规则）于 2026-10-12 获批，登记在
-[凭据能力词汇表](repository-credential-capability-vocabulary.md)。执行侧的身份隔离见
+[凭据能力词汇表](repository-credential-capability-vocabulary.md)。签名载荷**覆盖到哪些输入**、以及
+"决定克隆什么的值必须被签名或被权威行复核"这一条，连同带凭据 clone 的分支未进签名这一已登记缺口，
+见[授权载荷的覆盖范围](repository-credential-authorization-payload-coverage.md)。执行侧的身份隔离见
 [Node 凭据执行身份隔离](../../node/repository/git-credential-execution-isolation.md)。
 
 **当前实现状态（2026-10-12 本轮实现后）**：Cloud 侧的凭据元数据、用户自助 Ingress 与独立

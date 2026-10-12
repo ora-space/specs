@@ -216,6 +216,13 @@ Workspace 决定，请求既不需要、也不得声明自己服务哪个执行�
 对象的清理、删除 Project 时的清理，以及撤销与销毁的**触发者**。镜像记录的落点已按本次裁决定为受控持久卷上的
 文件系统记录，**不引入数据库 migration**（原先"很可能带来一次 migration"的推测作废）。
 
+**裁决补充（2026-10-13）——"不引入 migration"限的是镜像记录，不是操作状态。** 本轮批准的镜像准备**前置
+Operation** 需要独立的、可审计、可重试的状态，绑定 tenant、project、workspace、operation、runtime
+generation、credential ID/version、真实上游 repository 与精确 ref，因此**允许增加最小的 schema
+migration**，且**只在隔离 PostgreSQL 上验证**；正式库不迁移。两者的分界是：**镜像内容与镜像记录**继续
+落在受控持久卷上（本段上文），**镜像准备这一操作的权威状态**在 Cloud 的数据库里，因为它要参与 Cloud 的
+操作状态机、要能被重试与结算，而一卷文件系统记录无法承担这些。
+
 ### D7：Cloud 只在镜像就绪后写克隆输入，并钉住精确提交
 
 - Workspace 的克隆输入（记录中的 `repositoryUrl` 与 `requestedRef`）只在镜像已发布并核验之后写入；`requestedRef`
@@ -228,6 +235,10 @@ Workspace 决定，请求既不需要、也不得声明自己服务哪个执行�
   仓库"（`normalizeRepositoryScope` 与 `cloneauth.CanonicalRepository`，同时是 scope 比对与授权绑定的来源）。
   一旦该字段变成镜像地址，凭据授权就会绑定到**镜像**而不是用户的上游仓库，授权会指向错误的仓库身份。因此 C 侧
   的授权与 scope 校验必须改为以 Project 的上游仓库身份为准。这是安全相关的必改项，不是可选项。
+- **裁决（2026-10-13）**：本节承诺获批，并且"写克隆输入"这一步被明确限定为**在镜像 ready 且全部绑定重新核验
+  通过之后**才执行。旧代次、重绑、撤销、轮换与迟到结果都不得推进到写输入；镜像 URL **不得**被用来替代真实上游
+  repository 身份去授权。同时明确：**mirror ready 本身不等于 Workspace clone 成功**，两者是独立的状态，前者
+  不蕴含后者，也不把后者记为已完成。
 
 ### D8：内部只读通道与外部 Push 是两条独立路径
 
@@ -319,6 +330,21 @@ Workspace 决定，请求既不需要、也不得声明自己服务哪个执行�
 - **镜像的深度**：是否保留完整历史、是否支持子模块与 LFS。本文只要求"目标提交及其所需对象可用"。
 - ~~**镜像记录存放在哪里**~~ **已裁决（2026-10-13）**：权威记录暂留在**受控持久卷上的文件系统**里，不引入
   数据库 migration；镜像内容与记录同卷。这不排除将来把它移进数据库，但迁移必须另立决策，不得在本轮顺手做。
+- ~~**镜像准备的操作状态放在哪里、C 用什么接口准备镜像、`mirror_prepare` 要不要新能力**~~ **已裁决
+  （2026-10-13）**，三项分别如下，均**只在隔离完整栈内实施与验证**，不改生产行为：
+  1. **新增 Cloud 权威的 mirror_prepare 前置 Operation**（状态见 D6 的裁决补充）：必须有独立、可审计、可重试的
+     操作状态，绑定 tenant、project、workspace、operation、runtime generation、credential ID/version、真实
+     上游 repository 与精确 ref；镜像准备在 Node Clone **之前**完成；Cloud 必须在镜像 ready 后**重新核验全部
+     绑定**，并把 C 返回的完整 commit 与权威操作记录关联；旧代次、重绑、撤销、轮换与迟到结果一律不得推进状态。
+     **mirror ready 不等于 Workspace clone 成功**；公开匿名仓库保留现有路径（不进入这条通道）。
+  2. **C 增加独立镜像准备接口**，使用独立于 `POST /v1/clone-executions` 的路由、请求与结果类型，**不在原
+     Clone Job 上新增 kind 开关**。镜像消费方**只能**接受 `operation=mirror_prepare`，Clone 消费方**只能**
+     接受 `operation=clone`，两向都要测用途混淆。C 保持外部凭据独占与 C-only 私有临时材料规范，按"受权单仓库、
+     单 ref"抓取，核验 commit，原子发布裸仓库，不向 Node／Agent／Cloud 业务进程暴露秘密。
+  3. **`mirror_prepare` 继续使用 `capabilities=["clone"]`，不新增 capability。** 这只表示受限读取能力不扩大；
+     operation 是**独立且强制校验**的用途维度。**不得**扩展到任意 ref/tag/submodule、其他仓库、Push、删除或
+     强制更新。Store 可保持现有通用兑换逻辑，但必须记录并验证各可信消费方在使用材料前强制校验 operation 的
+     安全不变量。
 - **部署服务与工作负载共用网桥的残余**：见 D3 的已知残余。其中"未认证中继对工作负载可达"一条已在 cluster 栈的
   隔离 overlay 上修正并测量；**仍未决的是该 overlay 是否进入主栈**，以及是否愿意为 `ora-sandboxes` 上其余部署
   服务收紧能力集合。`sandbox-server` 的 Docker socket 无法收紧——它与"`sandbox-server` 必须持有 Engine 客户端"
