@@ -13,6 +13,14 @@ status: approved
 只覆盖本机首个 clone 闭环，不迁移既有 Worktree 数据，不切换 Backend 写入入口，
 也不安装凭据、SSH 服务或特权 helper。
 
+> **阅读入口（2026-10-10 追加，不改写本文决策）**：本文 D2 的"凭据由 Node 部署提供"已被
+> [最小 clone 执行契约 D2 的凭据来源修订](20261010-minimal-clone-execution-contract-credential-source-amendment.md)
+> （`approved`，2026-10-10）修订为"部署静态来源**或** Cloud 侧 Credential Service 按 Project 逐次
+> 授权解析，且后者只交付给凭据执行身份 C"。**单独阅读本文 D2 会得到已被修订的结论**，该链的读者应
+> 同时读到那份修订。D2 的其余每一句、以及本文其余决策都未被修订，仍然有效。相关实现侧约束见
+> [受控 Node 的仓库凭据执行使用独立 OS 身份](20261010-controlled-node-git-authentication-isolation.md)。
+> 本说明只增加指向，不改变本文的状态、决策文本或任何未实现的事实。
+
 ## 继承与修改
 
 | 根决策约定 | 本文处理 |
@@ -62,6 +70,12 @@ HTTPS 可使用部署已配置的非交互凭据来源；SSH 可使用部署已�
 Git 输出可能包含认证敏感信息，持久诊断必须限制和脱敏，不将原始 stderr 直接存入业务结果。
 是否采用具体 credential helper 或 SSH agent 属部署配置，不由业务请求指定任意可执行程序。
 当前信任 Node 的管理程序，不等于仓库不需要认证，也不保证抵御恶意同 UID 代码。
+
+> **修订说明（2026-10-10 追加，本节决策文本未改写）**：上面第二句的"HTTPS 可使用部署已配置的非
+> 交互凭据来源"已被
+> [最小 clone 执行契约 D2 的凭据来源修订](20261010-minimal-clone-execution-contract-credential-source-amendment.md)
+> 扩展为"部署静态来源**或** Cloud 侧 Credential Service 按 Project 逐次授权解析"；本节的其余每一句
+> 都逐字保留。改动只扩大凭据**来源**，不放松任何禁止面。
 
 ### D3：每个执行使用独立、受预留保护的目标
 

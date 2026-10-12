@@ -6,6 +6,13 @@
 已有 Worktree／process 测试不替代这些业务证据。端到端职责另见[结果边界](clone-and-result-boundaries.md)；
 clone 的 Git 移出受理 worker 后的受理与在途义务见[受理与 Git 执行分离](admission-and-git-execution.md)。
 
+**凭据来源已被修订（2026-10-10）**：执行契约 D2 的"凭据由部署提供"由
+[凭据来源修订](../../../decisions/node/repository/20261010-minimal-clone-execution-contract-credential-source-amendment.md)
+扩展为"部署静态来源**或** Cloud 侧 Credential Service 按 Project 逐次授权解析，且后者只交付给凭据执行
+身份 C"。受控 Node 上的凭据执行与执行身份隔离见
+[Node 凭据执行身份隔离](git-credential-execution-isolation.md)；下面第一个用例的"凭据由部署提供"
+一项按修订后的契约读，其余子句不变。
+
 ## Clone Input And Authentication Stay Noninteractive
 
 ### 风险
@@ -14,7 +21,8 @@ clone 的 Git 移出受理 worker 后的受理与在途义务见[受理与 Git �
 
 ### 前置状态
 
-Node 显式配置 Git、环境和可信凭据来源；分别准备 HTTPS、显式 SSH 服务以及认证失败、未知主机场景。
+Node 显式配置 Git、环境和可信凭据来源（部署静态来源，或受控 Node 上的逐次授权动态来源）；分别准备
+HTTPS、显式 SSH 服务以及认证失败、未知主机场景。
 
 ### 触发
 
@@ -24,7 +32,8 @@ Node 显式配置 Git、环境和可信凭据来源；分别准备 HTTPS、显�
 
 - 仅接受 HTTPS 与显式 ssh://，输入为源仓库分支；拒绝本地路径、file、scp 缩写和自定义 remote helper。
 - 不允许请求传入任意 Git 参数、目标路径、shell、环境或秘密；SSH 用户名不被当作密码拒绝。
-- 凭据由部署提供；缺少凭据或需要确认主机时明确失败，不弹窗、自动信任或无限等待。
+- 凭据由部署提供的静态来源、或受控 Node 上按 Project 逐次授权的动态来源提供（凭据来源修订 D1）；
+  两种形态都不由请求指定。缺少凭据或需要确认主机时明确失败，不弹窗、自动信任或无限等待。
 - 网络和认证子进程受期限及收尾管理；journal、业务结果和日志不传播秘密，诊断有上限且脱敏。
 
 ### 禁止结果
@@ -41,7 +50,7 @@ Node 显式配置 Git、环境和可信凭据来源；分别准备 HTTPS、显�
 
 ### 决策依据
 
-执行契约 D1、D2，不变量 4。
+执行契约 D1、D2，不变量 4；凭据来源修订 D1–D3。
 
 ## Clone Reserves And Verifies Its Exclusive Destination
 
