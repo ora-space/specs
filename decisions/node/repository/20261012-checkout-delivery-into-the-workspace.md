@@ -19,7 +19,60 @@ W（`process.workload_uid`，1000）能正常读写它。
 因此本文的目的不是自行选择通道，而是把**候选、代价与不可绕过的硬约束**摆到可以直接裁决的粒度。
 D2 节是需要裁决的唯一一项；其余各节记录无论选哪条通道都成立的要求与不变量。
 
+## 评审裁决（2026-10-12）：第一阶段不可实现——不修改 `desktop/` 就没有可用通道
+
+**结论**：在 `desktop/` 冻结、且不违反已批准决策的前提下，本文原来推荐的第一阶段（Cloud 的只读交付端点
++ Node 用自己的 clone 取回）**不可实现**。原因不是端点难写，而是 Node 的 fetch **无法出示任何受控身份**：
+今天 Node 侧可用的 Git 取回面只允许「把秘密放进 URL」这一种鉴权形态，而这正是评审要求 1 与 3 明确拒绝的
+形态。据此**撤回原 D2 的第一阶段**，并按评审要求 1–7 重列约束；`repository_credential_executor_unavailable`
+继续逐位拒绝，本裁决**不授权实施任何新信任边界**。
+
+### 评审提出的七条要求（作为本通道的准入约束）
+
+| # | 要求 |
+|---|---|
+| R1 | 不以 URL 持有权单独授权读取；采用受控客户端身份、逐请求服务端鉴权，或可证明等效的机制 |
+| R2 | 授权绑定 Tenant、Project、Workspace、Execution、Runtime Generation、仓库与有效期 |
+| R3 | Cloud 与 Node 的台账都不得保存可直接兑换代码的秘密 URL |
+| R4 | 服务端不可列举、不可跨执行访问；执行结束后关闭读取并清理镜像 |
+| R5 | C 的导出目录与 Token 物化根完全隔离 |
+| R6 | Node 必须实际完成正常 Checkout，不得绕过已有 Workspace 生命周期、结果结算与收尾规则 |
+| R7 | 必须给出与正式 Git Server 的兼容／迁移计划；不得依赖未来迁移掩盖当前漏洞 |
+
+### 最小不可行证据（只读 `desktop/` 得出，逐条给出位置）
+
+| # | 事实 | 位置 | 推论 |
+|---|---|---|---|
+| E1 | 每条命令注入**固定**的 `-c` 前缀：`protocol.allow=never`、`protocol.https.allow=always`、`protocol.ssh.allow=never`／`always`、`core.hooksPath=/dev/null`、`core.askPass=`、LFS 与 submodule 键 | `apps/ora-node/src/repository/config.rs:135-152` `constrain()` | 没有 `http.extraHeader`、`http.sslCert`、`http.sslKey`、`credential.helper`——**无法按执行注入 Authorization 头、客户端证书或凭据助手** |
+| E2 | Cloud 部署的 Git 配置只允许 CA 引用：非 `[http]` 段、或 `[http]` 下除 `sslCAInfo` 以外的任何键都是配置错误；SSH 身份一律禁止 | `config.rs:30-51` `validate_cloud_policy()` | 部署侧也**无法**为交付主机配置客户端证书 |
+| E3 | 环境是固定的：`PATH`、`GIT_CONFIG_NOSYSTEM=1`、`GIT_CONFIG_GLOBAL=<策略校验过的文件>`、`GIT_TERMINAL_PROMPT=0`、`GIT_ASKPASS=""`、`SSH_ASKPASS=""`、`GIT_LFS_SKIP_SMUDGE=1`、`GIT_OPTIONAL_LOCKS=0` | `config.rs:106-124` `environment()` | 没有环境变量位可放一次性秘密，交互与 askpass 取凭据都被关闭 |
+| E4 | E1+E2 之下 SSH 为 `never`，剩余取回形态只有 `https://`，而 HTTPS 的鉴权手段已被 E1–E3 全部关闭 | E1–E3 | **唯一可用的鉴权就是把秘密放进 URL**，即 R1／R3 拒绝的 bearer URL |
+| E5 | 只有一个 `ProcessConfig.workload_uid`，被 `isolate_workload`（`setpriv --reuid/--regid --clear-groups --no-new-privs`）应用到**每一个** RunSpec；clone 与 Agent 会话用同一个 uid | `apps/ora-node/src/managed.rs:25-56`；clone：`apps/ora-node/src/repository/drive.rs:261`；会话：`apps/ora-node/src/service/agents.rs:86-95` | 不存在「第三个身份、W 不可遍历的物化根」：任何交给 fetch 的秘密，**Agent 都读得到**。这不是「可证明等效」的机制，而是已批准隔离决策要求先解决的前提 |
+| E6 | `repository_root` 被冻结且必须与受保护状态／checkout 不重叠；Node 只承认自己独占创建的目录 | `config.rs:53-90` | 「别的组件写好目录、Node 直接采用」不成立——这也是 β／γ 被否决的同一依据 |
+
+**合并结论**：第一阶段的形态只剩两种可能——把读取权放进 URL（R1／R3 拒绝），或让 fetch 出示受控身份
+（必须修改 E1–E5 中的至少一条，也就是**必须改 `desktop/`**）。**不存在「不改 `desktop/` 且满足 R1–R7」的
+第三条路。**
+
+### 必须调整的约束（裁决项，本文不代选）
+
+| # | 必须调整的约束 | 最小改动面 | 对 R1–R7 的判定 |
+|---|---|---|---|
+| T1 | 放开「Cloud Git 配置只允许 CA 引用」，允许**部署为交付主机**配置客户端证书（`[http "https://<delivery-host>/"] sslCert/sslKey`），私钥固定在 Agent 不可遍历的路径 | `config.rs:30-51` 的白名单、`constrain()` 的固定前缀、部署编排；不改命令形状与 proto | 满足 R1（mTLS 身份 + 逐请求服务端鉴权，URL 只带 execution id，不构成读取权）、R2、R3（台账无秘密 URL）、R4、R5、R6。**但 E5 仍在**：证书对 Agent 可读，Agent 可冒名访问该端点；只要服务端把授权绑定到五元组而非「持证即授权」，跨执行读取仍被拒绝，冒名的审计与限流面需要单独裁决 |
+| T2 | 允许逐执行注入 `http.extraHeader: Authorization` | `constrain()` 增加一条按执行传入的键 | **建议否决**：一次性秘密必须经环境或配置进入与 Agent 同 uid 的进程（E5），违反已批准隔离决策；「受控客户端身份」不成立 |
+| T3 | 授权 desktop 侧**受控取回身份**：第三个 OS 身份、W／C 不可遍历的物化根、部署固定的 broker 客户端，按执行与代次兑换一次读取授权 | 前序[隔离决策](20261010-controlled-node-git-authentication-isolation.md)已写定的那份工作（clone 执行器形态、`managed.rs` 的身份模型、部署编排） | 完整满足 R1–R7；代价最大，且正是本 Issue 执行侧那一半的既有阻塞 |
+| T4 | 不设第一阶段：保持无条件拒绝，等正式 Git Server 通道 | `desktop/` 0 个文件；等 [Git Server 决策](../../cloud/git-server/0-sandbox-scoped-git-server-over-https.md)获批并落地（其 D5 自带 Node 出示客户端证书的工作） | 满足 R1–R7（R7 天然成立：不存在需要退役的过渡通道）。代价是本 Issue 的真实 Clone → Workspace → Agent 验收在该通道落地前**不可能**取得 |
+
+**建议**：若本轮仍坚持不修改 `desktop/`，唯一自洽的裁决是 **T4**——撤回第一阶段、fail-closed 保持、
+本文只保留 D3–D7 作为「任何通道都必须满足的约束」，并把 R1–R7 记为不变量。若要在本 Issue 内取得真实
+Checkout 验收，必须先在 **T1 与 T3** 之间裁决；**T2 应否决**。
+
+
 ## 推荐：选 α——Cloud 的交付端点发布只读镜像，Node 用自己的 clone 取回
+
+> **已被 2026-10-12 评审取代**：本节推荐的 α 第一阶段（端点 + URL 里的逐次能力值）因违反 R1／R3
+> 被撤回，可行性判定见上文「评审裁决」。本节保留为决策历史与代价对照，**不构成当前推荐**。
+
 
 三条硬约束合起来只剩下一条通道不需要修改 `desktop/`。决定性依据是**约束二的方向性**：Agent 会话的
 工作目录只能由 Node 自己的 clone 台账解析出来（`apps/ora-node/src/session/driver.rs:176` 的
@@ -50,6 +103,10 @@ D2 节是需要裁决的唯一一项；其余各节记录无论选哪条通道�
 
 因此本文的推荐分两段，两段的边界必须写清楚：
 
+> **已被 2026-10-12 评审取代**：下表中「第一阶段」一列不再成立（该形态要求把读取权放进 URL）。
+> 第一阶段的当前状态是「不存在」：`repository_credential_executor_unavailable` 继续逐位拒绝，直到 T1／T3
+> 之一被明确授权、或目标通道落地（T4）。
+
 | 阶段 | 通道 | 授权形态 | 今天能否落地 | 前提 |
 |---|---|---|---|---|
 | **第一阶段（本文推荐先落地）** | Cloud 的只读交付端点（D2 的四条条件） | URL 中的逐次能力值 + 网络可达性 | 能：零 `desktop/` 变更、无 proto 变更、无新 effect kind | A–C 获批 |
@@ -67,14 +124,13 @@ Cloud 的执行记录；目标通道没有任何这一类秘密，因为它用�
 
 ## 待批准事项（逐条）
 
-| # | 事项 | 本文的建议 | 批准后正式变更的约束 |
+| # | 事项 | 本文的建议 | 批准后才可执行的变更 |
 |---|---|---|---|
-| A | 允许**一个**集群内的只读 Git 交付端点存在 | 批准，并限定为 D2 的四条条件（无凭据、逐次授权、无列举、用后即删） | 修改凭据隔离 ADR D8 的标题级"不引入外部 Git 服务"；D8 其余三条不变。**必须由新决策承载，不得改写已批准正文** |
-| B | 带凭据执行的 Node clone 源是交付端点，而不是 Project 仓库 | 批准；`clone_executions` 继续记 Project 的真实仓库，交付记录记镜像与端点 URL 的映射 | 不改任何 proto 形状，只改 Cloud 侧写入 `CloneExecutionSpec.repository` 的取值 |
-| C | C 与交付端点之间如何交接镜像 | C 在**自己的导出区**（与物化根不共卷）按 execution id 发布只读镜像；交付端点只读挂载该导出区 | 无正式约束变更（Cloud 产品内部的部署形态） |
-| D | 是否允许为本通道修改 `desktop/` | **不允许，也不需要**；零 Desktop 变更是选择 α 的主要目的 | 无 |
-| E | 是否解除 fail-closed | 不解除（D7 不变） | 无 |
-| F | 两条通道的次序：先落地第一阶段再并入 Git Server，还是直接等 Git Server 通道 | **先落地第一阶段，并把「并入 Git Server 的只读取回」写成本通道的完成条件**；端点由此有了明确的退役判据 | 无正式约束变更本身；但它决定 A 项的修改是**限时**的还是**永久**的。批准 A 时必须同时记下 F 的退役条件，否则 A 读起来就是"永久接受一个集群内 Git 服务面" |
+| A′ | 是否批准以 URL 承载读取权的第一阶段 | **不批准**（已按 2026-10-12 评审撤回） | 无。原 A 项（限定修改凭据隔离 D8 的标题级禁令）随之作废：本通道不再要求引入新的 Git 服务面 |
+| B′ | 在 T1／T3／T4 之间裁决 Node 的取回身份 | 坚持不改 `desktop/` → **T4**；要在本 Issue 内取得真实 Checkout 验收 → 在 **T1 与 T3** 之间裁决，本文不代选 | T1 改 `apps/ora-node/src/repository/config.rs` 的配置白名单与固定前缀（+ 部署编排）；T3 改 clone 执行器的身份模型与物化根。两者都**必须由新决策承载，不得改写已批准正文** |
+| C′ | 是否解除 fail-closed | 不解除（D7 无条件不变） | 无 |
+| D′ | 目标通道与退役判据 | 正式 Git Server 的只读取回是**唯一**目标通道；任何中间通道都必须写明退役判据，且不得依赖未来迁移掩盖今天的漏洞（R7） | 无 |
+| E′ | D14-B 义务在容器边界下的证据映射 | 延后，且不得被声称已成立 | 无 |
 
 ## 最小修改清单
 
@@ -180,6 +236,11 @@ Substrate。**三者都超出"实现细节"的范围，这正是前序 ADR 把�
 **在销毁之后**而不是与销毁并发。把交付物定义成"销毁之后的结果"，使"交付通道泄漏秘密"在结构上不可能，
 而不是靠交付通道自己小心。**代价**：交付物与执行现场解耦后，"重试"必须重新执行 C 的 clone 并重新
 产出交付物（D5 的新执行、新授权），不能复用上一条残留。
+
+> **已被 2026-10-12 评审取代**：下面的通道形态要求「URL 中的能力值不可猜测」作为授权载体，违反 R1／R3。
+> D2 的**当前有效内容**是：在 T1／T3 被明确授权之前，本通道不存在，`repository_credential_executor_unavailable`
+> 保持逐位拒绝（T4）。本节其余文字保留为代价对照与不变量来源。
+>
 
 ### D2：交付通道——Cloud 的只读交付端点，Node 用自己的 clone 取回
 
@@ -330,8 +391,19 @@ Node 容器里加 sidecar（D8 理由 1）；把凭据执行搬回 Node 容器�
 10. 本文不解除 `repository_credential_executor_unavailable`，也不产生任何启用证据。
 11. 交付端点不持有任何凭据，只服务与某一次 `(tenantId, projectId, workspaceId, executionId,
     runtimeGeneration)` 绑定的镜像，不提供列举，交接完成后销毁副本。
-12. 本通道**不修改 `desktop/`**：Node 的 clone 源策略（scheme 白名单与 `git_config` 允许键）、目标目录
-    的独占创建与所有权证据、会话 checkout 的解析路径都逐位不变。
+12. 在 T1／T3 被明确授权之前，本通道**不修改 `desktop/`**：Node 的 clone 源策略（scheme 白名单与
+    `git_config` 允许键）、目标目录的独占创建与所有权证据、会话 checkout 的解析路径都逐位不变。
+    2026-10-12 评审已判定：正是这条把第一阶段挡死（见「评审裁决」）——它不是本通道的优点，而是它的成本。
+
+**2026-10-12 评审的准入要求（R1–R7）——任何最终通道都必须同时满足，本文原 D3–D7 是它们的具体化：**
+
+13. 读取授权不来自 URL 持有权；由受控客户端身份与逐请求服务端鉴权给出，或给出可证明等效的机制（R1）。
+14. 授权绑定 Tenant、Project、Workspace、Execution、Runtime Generation、仓库与有效期；缺一项即拒绝（R2）。
+15. Cloud 与 Node 的任何台账、日志、审计记录都不保存可直接兑换代码的秘密 URL（R3）。
+16. 服务端不可列举、不可跨执行访问；执行结束后关闭读取并清理镜像（R4）。
+17. C 的导出目录与 Token 物化根完全隔离，不同卷、不共挂载点（R5）。
+18. Node 必须实际完成正常 Checkout：走既有的 Workspace 生命周期、结果结算与收尾规则，不绕过、不新建旁路（R6）。
+19. 必须给出与正式 Git Server 的兼容与迁移计划，且不得依赖未来迁移掩盖当前漏洞（R7）。
 
 ## 为什么不是这些替代方案
 
@@ -376,13 +448,15 @@ Node 容器里加 sidecar（D8 理由 1）；把凭据执行搬回 Node 容器�
   定义已交接的树在 Workspace 代次替换后的重放行为。
 - **并入 Git Server 通道所需的"上游镜像"**（F 项）：git-server 决策的 D7 把"镜像上游、Node 改从
   Git Server clone"留给后续 ADR，并写明它涉及上游凭据与仓库凭据连续性；本工作线是那份 ADR 的一部分。
-  在该 ADR 获批之前，本文的第一阶段端点是唯一可用的取回通道，**但它不是终局**。
+  在该 ADR 获批、且 T1／T3 之一被明确授权之前，**没有任何取回通道**：原来的第一阶段已按 2026-10-12 评审撤回，`repository_credential_executor_unavailable` 继续逐位拒绝。
 
 ## 落地顺序
 
-1. **逐条评审 A–F 并批准（材料齐备）**：D2 已选定 α，需要裁决的是 A（D8 的限定修改）、B（clone 源与
-   记账口径）、C（导出区交接）、D（第一阶段不改 `desktop/`）、E（不解除 fail-closed）、F（两段通道的
-   次序与端点退役判据）。本步不产生代码、测试或启用证据，任何实现都不得在批准之前开始。
+1. **裁决取回身份（材料齐备，2026-10-12 评审后重写）**：D2 的第一阶段已撤回，需要裁决的是
+   B′——在 T1（放开交付主机的客户端证书配置）、T3（desktop 侧受控取回身份）、T4（不设第一阶段、等
+   Git Server 通道）之间选一条，并同时确认 C′（不解除 fail-closed）与 D′（唯一目标通道与退役判据）。
+   本步不产生代码、测试或启用证据；**在 B′ 被批准之前，第 2–4 步一律不得开始**，第 5、6 步的前置条件
+   按各自的决策执行。原第 1 步的其余文字随第一阶段的撤回一并作废。
 2. **镜像与导出区（C 侧，可在不启用 `clone_dispatch` 的条件下独立验收）**：把成功的 clone 固化为
    只读镜像并发布到导出区，销毁先于发布，启动清扫覆盖残留。完成条件：镜像可被独立校验（commit 与
    摘要），发布路径上不存在凭据材料。
@@ -403,5 +477,11 @@ Node 容器里加 sidecar（D8 理由 1）；把凭据执行搬回 Node 容器�
 `repository_credential_executor_unavailable` 结算、匿名 clone 与 Agent 会话链路逐位不变、旧 Desktop
 仓库内容不变（第一阶段不改 `desktop/` 一个文件；目标通道的 Desktop 变更由 git-server 决策承担）、Cloud
 业务库 schema 不变（除第 4 步若确需一条交付记录）。
-从本文生效开始改变的行为：**交付通道由 Cloud 的交付端点承担**——但仅在 A–F 批准之后按本文实现；
+从本文生效开始改变的行为：**没有**——2026-10-12 评审撤回第一阶段之后，本 ADR 在 B′ 被批准之前
+不改变任何运行时行为，`repository_credential_executor_unavailable` 逐位拒绝照旧。B′ 选 T1 或 T3 时，
+行为按那时的新决策改变；选 T4 时，行为直到 Git Server 通道落地才改变，且本 ADR 不引入任何中间通道。
+
+原第 7 步之后的文字（保留为历史）：
+
+> 从本文生效开始改变的行为：**交付通道由 Cloud 的交付端点承担**——但仅在 A–F 批准之后按本文实现；
 第 6 步生效后，它改由 Git Server 承担，交付端点退役。

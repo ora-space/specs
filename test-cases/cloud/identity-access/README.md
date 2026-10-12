@@ -10,7 +10,9 @@
 用户托管的仓库凭据（HTTPS Git Token）于 2026-10-10 随四份 ADR 进入 `approved`，其核心用例登记在
 [凭据元数据](repository-credential-metadata.md)、[凭据 Ingress 受限例外](repository-credential-ingress-exception.md)、
 [凭据 Secret Store](repository-credential-secret-store.md) 与
-[仓库凭据归属连续性](repository-credential-ownership-continuity.md)。执行侧的身份隔离见
+[仓库凭据归属连续性](repository-credential-ownership-continuity.md)。能力词汇表（`clone` 的语义、空集合
+的拒绝与迁移规则）于 2026-10-12 获批，登记在
+[凭据能力词汇表](repository-credential-capability-vocabulary.md)。执行侧的身份隔离见
 [Node 凭据执行身份隔离](../../node/repository/git-credential-execution-isolation.md)。
 
 **当前实现状态（2026-10-12 本轮实现后）**：Cloud 侧的凭据元数据、用户自助 Ingress 与独立
@@ -25,13 +27,16 @@ Credential Service 已经落地，证据集中在 `integration.git_credentials_t
 [把带凭据的拒绝结算为终态](../../../decisions/cloud/operation/20261012-credentialed-clone-refusal-is-terminal.md)，
 `proposed`）。
 
-仍然 `Missing` 的是**执行侧**与**能力词汇表**：Cloud 的 `Issue` 还没有生产调用方（唯一合法调用点在
+仍然 `Missing` 的是**执行侧**与**迁移一侧**：Cloud 的 `Issue` 还没有生产调用方（唯一合法调用点在
 `requireRepositoryAccess` 的无条件拒绝之后），部署尚未签发 `broker-resolver` 证书，Node 侧的凭据
 执行身份 C 与 clone 后清理未实现，因此私有仓库 clone 在所有路径上继续保持
-`repository_credential_executor_unavailable` 拒绝。能力词汇表今天只有 `clone`，Issue 验收要求的
-"读取与推送能力分别验证"与 P2 的候选验证能力都超出它，裁决材料见
-[仓库凭据能力词汇表](../../../decisions/cloud/identity-access/20261012-repository-credential-capability-vocabulary.md)
-（`proposed`，**未裁决**）。规则侧获批、Cloud 侧落地与新能力码都不解除任何拒绝。
+`repository_credential_executor_unavailable` 拒绝。能力词汇表已于 2026-10-12 裁决并进入 `approved`：
+词汇表保持 `["clone"]`，本次不引入 `read`、不开放 `push`，候选验证复用受限 `clone`；旧式
+`capabilities=[]` 引用走**逐条核验 + 逐条显式迁移**（不得批量授权，无法证明授权依据者保持冻结），
+实现与既有行的迁移落在解禁那次变更里。Issue 验收要求的"读取与推送能力分别验证"因此仍超出今天的
+词汇表：推送一侧由独立的
+[推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`proposed`）
+承载，其证据在获批并实现前如实标注 `Missing`。规则侧获批、Cloud 侧落地与新能力码都不解除任何拒绝。
 
 ## 阅读与维护规则
 

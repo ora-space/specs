@@ -118,7 +118,7 @@ Project 的持久引用，以及对外错误形状。
 | 能力拒绝不改写持久状态并终结 Operation | `internal/core` 的 `TestAnUnsupportedCapabilitySettlesTheOperationToo` 断言拒绝码、执行器零调用、Operation 为 `failed` + 该码、`retry_at` 为空、无 `clone_executions` 行、绑定与 lifecycle 未被触碰 | Covered（**未裁决**：结算语义由 [把带凭据的拒绝结算为终态](../../../decisions/cloud/operation/20261012-credentialed-clone-refusal-is-terminal.md)（`proposed`）承载，批准前只作为"实现先行"证据，不计入验收结果） |
 | 无作用域的旧式 clone 准入被拒绝 | `integration.repository_credentials_test.go` 的 `TestProductionStoreRefusesUnscopedCloneAdmission` 断言 `runtime_scope_required` 且拒绝的请求未被持久化 | Covered |
 | 解禁只能在 D11-B／D14-B 全部有证据之后 | 尚缺"解禁前后的门禁断言"测试；今天正确的行为正是继续拒绝，因此没有可指向的解禁证据。执行器与授权链路本轮已经落地，但 D11-B／D14-B 的**全部**义务仍不满足：checkout 尚未交付到 Workspace（D12 与验收义务 14 未实现），同一容器内的 W／C 分离不存在，"以 W 身份对 C 发起能力尝试"一类断言没有证据，超时与 `Interrupted` 两种结局的销毁也无直接证据。`repository_credential_executor_unavailable` 因此**继续保持无条件拒绝**，且 `CLOUD_CLONE_DISPATCH_ENABLED` 默认关闭 | Missing |
-| 能力词汇表本身是否扩展 | 词汇表今天只有 `clone`；Issue 验收要求的"读取与推送能力分别验证"与 P2 的候选验证能力都超出它，且被 approved 的凭据 ADR D2 明确排除。裁决材料见[仓库凭据能力词汇表](../../../decisions/cloud/identity-access/20261012-repository-credential-capability-vocabulary.md)（`proposed`，未裁决）；该文已改写成**逐条推荐**（A–E：`clone` 的语义边界、`read` 与 `push` 不进入 V1 及其开放条件、候选验证复用 `clone`、旧式空集合的显式声明迁移），但推荐不等于批准，Issue 验收第 2 项的推送一侧继续为 `Missing` | Missing |
+| 能力词汇表本身是否扩展 | 词汇表今天只有 `clone`；Issue 验收要求的"读取与推送能力分别验证"与 P2 的候选验证能力都超出它，且被 approved 的凭据 ADR D2 明确排除。[仓库凭据能力词汇表](../../../decisions/cloud/identity-access/20261012-repository-credential-capability-vocabulary.md)已于 2026-10-12 **批准**（A–D 按推荐批准，E 有条件批准）：词汇表保持 `["clone"]`、不引入 `read`、不开放 `push`、候选验证复用受限 `clone`，旧式空集合引用走逐条核验后的显式迁移。词汇表自身的承诺登记在[凭据能力词汇表](repository-credential-capability-vocabulary.md)，本文件不重复；Issue 验收第 2 项的**推送一侧**因此继续为 `Missing`（由 [推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`proposed`）承载，获批并实现前不计入验收） | Missing |
 | 部署托管引用（`capabilities` 为空）在执行器安装后的准入 | 尚缺证据：今天执行器未安装，部署级拒绝先于能力条款命中，因此集成套件里 `ConfigureCredential` 写下的引用仍返回 `repository_credential_executor_unavailable`，无法区分两条拒绝。需要一条在已安装执行器的栈上断言"空能力集合被拒"的测试，且解禁变更必须显式处理该迁移义务 | Missing |
 
 ### 决策依据
@@ -128,9 +128,10 @@ Project 的持久引用，以及对外错误形状。
 性 D4 承载，因此它的准入证据是正式验收结果。**"该拒绝终结 Operation"这一条不同**：它由
 [把带凭据的拒绝结算为终态](../../../decisions/cloud/operation/20261012-credentialed-clone-refusal-is-terminal.md)
 （`proposed`）承载，实现已先行，因此本文件只在证据表里如实登记并加 `未裁决` 标注，不把它记为正式验收
-结果。能力词汇表本身是否扩展由
-[仓库凭据能力词汇表](../../../decisions/cloud/identity-access/20261012-repository-credential-capability-vocabulary.md)
-裁决，本条只登记今天的判定与证据。
+结果。能力词汇表已于 2026-10-12 批准并进入 `approved`（见
+[仓库凭据能力词汇表](../../../decisions/cloud/identity-access/20261012-repository-credential-capability-vocabulary.md)）；
+词汇表自身的承诺与其迁移义务登记在
+[凭据能力词汇表](repository-credential-capability-vocabulary.md)，本条只登记今天的判定与证据。
 
 ## Credential Binding Is Frozen Per Clone Execution With Its Version
 
