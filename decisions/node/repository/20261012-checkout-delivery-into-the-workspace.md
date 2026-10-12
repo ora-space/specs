@@ -67,6 +67,38 @@ D2 节是需要裁决的唯一一项；其余各节记录无论选哪条通道�
 本文只保留 D3–D7 作为「任何通道都必须满足的约束」，并把 R1–R7 记为不变量。若要在本 Issue 内取得真实
 Checkout 验收，必须先在 **T1 与 T3** 之间裁决；**T2 应否决**。
 
+### B′ 裁决（2026-10-12）：选 T4
+
+项目负责人选择 **T4**：不设任何中间通道，`desktop/` 保持严格只读，生产 fail-closed 不解除。据此：
+
+- 本 ADR 在 B′ 被裁决后**不改变任何运行时行为**：`repository_credential_executor_unavailable` 继续逐位
+  拒绝，第 2–4 步不开始。R1–R7 记为不变量 13–19，是**任何**未来通道的准入约束。
+- **Issue #16 的真实 Clone → Workspace → Agent 验收在本通道落地前不可能取得**，该项保持
+  `Missing`／not-run，不得用别处的证据替代（原文该代价在 T4 行已写明，此处再次确认它是本次裁决的已知
+  且已接受的代价）。
+- T1 与 T3 未被授权：它们都要求修改 `desktop/`（T1 改 `apps/ora-node/src/repository/config.rs` 的配置
+  白名单与 `constrain()` 前缀，T3 改 clone 执行器的身份模型与物化根），在授权之前不得实施。T2 否决。
+
+### 目标通道自身的前置（2026-10-12 只读调查所得，待裁决）
+
+T4 把取得验收的希望放在正式 [Git Server 通道](../../cloud/git-server/0-sandbox-scoped-git-server-over-https.md)
+上。该通道**自身也不是"不碰 `desktop/`"的通道**，这一节把它今天的前置如实记下，避免 T4 被读成
+"验收迟早自动可用"：
+
+- 该通道的 D5 明确由 **Node 进程**执行 `git push`／`fetch`，并把 git-access 证书以
+  `-c http.sslCert=… -c http.sslKey=…`、执行 id 以 `-c http.extraHeader=…` 传入。这些是 `desktop/` 侧
+  的能力，今天的白名单与固定前缀都不允许（本 ADR 的 E1、E2 即该事实）。
+- 该通道与已批准决策存在两处需要裁决的关系：① [凭据执行器归属](20261012-credential-executor-belongs-to-the-current-product.md)
+  （approved）D2 与不变量 2 写的是"旧 Desktop 严格只读：不修改、不依赖、**不承载凭据执行**"，而按
+  git-server D5 执行带凭据 Git 的正是 Node；② [隔离决策](20261010-controlled-node-git-authentication-isolation.md)
+  （approved）D11 写的是认证材料"**不由环境、argv 或跨 exec 的文件描述符传递**"，而 git-server D5 正是
+  经 argv 传证书与私钥。两者都需要一篇明确的裁决或修订，不能靠沉默通过。
+- 该通道的 ADR 仍为 `proposed`，且其"未解决的问题"里包含上游镜像与 Node 从 Git Server 取回这两项——
+  没有它们，Issue #16 需要的**带凭据 workspace clone 仍然不存在**。
+
+结论：**在 `desktop/` 只读不变的前提下，今天不存在可交付的真实 checkout 通道**；T4 是这一前提下唯一
+自洽的选择，但它把"取得验收"推迟到了需要上述裁决与实现之后。
+
 
 ## 推荐：选 α——Cloud 的交付端点发布只读镜像，Node 用自己的 clone 取回
 
@@ -127,7 +159,7 @@ Cloud 的执行记录；目标通道没有任何这一类秘密，因为它用�
 | # | 事项 | 本文的建议 | 批准后才可执行的变更 |
 |---|---|---|---|
 | A′ | 是否批准以 URL 承载读取权的第一阶段 | **不批准**（已按 2026-10-12 评审撤回） | 无。原 A 项（限定修改凭据隔离 D8 的标题级禁令）随之作废：本通道不再要求引入新的 Git 服务面 |
-| B′ | 在 T1／T3／T4 之间裁决 Node 的取回身份 | 坚持不改 `desktop/` → **T4**；要在本 Issue 内取得真实 Checkout 验收 → 在 **T1 与 T3** 之间裁决，本文不代选 | T1 改 `apps/ora-node/src/repository/config.rs` 的配置白名单与固定前缀（+ 部署编排）；T3 改 clone 执行器的身份模型与物化根。两者都**必须由新决策承载，不得改写已批准正文** |
+| B′ | 在 T1／T3／T4 之间裁决 Node 的取回身份 | 坚持不改 `desktop/` → **T4**；要在本 Issue 内取得真实 Checkout 验收 → 在 **T1 与 T3** 之间裁决，本文不代选。**2026-10-12 已裁决：T4**（`desktop/` 严格只读、生产 fail-closed 不解除） | T1 改 `apps/ora-node/src/repository/config.rs` 的配置白名单与固定前缀（+ 部署编排）；T3 改 clone 执行器的身份模型与物化根。两者都**必须由新决策承载，不得改写已批准正文** |
 | C′ | 是否解除 fail-closed | 不解除（D7 无条件不变） | 无 |
 | D′ | 目标通道与退役判据 | 正式 Git Server 的只读取回是**唯一**目标通道；任何中间通道都必须写明退役判据，且不得依赖未来迁移掩盖今天的漏洞（R7） | 无 |
 | E′ | D14-B 义务在容器边界下的证据映射 | 延后，且不得被声称已成立 | 无 |
