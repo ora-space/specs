@@ -35,8 +35,10 @@ Credential Service 已经落地，证据集中在 `integration.git_credentials_t
 `capabilities=[]` 引用走**逐条核验 + 逐条显式迁移**（不得批量授权，无法证明授权依据者保持冻结），
 实现与既有行的迁移落在解禁那次变更里。Issue 验收要求的"读取与推送能力分别验证"因此仍超出今天的
 词汇表：推送一侧由独立的
-[推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`proposed`）
-承载，其证据在获批并实现前如实标注 `Missing`。规则侧获批、Cloud 侧落地与新能力码都不解除任何拒绝。
+[推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`approved` 2026-10-12，
+E 不批准：`push` 仍不在词汇表中）承载，其核心用例登记在
+[推送执行权限核心用例](../../node/repository/push-execution-authority.md)，除"推送不可被请求"一条外全部为
+`Missing`。规则侧获批、Cloud 侧落地与新能力码都不解除任何拒绝。
 
 ## 阅读与维护规则
 

@@ -23,8 +23,8 @@ E 有条件批准（条件并入 D5），结论见[批准记录](#批准记录20
 路径、不解除任何 fail-closed。**`push` 尤其仍然不可用**：本文只把它的语义写定，把它加入词汇表还需要
 另一篇 `approved` 决策（C 项），以及一篇承载其执行端契约的独立决策——Issue #16 的真实 Push 验收
 仍在本 Issue 的必交范围内，见
-[推送执行权限](../../node/repository/20261012-push-execution-authority.md)（`proposed`，**未批准，
-因此不构成任何授权**）。`read` 与 `push` 的语义在此写定的目的，是让此后每一篇扩展都对着同一套边界
+[推送执行权限](../../node/repository/20261012-push-execution-authority.md)（`approved`，2026-10-12：A–D 与 F
+批准、E 不批准。**批准的是权限模型，不构成实施或启用推送的授权**——`push` 仍在本词汇表之外）。`read` 与 `push` 的语义在此写定的目的，是让此后每一篇扩展都对着同一套边界
 论证，而不是让枚举先行于语义。
 
 前序决策 [用户自助 HTTPS Git 凭据](20261010-user-managed-git-credentials.md)（approved）D2 把第一版
@@ -298,8 +298,8 @@ P2 要求管理员在重绑前对候选引用做一次**受控验证**：在声�
 
 - **推送的执行端契约**：谁执行推送、谁授权、凭据在什么身份下可见、允许的 ref 范围、有效期、失败与
   部分成功、审计与恢复、如何避免 Agent 取得秘密。这是 C 项的前置，已由独立的
-  [推送执行权限](../../node/repository/20261012-push-execution-authority.md)（`proposed`）承载；
-  本文只写定 `push` 的语义维度，且在它获批之前不产生任何推送能力。
+  [推送执行权限](../../node/repository/20261012-push-execution-authority.md)（`approved`，2026-10-12）承载；
+  本文只写定 `push` 的语义维度，那篇获批也不产生任何推送能力。
 - **P2 的重绑流程**：验证端点、管理员重绑入口、失败重绑不得覆盖原绑定、迟到验证结果的隔离。本文
   只回答"验证用哪个能力"（D4）。
 - **被能力码终结的 Project 如何恢复**：今天只能新建引用再重绑。受 P2 决策影响，本文不提供绕过路径。
@@ -325,8 +325,9 @@ P2 要求管理员在重绑前对候选引用做一次**受控验证**：在声�
    两项都必须出现在解禁那次变更里，且该变更必须显式记录**具名清单与每一条的四项核验结果**（D5 第
    2–4 条）。
 4. **C 与 P2 的后续决策（未完成）**：推送的执行端契约由
-   [推送执行权限](../../node/repository/20261012-push-execution-authority.md)（`proposed`）承载，
-   重绑流程由 P2 决策承载；两者都不能由本文代替，也都不能靠本文的批准绕过。
+   [推送执行权限](../../node/repository/20261012-push-execution-authority.md)（`approved`，2026-10-12）承载，
+   重绑流程由 P2 决策承载；两者都不能由本文代替，也都不能靠本文的批准绕过。词汇表扩展仍是**第三篇**
+   独立决策，`push` 在被它加入枚举之前不可被请求。
 
 保持不变的行为（本文被批准后）：`cloneauth` 的能力成员集合与规范化规则、`requireRepositoryAccess`
 的全部判定与顺序、`terminalCredentialRefusals` 的适用面、`credential_refs.capabilities` 的默认值与
