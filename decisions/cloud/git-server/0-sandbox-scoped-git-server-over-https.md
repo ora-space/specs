@@ -11,6 +11,13 @@ Git Server 是 Cloud 仓库中与 model-gateway 并列的独立程序，只提�
 按证书目标与当前数据库状态判定能否读写该仓库；推送在 `pre-receive` 中再按 ref 逐项判定。Git Server 不保存
 任何授权状态，Controller 不参与授权。
 
+> **修订说明（2026-10-12／2026-10-13）**：上面这段描述的是**写方向与本文原始形态**。**读方向已被取代**：沙盒面向的
+> 只读镜像通道不再要求、也不接受客户端证书，也不接受任何请求自述的字段（含 `Ora-Execution-Id`），认证目标改由
+> 服务端在每次请求内把连接来源解析为部署自有的容器状态得出，`git-access` 身份不再签发。取代它的决策是
+> [工作区内容搬运](20261012-workspace-content-transport-over-the-internal-git-server.md)（proposed）；D2、D3、D5 与
+> 不变量、落地顺序中受影响的部分都已就地标注。写方向（把成果推回内部仓库或用户上游）仍待
+> `20261012-push-execution-authority.md`（proposed）裁决，本文不放行任何写。
+
 本 ADR 处于 `proposed`，是新建领域 `cloud/git-server` 的根决策。涉及 Cloud 仓库新增的 Git Server 程序、
 cluster 仓库的 Sandbox Server（签发 git-access 客户端身份）与 Compose 部署、desktop 的 Node（交付时推送、
 恢复时拉取）。本文确定 Git Server 的服务边界、协议、访问控制、远端 ref 规则与 Cloud 核验推送的接口；Revision
@@ -261,7 +268,9 @@ Cloud 的交付处理几乎保持原结构，D4 的“只能新建”也保证�
 - 镜像上游、Node 改从 Git Server clone：已由 [工作区内容搬运](20261012-workspace-content-transport-over-the-internal-git-server.md)（proposed）承接；
   推回用户远端仍待另立 ADR（D7）。
 - 向用户展示的分支（快进模式的 `refs/heads/...`）：需要时由后续 ADR 增加（D4）。
-- 仓库的配额、GC、失败交付尝试留下的 ref 与对象的清理、删除 Project 时的清理。
+- 仓库的配额、GC、失败交付尝试留下的 ref 与对象的清理、删除 Project 时的清理。**均未实现（2026-10-13）**：
+  镜像侧在 `cloud/internal/mirror` 与 `cloud/internal/mirrorpublish` 内有机制，但没有生产调用方，因此不得记为
+  完成；镜像的权威记录按本次裁决定为受控持久卷上的文件系统记录，不引入数据库 migration。
 - 用户或浏览器读取仓库内容（diff 预览、下载）的入口与授权。
 - 生产部署的多副本与存储后端。
 
@@ -277,6 +286,13 @@ Cloud 的交付处理几乎保持原结构，D4 的“只能新建”也保证�
 3. **Compose 接入**：Git Server 加入 cluster 栈，接入沙盒网络与默认网络。行为不变。
 4. **Node 交付时推送、恢复时拉取，Cloud 经 ref 查询核验并登记**：在 Revision 后续 ADR 获批后实施，证明不变量 12。
    从这一阶段开始，新交付 Revision 的代码改动存放在 Git Server，会话 JSONL 仍在对象存储。
+
+> **修订说明（2026-10-13）**：第 2、3、4 步中依赖"客户端证书目标"与"Node 出示 git-access 证书"的部分**已被取代**
+> ——读方向的授权改由服务端解析来源容器得出，写方向的身份方案仍待 push 执行授权 ADR 裁决。取代它的是
+> [工作区内容搬运](20261012-workspace-content-transport-over-the-internal-git-server.md)（proposed）的落地顺序，
+> 已实际落地的部分（部署前提固化、来源解析接口、只读 Git Server 与镜像存储、隔离读取验收）记在那里。下列第 2–4
+> 步的原文保留为决策历史与代价对照，**不构成当前计划**：其中的 `pre-receive` ref 规则与"按需建仓"仍适用于写方向，
+> 但"证书解析"与"逐请求的数据库判定"的读方向形态已作废。
 
 先交付并独立验收访问控制，再改动 Revision 链路，使安全边界可以在没有业务调用方的情况下单独评审；任何一步失败都不
 影响已有的对象存储路径。
