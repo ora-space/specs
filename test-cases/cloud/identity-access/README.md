@@ -7,6 +7,32 @@
 架构边界和不变量来自
 [外部身份由 Gateway 归一，Cloud 保持授权权威](../../../decisions/cloud/identity-access/0-gateway-mediated-external-identity.md)。
 
+用户托管的仓库凭据（HTTPS Git Token）于 2026-10-10 随四份 ADR 进入 `approved`，其核心用例登记在
+[凭据元数据](repository-credential-metadata.md)、[凭据 Ingress 受限例外](repository-credential-ingress-exception.md)、
+[凭据 Secret Store](repository-credential-secret-store.md) 与
+[仓库凭据归属连续性](repository-credential-ownership-continuity.md)。执行侧的身份隔离见
+[Node 凭据执行身份隔离](../../node/repository/git-credential-execution-isolation.md)。
+
+**当前实现状态（2026-10-12 本轮实现后）**：Cloud 侧的凭据元数据、用户自助 Ingress 与独立
+Credential Service 已经落地，证据集中在 `integration.git_credentials_test.go`、
+`integration.git_credential_ingress_test.go`、`integration.git_credential_binding_test.go`、
+`internal.credentialstore.*` 与 `internal.config.*`。上一轮补上了**单次授权的 Cloud+Store 半程**：
+授权载体与验签在 `internal.cloneauth`，Store 侧的兑换、原子消费与重放拒绝在
+`internal.credentialstore`（`Resolver` 类型与 `authorization.go`）。本轮把**所需能力并入执行计划**：
+准入要求引用声明 `clone`，规范集合随签名的 `cloneauth.Binding` 进入 `cloneexec.Job`，执行器再比对
+一次；引用不允许该能力时以新的 `repository_credential_capability_unsupported` 明确拒绝，并与其他
+确定性拒绝一样结算 Operation（见
+[把带凭据的拒绝结算为终态](../../../decisions/cloud/operation/20261012-credentialed-clone-refusal-is-terminal.md)，
+`proposed`）。
+
+仍然 `Missing` 的是**执行侧**与**能力词汇表**：Cloud 的 `Issue` 还没有生产调用方（唯一合法调用点在
+`requireRepositoryAccess` 的无条件拒绝之后），部署尚未签发 `broker-resolver` 证书，Node 侧的凭据
+执行身份 C 与 clone 后清理未实现，因此私有仓库 clone 在所有路径上继续保持
+`repository_credential_executor_unavailable` 拒绝。能力词汇表今天只有 `clone`，Issue 验收要求的
+"读取与推送能力分别验证"与 P2 的候选验证能力都超出它，裁决材料见
+[仓库凭据能力词汇表](../../../decisions/cloud/identity-access/20261012-repository-credential-capability-vocabulary.md)
+（`proposed`，**未裁决**）。规则侧获批、Cloud 侧落地与新能力码都不解除任何拒绝。
+
 ## 阅读与维护规则
 
 - 核心用例按业务风险组织，不按 Go package、单元测试或集成测试组织。
@@ -14,6 +40,9 @@
   PostgreSQL、真实 Cloud router 与会校验 PKCE 的假 provider 的验收测试；`gateway.*` 与 `github.*` 是
   `internal/gateway` 及其 `github` 子包的单元测试。
 - 只有在测试失败会直接说明某项验证义务不成立时，才把该测试列为代表性证据。
+- `decisions/` 中状态为 `proposed` 的 ADR **不构成验收依据**：以它为决策依据的义务可以登记"实现先行"
+  的证据（测试存在且在跑），但状态必须显式标注 `未裁决` 并写明承载它的 proposed ADR，且在该 ADR 变为
+  `approved` 之前不得被当作正式验收结果引用，也不得计入 Issue 验收。ADR 状态变化时同步复核这些标注。
 - 文件路径与用例标题共同构成稳定引用；集成测试的 doc comment 引用它们。
 - 改变 attempt/session 状态、事务顺序、Cookie 策略、凭据签发、代理过滤或数据库约束时，必须检查相关
   核心用例及其证据状态。
