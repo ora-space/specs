@@ -298,11 +298,15 @@ Controller 拿不到仓库地址与交付 ref，无论 `v1` 是否保留都无�
 
 ## 核心测试用例
 
-按仓库规则，核心测试用例在本 ADR 状态变为 `approved` 后依据最终方案补充。需要同步的用例：
+本 ADR 获批后依据最终方案补充的核心用例如下。第 4 步尚未实现，新增义务的证据大多为 `Missing`，实现时按用例逐项
+补充直接测试并更新状态。
 
-- 新增 `test-cases/cloud/revision/`：Revision 只在 ref 查询确认后登记（Git Server 根决策不变量 12，本文不变量 2）；
-  ref 不存在或不符记 `verification_failed` 且不登记；Git Server 不可用不接管、可重放；`unchanged` 也登记交付 ref；
-  续作候选只含有交付 ref 且最终提交不等于基础提交的 Revision；取消的运行不标记不可续接。
+- [Git 交付的输入、授权、核验与登记](../../../test-cases/cloud/revision/git-delivery-verification.md)：固定输入中的
+  仓库地址与交付 ref；缺任一配置时 `skipped`；Git Server 授权的阶段条件；Revision 只在 ref 查询确认后登记
+  （Git Server 根决策不变量 12，本文不变量 2），ref 不存在或不符记 `verification_failed`，Git Server 不可用不接管、
+  可重放，`unchanged` 也登记交付 ref；`revisions` 的两种形态；公开投影保持形状。
+- [从交付 ref 续作前序 Revision](../../../test-cases/cloud/revision/git-revision-resume.md)：续作候选只含有交付 ref
+  且最终提交不等于基础提交的 Revision；会话输入的前序形状；取消的运行不标记不可续接。
 - `test-cases/cloud/controller-integration/agent-run-executions-and-thread.md`：“成功交付等待 Cloud 验证”改为 ref 查询
   加 JSONL `HEAD`；“授权不持久化”中只剩 JSONL 上传授权。
 - `test-cases/node/protocol/agent-run-messages.md`：交付输入的 ref 与对象键校验改为交付 ref 与 JSONL 键，删除下载
