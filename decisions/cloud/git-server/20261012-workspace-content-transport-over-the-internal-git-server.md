@@ -374,6 +374,22 @@ migration**，且**只在隔离 PostgreSQL 上验证**；正式库不迁移。�
 - **调用方自述对端地址的残余**：见 D3 的已知残余。彻底消除需要把沙盒面向的读取终结在 `sandbox-server` 进程内，
   这是一个通道形态的改变，超出本文范围。
 - 生产部署的多副本、存储后端与 GC 阈值；会话 JSONL 仍走对象存储（根决策不变量 14 不变）。
+- **`mirror_prepare` 授权今天既签不出、也兑换不了**（2026-10-13 受阻，需评审后才能推进）：本轮为镜像准备建立了
+  真实产生者（`internal/core/mirror_worker.go`：短事务 claim、lease 过期、单调 `generation` fencing、有限重试与
+  终止性失败结算），但**签发调用点仍然缺位**。原因是安全协议**表达不了**这份请求，而不是实现没写完，因此按本轮
+  边界在此登记精确阻塞，不通过扩大 bearer 权限或绕开校验来推进：
+  1. **签不出**：`cloneauth.Binding` 对**任何** operation 都要求非空 `execution id`
+     （`internal/cloneauth/authorization.go:206`）。镜像准备没有 clone execution —— `mirror_preparations`（0034）
+     以 `operation_id` 为键，建表语句里没有任何 execution 列。把 operation id 填进这个字段是把一个身份当成
+     另一个身份，而该包已明确拒绝"签一个没有检查会读的值"（`Binding.Ref` 的注释即为此）。
+  2. **兑换不了**：Store 的兑换要求出示方**自述** `NodeID`／`NodeInstanceID`／`NodeIncarnationID`／
+     `RuntimeGeneration`／`ControlEpoch`，并与绑定逐项比对（`internal/credentialstore/authorization.go:173-179`）。
+     镜像准备由 C 执行，而 C 不运行在任何 Node 上，没有 node instance 与 runtime generation 可自述——要让它有，
+     就得先决定那个"运行时"指的是谁。
+  两项都改动**签名载荷的形态**或 **Store 的身份判定**，属于新的生产权限边界，不在本轮授权范围内自行决定。
+  可选的收窄路径（择一，均需评审）：按 operation 让 `ExecutionID` 成为有条件字段（与 `Ref` 同一模式）；并由 Cloud
+  在 mirror job 中下发所服务 Workspace 的 runtime、像 clone 路径已做的那样由 C 回述——但后者必须先回答"C 回述一个
+  它并不运行于其上的 runtime 是否仍构成绑定，而不是 Cloud 与自己比对"。
 
 ## 落地顺序
 
