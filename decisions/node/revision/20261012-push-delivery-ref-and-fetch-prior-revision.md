@@ -225,10 +225,18 @@ Node 协议的消息拒绝未知字段，新旧 Node 与 Controller 不能混用
 
 ## 核心测试用例
 
-按仓库规则，核心测试用例在本 ADR 状态变为 `approved` 后补充到 `test-cases/node/revision/`：推送 `delivered` 与两种
-`unchanged`；重启后重放推送不失败；`403` 与 ref 被拒不重试、`503` 重试后成功与耗尽；单次时限与低速中止；checkout
-中恶意的 `credential.helper`、`http.<url>.sslVerify`、`url.<base>.insteadOf` 不生效；恢复成功、交付 ref 不存在与 `403`
-为 `base_unavailable`、提交不符与网络失败为 `unavailable`、远端改写提示；Cloud 模式缺 `git_access` 拒绝启动。
+本 ADR 获批后依据最终方案补充的核心用例如下。本 ADR 尚未实现，新增义务的证据大多为 `Missing`，实现时按用例
+逐项补充直接测试并更新状态。
+
+- [git-access 凭据隔离与 Cloud 模式配置](../../../test-cases/node/revision/git-access-isolation.md)：checkout 中恶意的
+  `credential.helper`、`http.<url>.sslVerify`、`url.<base>.insteadOf` 不生效，凭据只经命令行传入；Cloud 模式缺
+  `git_access` 拒绝启动。
+- [交付推送最终提交到交付 ref](../../../test-cases/node/revision/git-delivery-push.md)：推送 `delivered` 与两种
+  `unchanged`；重启后重放推送不失败；`403` 与 ref 被拒不重试，`503` 重试后成功与耗尽；单次时限与低速中止。
+- [恢复从 Git Server 拉取前序交付 ref](../../../test-cases/node/revision/git-restore-fetch.md)：恢复成功且不访问
+  `origin`；交付 ref 不存在与 `403` 为 `base_unavailable`，`401`、提交不符与网络失败为 `unavailable`；远端改写提示；
+  恢复失败时插件从未启动。
+- Node 协议的消息形状见[Agent 运行的协议消息](../../../test-cases/node/protocol/agent-run-messages.md)。
 
 ## 落地
 
