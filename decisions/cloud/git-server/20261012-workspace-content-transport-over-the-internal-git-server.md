@@ -374,22 +374,31 @@ migration**，且**只在隔离 PostgreSQL 上验证**；正式库不迁移。�
 - **调用方自述对端地址的残余**：见 D3 的已知残余。彻底消除需要把沙盒面向的读取终结在 `sandbox-server` 进程内，
   这是一个通道形态的改变，超出本文范围。
 - 生产部署的多副本、存储后端与 GC 阈值；会话 JSONL 仍走对象存储（根决策不变量 14 不变）。
-- **`mirror_prepare` 授权今天既签不出、也兑换不了**（2026-10-13 受阻，需评审后才能推进）：本轮为镜像准备建立了
-  真实产生者（`internal/core/mirror_worker.go`：短事务 claim、lease 过期、单调 `generation` fencing、有限重试与
-  终止性失败结算），但**签发调用点仍然缺位**。原因是安全协议**表达不了**这份请求，而不是实现没写完，因此按本轮
-  边界在此登记精确阻塞，不通过扩大 bearer 权限或绕开校验来推进：
-  1. **签不出**：`cloneauth.Binding` 对**任何** operation 都要求非空 `execution id`
-     （`internal/cloneauth/authorization.go:206`）。镜像准备没有 clone execution —— `mirror_preparations`（0034）
-     以 `operation_id` 为键，建表语句里没有任何 execution 列。把 operation id 填进这个字段是把一个身份当成
-     另一个身份，而该包已明确拒绝"签一个没有检查会读的值"（`Binding.Ref` 的注释即为此）。
-  2. **兑换不了**：Store 的兑换要求出示方**自述** `NodeID`／`NodeInstanceID`／`NodeIncarnationID`／
-     `RuntimeGeneration`／`ControlEpoch`，并与绑定逐项比对（`internal/credentialstore/authorization.go:173-179`）。
-     镜像准备由 C 执行，而 C 不运行在任何 Node 上，没有 node instance 与 runtime generation 可自述——要让它有，
-     就得先决定那个"运行时"指的是谁。
-  两项都改动**签名载荷的形态**或 **Store 的身份判定**，属于新的生产权限边界，不在本轮授权范围内自行决定。
-  可选的收窄路径（择一，均需评审）：按 operation 让 `ExecutionID` 成为有条件字段（与 `Ref` 同一模式）；并由 Cloud
-  在 mirror job 中下发所服务 Workspace 的 runtime、像 clone 路径已做的那样由 C 回述——但后者必须先回答"C 回述一个
-  它并不运行于其上的 runtime 是否仍构成绑定，而不是 Cloud 与自己比对"。
+- ~~**`mirror_prepare` 授权既签不出、也兑换不了**~~ **已裁决（2026-10-13，签发侧已落地，兑换侧待落地）**：
+  上一轮登记的两项阻塞（`cloneauth.Binding` 对任何 operation 都要求非空 `execution id`；Store 兑换要求出示方
+  自述一组 Node／runtime 值，而 C 不运行在任何 Node 上）都改动签名载荷形态与 Store 的身份判定，因此当时未自行
+  决定。裁决结果是**按 operation 区分签名绑定**，而不是任何兼容捷径：
+  1. **operation 是强制校验的用途维度，不是标签。** `OperationClone` 与 `OperationMirrorPrepare` 各自**要求**
+     本用途的身份字段并**禁止**对方的：clone 要求 `executionId` 与整组 Node 运行时值、禁止 `ref`／`operationId`／
+     `preparationGeneration`／`executorIdentity`；镜像准备要求 `operationId`／`preparationGeneration`(≥1)／
+     `executorIdentity`／`ref`(`refs/heads/...`)、禁止 `executionId` 与整组 Node 运行时值。两组**不得同时出现**，
+     未知 operation 被拒而不是回落到 `clone`。**明确不允许**用假 Node ID 兼容，也**不允许**把 Operation ID 填进
+     execution 字段——混用载荷读起来两种解释都成立，那样 operation 就退化成标签。
+  2. **旧 Clone 协议逐位不变。** 上述规则不改变任何一份 clone 绑定的字节：clone 的字段集、签名输入与校验顺序都
+     与上一轮相同，全部既有 clone 用例（含 `internal/cloneexec` 的验收路径）不改断言仍绿。
+  3. **镜像用途的"谁可以花掉它"改由证书判定，而不是自述。** clone 绑定一个 Node 运行时，出示方能如实自述，
+     Store 比对的是请求自述值；C 没有运行时可自述，因此镜像绑定的是 `executorIdentity`，由 Store 从**验过的
+     mTLS 客户端证书**解析（`internal/credentialstore` 的 `Identities.PresentedIdentity`），即"部署签发了证书的
+     那一方"，而不是请求体里写着的名字。上面那条"C 回述一个它并不运行于其上的 runtime 是否构成绑定"的疑问因此
+     不再成立：C 不再回述任何 runtime 身份。
+  **签发侧证据（2026-10-13）**：`internal/cloneauth` 的 `validateClone`／`validateMirrorPrepare` 双向强制；
+  `purpose_test.go` 的 14 个"改一个字段"用例证明双向互斥（含把 Operation ID 填进 execution 字段），另有三个
+  手工签名、只保留真实签名的用例证明**有效签名也不能让混用或未知 operation 的载荷通过 `Verify`**；
+  `internal/cloneexec` 的 `TestExecuteRefusesAMirrorAuthorizationOnTheCloneRoute` 证明一份合法签发、且仓库／
+  凭据／版本／代次都与 job 一致的镜像授权在 clone 路由上以 `binding_mismatch` 被拒，且 Store 一次都没有被询问。
+  **仍待落地**：Store 侧的镜像专用兑换路径（以证书身份替代自述 runtime 判定、单次认领、凭据当前版本与撤销状态），
+  以及"Store 不能实时查询 Cloud 时，授权有效期与撤销窗口如何如实声明并在发布与 ready 接收处重新校验"。
+  在它落地前，镜像授权**签得出但兑换不了**，因此没有任何真实秘密会因本轮变更被交付。
 
 ## 落地顺序
 
