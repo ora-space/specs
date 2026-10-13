@@ -250,7 +250,11 @@ migration**，且**只在隔离 PostgreSQL 上验证**；正式库不迁移。�
   `mirror_preparations`（主键为 `operation_id`，自带 `state` 相位），运行在既有的 `node` → `clone` 转换之内**，
   由 Cloud 在该转换上把门——未 ready 或绑定未重新核验通过就不转换。migration 0035 把 `mirror` 从 step 词汇表
   撤回，使它不再是一个系统可以进入、却无人能驱动的状态。这**不改变**本节对顺序的承诺（镜像先于 Clone），
-  只改变该承诺在何处被表达。
+  只改变该承诺在何处被表达。本轮同时修掉了让这件事**无声**的那个映射：`controlgrpc` 现在对"合约未定义、
+  且不属于退休集合"的 step 明确拒绝（`codes.Internal`，并在错误里带出该名字），不再静默降级为
+  `OPERATION_STEP_UNSPECIFIED`。失败因此发生在 Cloud 自己的投影里并写明原因，而不是留给 Controller 去整轮
+  失败。四个退休名（`storage`／`worktree`／`ready`／`storage_delete`）仍投影为零值，因为已应用的行还写着它们、
+  而历史操作永远不会被 claim。
 
 ### D8：内部只读通道与外部 Push 是两条独立路径
 
