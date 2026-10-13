@@ -16,11 +16,22 @@
 迁移 `0033_user_git_credentials.sql`）、用户自助 Ingress、独立 Credential Service
 （`internal/credentialstore/`、`cmd/credential-store`）、单次授权的签发与兑换
 （`internal/cloneauth/` 与 `internal/credentialstore/authorization.go`）与 `projects.credential_ref_id`
-权威绑定（`internal/core/repository_credentials.go`）。仍然**没有**可用的凭据执行器：授权的签发方
-（Cloud 的 `Issue`）还没有生产调用方，Node 侧认证通道未定义，因此凭据 clone 在每个执行路径上继续被
-拒绝。本文件中"元数据权威"一侧的义务多数已有直接证据；"执行绑定"一侧在 2026-10-12 由 `internal/core`
-的定向测试补上了 Cloud 侧的准入、结算与版本冻结证据，多数由 `Missing` 升为 `Partial`，**仍缺**真实
-Store 与执行器那一段（兑换 → 执行 → 销毁）以及协议冻结后的交接故障检查。
+权威绑定（`internal/core/repository_credentials.go`）。
+
+**2026-10-13 更正：下面这句原先写成"授权的签发方还没有生产调用方"，它只对按凭据直连的 clone 成立。**
+两条通道的签发方是分开的：`OperationClone` 的 `Issue`（`internal/core/credentialed_clone.go`）只在
+`CLOUD_CLONE_DISPATCH_ENABLED=true` 时安装（该开关默认关闭），Node 侧认证通道未定义，因此**按凭据直连
+的** clone 仍在每个部署上被拒绝；而镜像通道（`CLOUD_CLONE_DISPATCH_MIRROR_ENABLED`）有自己的签发方
+`MirrorDispatcher.Prepare`（`internal/core/mirror_dispatch.go`，绑定 `OperationMirrorPrepare`），由
+`cmd/server` 的镜像准备循环（`PrepareMirrorsOnce`）真实驱动。2026-10-13 的隔离验收里，它签发的授权由
+凭据执行器在真实 Credential Service 上兑换（`ResolveMirror`）、抓取只承认 token 的私有上游、并销毁
+材料——"签发 → 兑换 → 执行 → 销毁"这一段在镜像通道上已有端到端证据，见代码仓库
+`docs/internal-git-server-mirror-acceptance.md`。
+
+本文件中"元数据权威"一侧的义务多数已有直接证据；"执行绑定"一侧在 2026-10-12 由 `internal/core` 的
+定向测试补上了 Cloud 侧的准入、结算与版本冻结证据，多数由 `Missing` 升为 `Partial`。**仍缺**的是
+`OperationClone` 那一段（真实执行器执行 clone → 交付 checkout → 销毁）与协议冻结后的交接故障检查；
+镜像通道那一段虽有端到端证据，但它只在验收驱动里被逐条断言，尚未把每一项登记进本文件的证据表。
 
 ## Credential Metadata Is The Only Authority And Secret Reference Is Not A Bearer Token
 
@@ -119,7 +130,7 @@ Project 的持久引用，以及对外错误形状。
 | 引用未声明所需能力时在准入处明确拒绝 | `internal/core` 的 `TestCredentialedCloneAdmissionRequiresTheReferencesCloneCapability` 用八行表断言：`["clone"]` 被准入并把规范集合交给执行器，而 `[]`、`["fetch"]`、`["push"]`、`["Clone"]`、`["clone","clone"]`、`["clone",7]`、`[""]` 各以 `repository_credential_capability_unsupported` 被拒且**从未到达执行器**；`TestADeploymentsOwnRefusalOutranksTheReferencesCapability` 断言部署级拒绝优先。执行器一侧的同一规则由 `internal/cloneexec` 的 `TestExecuteRefusesBeforeSpendingAnything` 覆盖（无能力、词汇表外能力、重复能力三种作业在花费任何资源前被拒） | Covered |
 | 能力拒绝不改写持久状态并终结 Operation | `internal/core` 的 `TestAnUnsupportedCapabilitySettlesTheOperationToo` 断言拒绝码、执行器零调用、Operation 为 `failed` + 该码、`retry_at` 为空、无 `clone_executions` 行、绑定与 lifecycle 未被触碰 | Covered（**未裁决**：结算语义由 [把带凭据的拒绝结算为终态](../../../decisions/cloud/operation/20261012-credentialed-clone-refusal-is-terminal.md)（`proposed`）承载，批准前只作为"实现先行"证据，不计入验收结果） |
 | 无作用域的旧式 clone 准入被拒绝 | `integration.repository_credentials_test.go` 的 `TestProductionStoreRefusesUnscopedCloneAdmission` 断言 `runtime_scope_required` 且拒绝的请求未被持久化 | Covered |
-| 解禁只能在 D11-B／D14-B 全部有证据之后 | 尚缺"解禁前后的门禁断言"测试；今天正确的行为正是继续拒绝，因此没有可指向的解禁证据。执行器与授权链路本轮已经落地，但 D11-B／D14-B 的**全部**义务仍不满足：checkout 尚未交付到 Workspace（D12 与验收义务 14 未实现），同一容器内的 W／C 分离不存在，"以 W 身份对 C 发起能力尝试"一类断言没有证据，超时与 `Interrupted` 两种结局的销毁也无直接证据。`repository_credential_executor_unavailable` 因此**继续保持无条件拒绝**，且 `CLOUD_CLONE_DISPATCH_ENABLED` 默认关闭 | Missing |
+| 解禁只能在 D11-B／D14-B 全部有证据之后 | 尚缺"解禁前后的门禁断言"测试；今天正确的行为正是继续拒绝，因此没有可指向的解禁证据。执行器与授权链路本轮已经落地，但 D11-B／D14-B 的**全部**义务仍不满足：checkout 尚未交付到 Workspace（D12 与验收义务 14 未实现），同一容器内的 W／C 分离不存在，"以 W 身份对 C 发起能力尝试"一类断言没有证据，超时与 `Interrupted` 两种结局的销毁也无直接证据。`repository_credential_executor_unavailable` 因此**在未安装任何通道的部署上**继续是带凭据 clone 的答案，且两个开关（`CLOUD_CLONE_DISPATCH_ENABLED` 与 `CLOUD_CLONE_DISPATCH_MIRROR_ENABLED`）都默认关闭。**2026-10-13 更正**：本行原先写作"继续保持无条件拒绝"，这对**启用镜像通道的部署**不成立——准入守卫的收尾判据是"两个通道都没有才拒绝"（`internal/core/repository_credentials.go`），因此被镜像通道服务的那一次 clone **会被准入**，并真的写下 `clone_executions` 行：`scripts/agent-read-acceptance.py` 在镜像栈上按 `workspace_id` 读回这次 clone 的 `result->>'path'`（`outcome='clone_ready'`）与 `input->>'repositoryUrl'`（内部 Git Server 的镜像地址）。这**不是**本项义务的例外：解禁所指的是"按凭据直连"的那条路径，镜像通道不把上游凭据交给 Node，因此 D11-B／D14-B 中任何以"执行器按凭据执行 clone 并把 checkout 交给 Workspace"为前提的义务它一条都不满足 | Missing |
 | 能力词汇表本身是否扩展 | 词汇表今天只有 `clone`；Issue 验收要求的"读取与推送能力分别验证"与 P2 的候选验证能力都超出它，且被 approved 的凭据 ADR D2 明确排除。[仓库凭据能力词汇表](../../../decisions/cloud/identity-access/20261012-repository-credential-capability-vocabulary.md)已于 2026-10-12 **批准**（A–D 按推荐批准，E 有条件批准）：词汇表保持 `["clone"]`、不引入 `read`、不开放 `push`、候选验证复用受限 `clone`，旧式空集合引用走逐条核验后的显式迁移。词汇表自身的承诺登记在[凭据能力词汇表](repository-credential-capability-vocabulary.md)，本文件不重复；Issue 验收第 2 项的**推送一侧**因此继续为 `Missing`（由 [推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`approved` 2026-10-12，E 不批准）承载，词汇表扩展仍待独立决策，实现前不计入验收） | Missing |
 | 部署托管引用（`capabilities` 为空）在执行器安装后的准入 | 尚缺证据：今天执行器未安装，部署级拒绝先于能力条款命中，因此集成套件里 `ConfigureCredential` 写下的引用仍返回 `repository_credential_executor_unavailable`，无法区分两条拒绝。需要一条在已安装执行器的栈上断言"空能力集合被拒"的测试，且解禁变更必须显式处理该迁移义务 | Missing |
 
@@ -170,8 +181,8 @@ Project 的持久引用，以及对外错误形状。
 |---|---|---|
 | 绑定必须成对（id 与版本同时存在或同时为空） | `core.TestAnExecutionCannotRecordHalfACredentialBindingAndRevocationLeavesItAlone`：先写入一行同时带 id 与版本的执行（证明该形态可记录），再分别尝试只带 id 与只带版本的两行，两者都必须被拒，且断言拒绝来自 `execution_credential_binding` 这个具名约束（PostgreSQL 在错误里给出约束名），从而排除"因别的原因恰好失败"。约束被删除或放宽时该测试直接失败 | Covered |
 | 轮换与冻结不重写已受理执行的绑定 | 同一测试的后半段：把引用推进版本并置为 `invalid`／`revoked_by_owner` 之后，原本记录 `credential_ref_version=1` 的执行行仍然匹配，引用侧的变更没有级联进执行记录。另有否定性核对：`clone_executions` 的全部写入点只有三处 `UPDATE`（`internal/core/clone.go`、`internal/core/credentialed_clone.go` 写 `result`，`internal/core/runtime_force_stop.go` 写 `terminated_by_force_stop_id`）与两处 `INSERT`，**没有任何代码路径或迁移改写已存在行的 `credential_ref_id`／`credential_ref_version`**。仍是 `Partial`：`core.TestRotatingACredentialLeavesTheAcceptedExecutionsBindingAndSettlementIntact`（2026-10-12 补，本轮实际执行）现在经**真实轮换 API**（`PUT` 把版本 1→2）驱动一条已受理执行，断言执行行的见证字节不变、`credential_ref_version` 仍为 1，并断言该执行随后正常结算；仍未消除的一半是"生产上还没有真实执行器产出的带凭据执行行"，因此不记为完整系统承诺 | Partial |
-| 在途执行按原版本结算 | **Cloud 结算侧已有直接证据（2026-10-12 补，本轮实际执行）**：`core.TestRevokingACredentialLeavesTheAcceptedExecutionAndItsSettlementIntact` 与 `core.TestRotatingACredentialLeavesTheAcceptedExecutionsBindingAndSettlementIntact` 分别在真实 `DELETE`（撤销）与真实 `PUT`（轮换）之后，断言已受理执行仍按它记录的 `credential_ref_version=1` 结算（推进基线、operation 置 `succeeded`），且执行行的结果字节与 `updated_at` 不被引用侧变更改写。**仍缺的一半**：真实 Store 与执行器那一段（兑换 → 执行 → 销毁）尚不存在，因此只升到 Partial | Partial |
-| 冻结后不再签发新授权、已签发授权随到期失效 | 冻结一侧由 `integration.repository_credentials_test.go` 的归属连续性测试覆盖状态迁移；`core.TestRevokingACredentialClosesNewCloneBindings`（2026-10-12 补，本轮实际执行）在真实撤销之后断言**新**的 clone 绑定以 `repository_credential_frozen` 在准入处被拒、执行器零调用、`clone_executions` 零行——即撤销确实关闭新绑定，且关闭发生在任何登记或派发之前。同类证据本轮补上"冻结"这一来源：`core.TestASweepFrozenReferenceIsRefusedAtAdmission` 用归属连续性扫描（而不是撤销）冻结一行，再走已装载执行器的 `clone_dispatch`，断言 `repository_credential_frozen`、执行器零调用、`clone_executions` 零行——扫描产出的冻结与撤销产出的冻结在准入处得到同一个拒绝码，谁冻结不影响结论。签发与到期语义仍无直接证据：授权的签发与验签本轮已实现（`internal.cloneauth`）且 Store 侧的到期与单次消费已有测试（含跨真实进程的重放拒绝与"记录损坏即读作已消费"的失败语义），但 Cloud 的 `Issue` **没有生产调用方**——它唯一的合法调用点在 `requireRepositoryAccess` 的无条件拒绝之后，因此不存在"对已冻结凭据签发授权"这条可断言的路径，也没有"已签发授权随到期失效"的端到端演练。相邻证据是 `TestResolveRejectsARevokedCredential`：即便授权本身有效，Store 也拒绝兑换已撤销凭据的秘密——这是 Store 侧的纵深防御，不等于 Cloud 侧的冻结语义。**仍缺**：Cloud 的 `Issue` 至今没有生产调用方，因此"对已冻结凭据签发授权"与"已签发授权随到期失效"两条端到端路径依旧无从断言，本行只升到 Partial | Partial |
+| 在途执行按原版本结算 | **Cloud 结算侧已有直接证据（2026-10-12 补，本轮实际执行）**：`core.TestRevokingACredentialLeavesTheAcceptedExecutionAndItsSettlementIntact` 与 `core.TestRotatingACredentialLeavesTheAcceptedExecutionsBindingAndSettlementIntact` 分别在真实 `DELETE`（撤销）与真实 `PUT`（轮换）之后，断言已受理执行仍按它记录的 `credential_ref_version=1` 结算（推进基线、operation 置 `succeeded`），且执行行的结果字节与 `updated_at` 不被引用侧变更改写。**2026-10-13 更正**：本行原先写"真实 Store 与执行器那一段（兑换 → 执行 → 销毁）尚不存在"，这对**镜像通道**已不成立——隔离栈上真实 Cloud 服务进程签发、真实 Credential Service 校验并原子消费、真实执行器抓取只承认 token 的私有上游、随后销毁材料（`docs/internal-git-server-mirror-acceptance.md`）。**仍缺的一半**是"按凭据直连"的那条执行路径（`OperationClone` 的兑换 → clone → checkout 交付 → 销毁），它与本行的版本冻结义务不是同一段，因此状态仍为 Partial | Partial |
+| 冻结后不再签发新授权、已签发授权随到期失效 | 冻结一侧由 `integration.repository_credentials_test.go` 的归属连续性测试覆盖状态迁移；`core.TestRevokingACredentialClosesNewCloneBindings`（2026-10-12 补，本轮实际执行）在真实撤销之后断言**新**的 clone 绑定以 `repository_credential_frozen` 在准入处被拒、执行器零调用、`clone_executions` 零行——即撤销确实关闭新绑定，且关闭发生在任何登记或派发之前。同类证据本轮补上"冻结"这一来源：`core.TestASweepFrozenReferenceIsRefusedAtAdmission` 用归属连续性扫描（而不是撤销）冻结一行，再走已装载执行器的 `clone_dispatch`，断言 `repository_credential_frozen`、执行器零调用、`clone_executions` 零行——扫描产出的冻结与撤销产出的冻结在准入处得到同一个拒绝码，谁冻结不影响结论。**签发侧要按绑定分开看（2026-10-13 更正，原先整句写作"Cloud 的 `Issue` 没有生产调用方"）**：`OperationClone` 的 `Issue` 确实没有生产调用方，但 `OperationMirrorPrepare` 的签发方有——`core.MirrorDispatcher.Prepare`（`internal/core/mirror_dispatch.go`）由 `cmd/server` 的 `PrepareMirrorsOnce` 循环真实驱动。因此"对已冻结凭据签发授权"在镜像通道上可断言，且已有断言：`core.TestOnlyADurableRefusalEndsTheOperation` 的 "a reference that is frozen" 一例走真实的 `PrepareMirrorsOnce`，断言**零次派发**（`len(preparer.calls)==0`）且不留准备行——冻结的引用没有走到签名那一步。隔离验收另给出一条端到端旁证：真实 Cloud 服务进程签发的授权被真实 Credential Service 兑换、抓取只承认 token 的私有上游成功。相邻证据是 `TestResolveRejectsARevokedCredential`：即便授权本身有效，Store 也拒绝兑换已撤销凭据的秘密——这是 Store 侧的纵深防御，不等于 Cloud 侧的冻结语义。**仍缺**："已签发授权随到期失效"仍无端到端演练（Cloud 侧只有"授权寿命不得超过准备租约"这条签发期拒绝，Store 侧只有按自己时钟判过期），且上述两条证据都属于镜像通道；`OperationClone` 一侧依旧无从断言。本行保持 Partial | Partial |
 
 ### 决策依据
 

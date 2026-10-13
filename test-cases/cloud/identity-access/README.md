@@ -29,10 +29,16 @@ Credential Service 已经落地，证据集中在 `integration.git_credentials_t
 [把带凭据的拒绝结算为终态](../../../decisions/cloud/operation/20261012-credentialed-clone-refusal-is-terminal.md)，
 `proposed`）。
 
-仍然 `Missing` 的是**执行侧**与**迁移一侧**：Cloud 的 `Issue` 还没有生产调用方（唯一合法调用点在
-`requireRepositoryAccess` 的无条件拒绝之后），部署尚未签发 `broker-resolver` 证书，Node 侧的凭据
-执行身份 C 与 clone 后清理未实现，因此私有仓库 clone 在所有路径上继续保持
-`repository_credential_executor_unavailable` 拒绝。能力词汇表已于 2026-10-12 裁决并进入 `approved`：
+仍然 `Missing` 的是**按凭据直连的执行侧**与**迁移一侧**：`OperationClone` 的 `Issue` 只在
+`CLOUD_CLONE_DISPATCH_ENABLED=true` 时安装，该开关默认关闭，Node 侧的凭据执行身份 C 与 clone 后清理
+未实现，因此**按凭据直连的**私有仓库 clone 在安装该通道之前的所有部署上继续保持
+`repository_credential_executor_unavailable` 拒绝。**2026-10-13 更正**：本段原先把签发侧整体写成
+"Cloud 的 `Issue` 还没有生产调用方"并说"部署尚未签发 `broker-resolver` 证书"，两句都不再成立——镜像
+绑定（`OperationMirrorPrepare`）的签发方 `core.MirrorDispatcher.Prepare` 由 `cmd/server` 的
+`PrepareMirrorsOnce` 循环真实驱动，`broker-resolver` 证书由 `compose/clone-executor-setup.sh` 真实签发，
+启用镜像通道的隔离栈上已有一轮真实 Cloud 进程签发 → 真实 Store 兑换 → 私有上游抓取的端到端证据
+（代码仓库 `docs/internal-git-server-mirror-acceptance.md`）。镜像通道是**另一套部署状态**：凭据只在执行器
+手里用一次，Node 拿到的是内部地址，从未接触上游凭据，所以它不改变本文件其余各项的判断。能力词汇表已于 2026-10-12 裁决并进入 `approved`：
 词汇表保持 `["clone"]`，本次不引入 `read`、不开放 `push`，候选验证复用受限 `clone`；旧式
 `capabilities=[]` 引用走**逐条核验 + 逐条显式迁移**（不得批量授权，无法证明授权依据者保持冻结），
 实现与既有行的迁移落在解禁那次变更里。Issue 验收要求的"读取与推送能力分别验证"因此仍超出今天的

@@ -25,11 +25,22 @@ ingress-writer 客户端）并由 `cloud/cmd/credential-store` 承载，部署�
 在真实双向认证监听上验证"一份授权恰好换到一个 Token、重放被拒、**进程重启后仍被拒**、审计日志不含
 Token 与授权载体"。
 
-仍然 `Missing` 的是：**签发侧没有生产调用方**（唯一合法调用点在 `requireRepositoryAccess` 的无条件拒绝之后，
-本轮 fail-closed 不变，因此也不配置 Cloud 签名私钥，`Issue` 只由测试驱动；跨进程验收里的"签发方"是 Cloud
-的真实签发代码而不是真实的 Cloud 服务进程）、**部署尚未签发 `broker-resolver` 证书**（部署栈上
-`resolve` 依旧不可达，未配置验签公钥的部署继续以 `authorization_verification_unavailable` 拒绝每一次
-兑换）、**Node 侧执行身份 C 与凭据清理**、以及**备份／恢复演练**。Cloud 侧的元数据权威与 fail-closed 见
+**2026-10-13 更正**：上面这段原先把签发侧整体写成"没有生产调用方"，并说"部署尚未签发
+`broker-resolver` 证书"。两句都已不成立，要**按绑定**和**按部署**分开看。签发方是按绑定分开的：
+`OperationClone` 的 `Issue`（`internal/core/credentialed_clone.go`）只在 `CLOUD_CLONE_DISPATCH_ENABLED=true`
+时安装，该开关默认关闭，Node 侧认证通道未定义，因此**按凭据直连的** clone 仍在每个部署上被拒绝；而
+`OperationMirrorPrepare` 的签发方 `core.MirrorDispatcher.Prepare`（`internal/core/mirror_dispatch.go`）由
+`cmd/server` 的镜像准备循环（`PrepareMirrorsOnce`）真实驱动，签发方是**真实的 Cloud 服务进程**而不是测试
+代码。`broker-resolver` 证书也已由部署真实签发：`compose/clone-executor-setup.sh` 用 Credential Service
+的 CA 签出这一对，只落进执行身份 C 挂载的卷（`compose/credential-store-setup.sh` 的注释说明了为什么由
+持有方而不是 Service 自己的 setup 签发）。因此在启用镜像通道的隔离栈上 `resolve` **可达且已被真实兑换**：
+Cloud 服务进程签发 → Store 校验并原子消费 → 抓取只承认 token 的私有上游 → 销毁材料，见代码仓库
+`docs/internal-git-server-mirror-acceptance.md`。真实生产部署仍未启用任何通道
+（`CLOUD_CLONE_DISPATCH_ENABLED` 与 `CLOUD_CLONE_DISPATCH_MIRROR_ENABLED` 都默认关闭），在未安装任何通道的
+部署上 `resolve` 依旧不可达。
+
+仍然 `Missing` 的是：**`OperationClone` 一侧的签发方**（见上；跨进程验收里那一侧的"签发方"是 Cloud 的真实
+签发代码而不是真实的 Cloud 服务进程）、**Node 侧执行身份 C 与凭据清理**、以及**备份／恢复演练**。Cloud 侧的元数据权威与 fail-closed 见
 [凭据元数据](repository-credential-metadata.md)，接收面见
 [凭据 Ingress 受限例外](repository-credential-ingress-exception.md)，消费侧强制见
 [Node 凭据执行身份隔离](../../node/repository/git-credential-execution-isolation.md)。

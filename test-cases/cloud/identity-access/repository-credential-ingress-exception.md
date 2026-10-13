@@ -11,9 +11,15 @@ Token 只能从一个位置、以一个身份被接收，必须在同请求内�
 /api/v1/tenants/{tid}/git-credentials/{credId}`，见 `internal/api/router/router.go`），独立 Credential
 Service 已实现（`internal/credentialstore/`、`cmd/credential-store`），单次授权的签发与兑换本轮补齐
 （`internal/cloneauth/` 与 `internal/credentialstore/authorization.go`）。条件 1–4 的接收面、同请求转交与
-投影已有直接证据；仍然 `Missing` 的是执行侧——Cloud 的 `Issue` 还没有生产调用方（唯一合法调用点在
-`requireRepositoryAccess` 的无条件拒绝之后），部署尚未签发 `broker-resolver` 证书，Node 侧的凭据执行
-身份与私有 clone 未实现，规则侧与 Cloud 侧双双落地都不解除 `repository_credential_executor_unavailable`。
+投影已有直接证据；仍然 `Missing` 的是**按凭据直连**的执行侧——`OperationClone` 的 `Issue`
+（`internal/core/credentialed_clone.go`）只在 `CLOUD_CLONE_DISPATCH_ENABLED=true` 时安装，该开关默认关闭，
+Node 侧的凭据执行身份与私有 clone 未实现。**2026-10-13 更正**：本段原先把签发侧整体写成"Cloud 的 `Issue`
+还没有生产调用方"并说"部署尚未签发 `broker-resolver` 证书"，两句都不再成立——镜像绑定
+（`OperationMirrorPrepare`）的签发方 `core.MirrorDispatcher.Prepare` 由 `cmd/server` 的 `PrepareMirrorsOnce`
+循环真实驱动，`broker-resolver` 证书由 `compose/clone-executor-setup.sh` 真实签发，启用镜像通道的隔离栈上
+真实 Cloud 进程签发、真实 Store 兑换（`docs/internal-git-server-mirror-acceptance.md`）。这**不**解除
+任何拒绝：没有任何通道的部署上 `repository_credential_executor_unavailable` 依旧是带凭据 clone 的答案，
+而镜像通道把凭据留在执行器手里用一次、Node 拿到的是内部地址，与本文件的接收面例外无关。
 凭据元数据与 fail-closed 见[凭据元数据](repository-credential-metadata.md)，秘密承载见
 [凭据 Secret Store](repository-credential-secret-store.md)。
 
