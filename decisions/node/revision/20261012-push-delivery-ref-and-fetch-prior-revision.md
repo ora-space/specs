@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: approved
 ---
 
 # Node 交付把最终提交推送到 Git Server 的交付 ref（无改动也推），恢复从 Git Server 拉取前序交付 ref；Git 访问在 Node 私有传输仓库中进行，Cloud 模式必须配置 `git_access`
@@ -12,7 +12,9 @@ Node 交付时仍按根决策生成内部快照与本地 `refs/ora/revisions/<ru
 执行，只把 checkout 的对象当数据借用，从不读取 checkout 的仓库配置。Node 在 Cloud 模式（配置了 `control.target`）
 下必须配置 `git_access`，缺失时拒绝启动。
 
-本 ADR 处于 `proposed`，继承 [Node 交付 Revision 根决策](0-internal-snapshot-and-incremental-bundle-upload.md) 与
+本 ADR 于 2026-10-12 经 owner 审核通过，状态为 `approved`：规则是 desktop Node 第 4 步的开发依据，实现与验收尚未
+完成；核心用例见文末“核心测试用例”一节，直接证据逐项登记为 `Covered`、`Partial` 或 `Missing`。本文继承
+[Node 交付 Revision 根决策](0-internal-snapshot-and-incremental-bundle-upload.md) 与
 [恢复前序 Revision 后续决策](20261010-restore-prior-revision-before-session.md)，承担
 [Git Server 根决策](../../cloud/git-server/0-sandbox-scoped-git-server-over-https.md) D5 在 Node 一侧的落地。交付契约、
 核验登记与不兼容规则由 [Cloud Revision 后续决策](../../cloud/revision/20261012-git-server-delivery-and-verified-delivery-refs.md)
@@ -111,7 +113,7 @@ Git Server 不可用时 `unchanged` 也会失败。
 
 - 单次推送的时限 30 分钟；另以 `http.lowSpeedLimit=1024`、`http.lowSpeedTime=60` 在一分钟低于 1 KiB/s 时中止。
   最坏情况 3 次尝试加退避约 91 分钟，小于 IssueRun 根决策 D5 的交付放弃窗口（默认 2 小时，从第一个交付工作项创建
-  时计），所以推送不会在 Cloud 已放弃之后仍长时间占用沙盒。这些值是 proposed 默认值。
+  时计），所以推送不会在 Cloud 已放弃之后仍长时间占用沙盒。这些值是默认值。
 - JSONL 上传规则不变（根 D4）：授权缺失时 `UploadGrantNeeded` 等待，单对象 3 次失败为 `failed{upload_failed}`。
 
 为什么 `403` 不重试：Git Server 只在 Cloud 当前状态不允许时返回 `403`（运行不在 `delivering`、执行已有结果、沙盒
@@ -216,7 +218,7 @@ Node 协议的消息拒绝未知字段，新旧 Node 与 Controller 不能混用
 
 ## 本决策未解决的问题
 
-- 大仓库首次推送的进度反馈与时限调优（本文给出的是 proposed 默认值）。
+- 大仓库首次推送的进度反馈与时限调优（本文给出的是默认值）。
 - 失败分类依赖 Git 输出措辞（与原 `base_unavailable` 的已知限制相同）。
 - Agent 其他分支、子模块内容与 LFS 实体的保存（根决策未解决项）。
 - 工作负载能读到 git-access 私钥的既有缺口（Git Server 根决策 D5），由工作负载降权解决。

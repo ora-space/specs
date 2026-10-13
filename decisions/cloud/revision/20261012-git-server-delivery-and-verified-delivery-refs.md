@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: approved
 ---
 
 # Revision 的代码改动只经 Git Server 交付：Cloud 写入仓库地址与交付 ref，经 ref 查询核验后登记；删除 bundle 与下载授权，proto `v1` 破例删字段
@@ -12,8 +12,10 @@ JSONL，最后在事务内登记 Revision 并记下交付 ref。无改动的运�
 仓库地址与交付 ref 交给 Node 拉取。代码 bundle 的对象键、bundle 的上传授权与下载授权全部删除；不向后兼容：升级前
 只有 bundle 的 Revision 不迁移，行保留，但不在续作候选中。
 
-本 ADR 处于 `proposed`，是 [Cloud Revision 根决策](0-cloud-owned-object-store-and-verified-revisions.md) 的第一个后续
-决策，承担 [Git Server 根决策](../git-server/0-sandbox-scoped-git-server-over-https.md)“对 Revision 链路的影响”中 Cloud
+本 ADR 于 2026-10-12 经 owner 审核通过，状态为 `approved`：规则是 Git Server 根决策落地顺序第 4 步的开发依据，
+cloud、desktop、cluster 的实现与验收尚未完成；核心用例见文末“核心测试用例”一节，直接证据逐项登记为 `Covered`、
+`Partial` 或 `Missing`。本文是 [Cloud Revision 根决策](0-cloud-owned-object-store-and-verified-revisions.md) 的第一个
+后续决策，承担 [Git Server 根决策](../git-server/0-sandbox-scoped-git-server-over-https.md)“对 Revision 链路的影响”中 Cloud
 一侧的修改，是这组修改的主 ADR。Node 的推送与恢复见
 [node/revision 后续决策](../../node/revision/20261012-push-delivery-ref-and-fetch-prior-revision.md)，契约形状的修改说明见
 [controller-integration 后续决策](../controller-integration/20261012-git-delivery-inputs-without-bundle-grants.md)。涉及 Cloud
@@ -95,7 +97,7 @@ Controller 不需要新配置，也不因此获得任何权限。若在工作项
 | `ref_query_url` | 只对 Cloud 开放的 ref 查询监听（Git Server 根决策 D6），经默认网络访问 |
 | `ca_file` | 校验 Git Server 服务端证书的 CA |
 | `client_cert_file`、`client_key_file` | Cloud 查询 ref 的固定客户端身份，与 Controller 访问 Cloud 的身份分开；私钥不进入配置值、日志或数据库 |
-| `ref_query_timeout` | 单次 ref 查询的时限，proposed 默认 10 秒 |
+| `ref_query_timeout` | 单次 ref 查询的时限，默认 10 秒 |
 
 - 交付需要 `object_store`（JSONL）与 `git_server`（代码改动）两项配置。放出交付工作项时任一缺失，交付以
   `skipped` 结算，原因按先对象存储、后 Git Server 的顺序记为 `object_store_unconfigured` 或 `git_server_unconfigured`，
@@ -310,7 +312,7 @@ Controller 拿不到仓库地址与交付 ref，无论 `v1` 是否保留都无�
 
 ## 落地顺序
 
-1. **specs**：本文与 node/revision、controller-integration 两份后续决策获批。
+1. **specs**（已完成）：本文与 node/revision、controller-integration 两份后续决策于 2026-10-12 获批，核心用例随之补齐。
 2. **cloud**：proto 修改与 `buf.yaml` 豁免、生成物、`internal/controlgrpc` 编解码（`DeliverRevisionSpec` 不再要求
    `bundle_key`）、`git_server` 配置与 ref 查询客户端、`deliveryWorkInput`、核验登记、迁移、续作选取、
    `GrantRevisionUpload` 只签 JSONL、删除 `GrantRevisionDownload`、前端交付展示去掉 bundle 大小（D8）；Git Server 的写授权改为读取固定输入中的

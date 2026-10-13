@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: approved
 ---
 
 # 交付与会话输入改为携带 Git Server 仓库地址与交付 ref，Controller 原样转交；删除 bundle 对象键与下载授权（修改说明）
@@ -12,7 +12,9 @@ status: proposed
 不持有、不转交任何 Git 访问凭据，推送与拉取的授权由 Git Server 按 Cloud 当前状态逐请求判定。决策依据、proto
 `v1` 破例与不开 `v2` 的理由都在主 ADR，本文只列契约与 Controller 行为的变化。
 
-本 ADR 处于 `proposed`，修改 [Agent 运行执行与上传授权决策](20260928-agent-run-executions-thread-and-upload-grants.md)
+本 ADR 于 2026-10-12 经 owner 审核通过，状态为 `approved`：规则是第 4 步 cloud 契约与 desktop Controller 修改的开发
+依据，实现与验收尚未完成；核心用例见文末“核心测试用例”一节，直接证据逐项登记为 `Covered`、`Partial` 或
+`Missing`。本文修改 [Agent 运行执行与上传授权决策](20260928-agent-run-executions-thread-and-upload-grants.md)
 与 [Revision 恢复契约决策](20261010-revision-restore-contract.md)。涉及 Cloud 的 proto 与 `internal/controlgrpc`，以及
 desktop 的 Controller。兼容性边界：不兼容，与主 ADR 相同，Cloud 与 Controller 同时发布。
 
