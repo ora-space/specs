@@ -72,7 +72,9 @@ status: proposed
 `OperationID`＋`PreparationGeneration`＋`ExecutorIdentity`＋`Ref` 这一组字段承载一次不由 Node 执行的
 写入，并**禁止** clone 的 `ExecutionID` 与运行时 fencing 字段（`internal/cloneauth/authorization.go`
 的字段存在性规则）。推送与 mirror_prepare 在这一点上同形——都由 C 执行、都由 Cloud 的单次授权驱动、
-都在一个 ref 上产生远端副作用——因此 D3 复用这组字段而不是新造一套。
+都在一个 ref 上产生远端副作用——因此 D3 复用 executor identity 与 ref 这两个字段而不是新造一套，同时
+**不用** `PreparationGeneration`：那个字段存在是为了让"只有仍然当前的尝试可以发布"成立，而一次推送
+不重试（重试是一份新授权，不变量 2），所以本文禁止它，而不是签一个没有检查读取它的值。
 
 ## 威胁模型
 
@@ -107,6 +109,11 @@ status: proposed
 决定 D12 的"推送不依赖 checkout 所有权交接"），而把 `clone` 一并签进写向授权，等于让一次推送的授权
 在兑换后还能被用来做一次读取。两个操作各自回答自己的能力集合，是既有代码的写法，本文照办。
 
+能力名与操作名共用同一个拼写（`CapabilityClone` 与 `OperationClone` 今天都是 `"clone"`，
+`internal/cloneauth/authorization.go:58`），`push` 照此办理：**能力** `push` 说的是"这条引用被允许
+做什么"，**操作** `push` 说的是"这次作业在执行什么"。两者是不同维度的值，共用拼写不构成把它们混为
+一谈的理由，但评审时值得确认这一点是有意为之。
+
 **为什么不是"给 `clone` 加一个写标志"**：能力是引用的属性，一条引用的能力集合是它对**所有**后续操作
 的授权面。把读写塞进同一个成员，等于让每一个今天只需要读的引用同时携带写授权，而撤销时无法说清撤销的
 是哪一半。
@@ -140,7 +147,7 @@ status: proposed
 | 绑定项 | 含义 | 存在性 |
 |---|---|---|
 | 租户、所有者、Project、Workspace | 这次推送属于谁 | 与既有操作一致 |
-| 操作名与操作标识 | 这次推送是哪个受控流程的一步 | 必填，对应 `Binding.Operation`／`OperationID`；禁止 clone 的 `ExecutionID` |
+| 操作名与操作标识 | 这次推送是哪个受控流程的一步 | 必填，对应 `Binding.Operation`／`OperationID`；**禁止** clone 的 `ExecutionID` 与运行时 fencing 字段，也**禁止** mirror_prepare 的 `PreparationGeneration`（一次推送不重试，重试是一份新授权） |
 | 执行者身份 | 只允许部署给 C 的那一个 SPIFFE 身份兑换 | 必填 `Binding.ExecutorIdentity`；Store 从已校验的客户端证书解析，不接受请求体自述 |
 | 凭据 id 与版本 | 用哪一份凭据的哪个版本 | 必填；版本对着 Store 自己的记录校验 |
 | **upstream** | 规范化仓库身份（小写 host 去掉 `:443`、path 去一个前导 `/`、一个尾随 `/` 与一个尾随 `.git`，不做百分号解码） | 必填；与凭据的 `repository_scope` **逐字节相等**，并作为物化 scope 交给 helper 比对 |
@@ -181,8 +188,14 @@ old 之后，"这次授权允许改什么"有了一个可以逐字节回答的�
 - 凭据：清空继承的 helper 后只装部署固定的那个，并保持 `credential.useHttpPath=true`，使 helper 拿到
   path 而不是只有 host（该收紧已于 2026-10-13 落地）；
 - 出网：`http.followRedirects=false`、`http.proxy=`、`http.sslVerify=true`，与读向相同；
-- **写入面**：不使用任何用户或全局 Git 配置；不使用 `--all`／`--mirror`／`--tags`；refspec 的两侧都写
-  完整 ref 名；不使用环境变量传递秘密。
+- **写入面**：子进程环境沿用既有的**从零构建的白名单**做法（`internal/cloneexec/git.go:101-123`：
+  `GIT_CONFIG_NOSYSTEM=1`、`GIT_CONFIG_GLOBAL=/dev/null`、`HOME` 指向一个什么都不含的目录、
+  `GIT_TERMINAL_PROMPT=0`、`GIT_ASKPASS=`、`SSH_ASKPASS=`、`GIT_LFS_SKIP_SMUDGE=1`、`GIT_OPTIONAL_LOCKS=0`
+  与固定的 `PATH`），因为继承后再过滤会让宿主级的 `credential.helper`、`url.<x>.insteadOf` 与
+  `http.proxy` 落进一个从未被检查的窗口；hooks 继续由 `core.hooksPath=/dev/null` 关闭；不使用
+  `--all`／`--mirror`／`--tags`；refspec 的两侧都写完整 ref 名；秘密不经环境变量传递。
+
+  写向沿用**同一份**白名单，不新增环境变量：推送需要的是远端写入，不是本地索引锁。
 
 **为什么不让 Node 会话（W）执行**：W 与 Agent 同身份，且没有 C 独占的物化根，秘密必然可被 Agent 读取
 ——这正是 clone 侧已经否掉的形态。
@@ -269,7 +282,8 @@ ref、old/new 提交与稳定结果码；不含 token、不含任何可复原秘
 
 **隔离验收**（Issue #16 验收第 2 项的推送一侧）：以下每一条都必须有**直接**证据，缺一即 `Missing`：
 
-1. 真实私有仓库、真实远端、受控凭据；不得用 mock、内部交付 ref 通道或定向单测顶替（T8、不变量 14）；
+1. 真实私有仓库、真实远端、受控凭据；不得用 mock、内部交付 ref 通道或定向单测顶替（不变量 14；推送执行
+   权限 D8）；
 2. 一次授权消费一次即失效，重放被拒（含重启后仍被拒）；
 3. ref 与提交严格按授权执行：授权外的 ref 被拒、old 不匹配被拒、非后代被拒、force／delete／wildcard
    被准入处拒绝而非依赖远端；
