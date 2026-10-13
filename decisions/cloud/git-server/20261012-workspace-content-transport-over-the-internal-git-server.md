@@ -239,6 +239,18 @@ migration**，且**只在隔离 PostgreSQL 上验证**；正式库不迁移。�
   通过之后**才执行。旧代次、重绑、撤销、轮换与迟到结果都不得推进到写输入；镜像 URL **不得**被用来替代真实上游
   repository 身份去授权。同时明确：**mirror ready 本身不等于 Workspace clone 成功**，两者是独立的状态，前者
   不蕴含后者，也不把后者记为已完成。
+- **裁决补充（2026-10-13）——镜像准备不能作为独立的、Controller 可见的 step。** 本轮隔离实现原本把镜像准备
+  实现成 `operations.step` 的一个新取值（`mirror`，由 migration 0034 插在 `node` 与 `clone` 之间），并已在
+  隔离 PostgreSQL 上验证。**该形态被证据否决**：step 经 `internal/controlgrpc/operations.go` 的 `enum()` 转成
+  protobuf 枚举发给 desktop Controller，而 `enum()` 是无 comma-ok 的 map 查表，未识别的名字**静默取零值**，
+  于是 Cloud 实际在线上发出 `OPERATION_STEP_UNSPECIFIED`；Controller 把它当失败
+  （`apps/ora-controller/src/cloud/operations.rs` 的 `OperationStep::Done | OperationStep::Unspecified =>
+  Err(Error::Conflict)`），`drain()` 随即放弃该轮并重新认领。结果是**该 step 永远不会产生任何 effect，操作也
+  永远不离开它**；`desktop/` 在本轮严格只读，无法为它补一条分支。因此：**镜像准备的真实状态记录在
+  `mirror_preparations`（主键为 `operation_id`，自带 `state` 相位），运行在既有的 `node` → `clone` 转换之内**，
+  由 Cloud 在该转换上把门——未 ready 或绑定未重新核验通过就不转换。migration 0035 把 `mirror` 从 step 词汇表
+  撤回，使它不再是一个系统可以进入、却无人能驱动的状态。这**不改变**本节对顺序的承诺（镜像先于 Clone），
+  只改变该承诺在何处被表达。
 
 ### D8：内部只读通道与外部 Push 是两条独立路径
 
@@ -345,6 +357,12 @@ migration**，且**只在隔离 PostgreSQL 上验证**；正式库不迁移。�
      operation 是**独立且强制校验**的用途维度。**不得**扩展到任意 ref/tag/submodule、其他仓库、Push、删除或
      强制更新。Store 可保持现有通用兑换逻辑，但必须记录并验证各可信消费方在使用材料前强制校验 operation 的
      安全不变量。
+- **镜像准备是否需要一个 Controller 可见的独立相位**（2026-10-13 受阻于只读边界）：本轮把准备状态放在
+  `mirror_preparations` 里、跑在既有 `node` → `clone` 转换内，因此**没有**新增 step 或 effect 类型，也就不需要
+  改 `desktop/`。若将来要让镜像准备成为一个能被 Controller 观察与驱动的独立相位，就必须同时改 Cloud 的
+  `controlpb` 与 Controller 的 step 分发，即一次跨 `desktop/` 的变更；它超出本轮边界，且必须先回答"新增的
+  Controller 可见 step 如何被旧版本安全忽略"这一兼容性问题——本轮的证据正是：今天的答案不是"被忽略"，而是
+  "整轮失败并停在那里"。
 - **部署服务与工作负载共用网桥的残余**：见 D3 的已知残余。其中"未认证中继对工作负载可达"一条已在 cluster 栈的
   隔离 overlay 上修正并测量；**仍未决的是该 overlay 是否进入主栈**，以及是否愿意为 `ora-sandboxes` 上其余部署
   服务收紧能力集合。`sandbox-server` 的 Docker socket 无法收紧——它与"`sandbox-server` 必须持有 Engine 客户端"
