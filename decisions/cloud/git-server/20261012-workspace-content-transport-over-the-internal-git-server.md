@@ -209,12 +209,17 @@ Workspace 决定，请求既不需要、也不得声明自己服务哪个执行�
   Server 自己的记忆或本地记录。
 - **并发**：同一键的发布以排他锁串行化；并发产生的第二个请求等待，或直接复用已核验的同一镜像，不产生两份可变副本。
 
-**完成状态（2026-10-13）——本节是承诺，不是现状。** 键、失败清理、原子发布、宽限销毁与撤销的**机制**已在
-`cloud/internal/mirror` 与 `cloud/internal/mirrorpublish` 内实现并有测试覆盖，但**除读取侧的状态查询外没有生产
-调用方**：Cloud 今天不签发镜像授权，所以生产里没有任何进程在创建、撤销或回收镜像。因此下列各项**不得记为
-完成**——有实现、无调用方、无生产证据：存储卷总量与每租户配额、孤儿回收（`Sweep`）、失败交付尝试留下的 ref 与
-对象的清理、删除 Project 时的清理，以及撤销与销毁的**触发者**。镜像记录的落点已按本次裁决定为受控持久卷上的
-文件系统记录，**不引入数据库 migration**（原先"很可能带来一次 migration"的推测作废）。
+**完成状态（2026-10-13，同日修订）——本节是承诺，不是现状。** 键、失败清理、原子发布、宽限销毁与撤销的
+**机制**已在 `cloud/internal/mirror` 与 `cloud/internal/mirrorpublish` 内实现并有测试覆盖。**创建侧现在有生产
+调用方**：`cloud/internal/core` 的镜像准备 worker（`PrepareMirrorsOnce` 配 `MirrorDispatcher`）领取 Operation、
+签发 `mirror_prepare` 授权并派发给 C，由 C 抓取后经"暂存—核验—原子发布"写入镜像卷；开关
+`CLOUD_CLONE_DISPATCH_MIRROR_ENABLED` 默认关闭，且**镜像内容今天仍无读者**——Cloud 被告知"沙盒从哪里读镜像"
+的那一项（`git_server.sandbox_base_url`，见 D7 的裁决补充）已经存在，但**没有任何部署为它赋值**，默认空值下
+`Store` 不持有镜像端点、带凭据的 Workspace 在 `clone` 转换上以 `mirror_not_ready` 被拒，所以没有任何 Workspace
+会从镜像 clone。**回收侧仍然没有调用方**，
+因此下列各项**不得记为完成**——有实现、无调用方、无生产证据：存储卷总量与每租户配额、孤儿回收（`Sweep`）、
+失败交付尝试留下的 ref 与对象的清理、删除 Project 时的清理，以及撤销与销毁的**触发者**。镜像记录的落点已按
+本次裁决定为受控持久卷上的文件系统记录，**不引入数据库 migration**（原先"很可能带来一次 migration"的推测作废）。
 
 **裁决补充（2026-10-13）——"不引入 migration"限的是镜像记录，不是操作状态。** 本轮批准的镜像准备**前置
 Operation** 需要独立的、可审计、可重试的状态，绑定 tenant、project、workspace、operation、runtime
@@ -396,9 +401,11 @@ migration**，且**只在隔离 PostgreSQL 上验证**；正式库不迁移。�
   手工签名、只保留真实签名的用例证明**有效签名也不能让混用或未知 operation 的载荷通过 `Verify`**；
   `internal/cloneexec` 的 `TestExecuteRefusesAMirrorAuthorizationOnTheCloneRoute` 证明一份合法签发、且仓库／
   凭据／版本／代次都与 job 一致的镜像授权在 clone 路由上以 `binding_mismatch` 被拒，且 Store 一次都没有被询问。
-  **仍待落地**：Store 侧的镜像专用兑换路径（以证书身份替代自述 runtime 判定、单次认领、凭据当前版本与撤销状态），
-  以及"Store 不能实时查询 Cloud 时，授权有效期与撤销窗口如何如实声明并在发布与 ready 接收处重新校验"。
-  在它落地前，镜像授权**签得出但兑换不了**，因此没有任何真实秘密会因本轮变更被交付。
+  **仍待落地**："Store 不能实时查询 Cloud 时，授权有效期与撤销窗口如何如实声明并在发布与 ready 接收处重新校验"。
+  **Store 侧的镜像专用兑换路径已落地（2026-10-13）**：`POST /v1/credentials/{id}/resolve-mirror` 只接受
+  `operation=mirror_prepare` 的授权，出示方身份取自**已验证客户端证书**而非请求自述，兑换仍是一次认领、并校验
+  凭据的当前版本与撤销状态。今日仍**没有**凭据会因此被交付：`CLOUD_CLONE_DISPATCH_MIRROR_ENABLED` 默认关闭，
+  且 `broker-resolver` 证书在部署栈上按设计不签发。
 
 ## 落地顺序
 
@@ -464,6 +471,31 @@ migration**，且**只在隔离 PostgreSQL 上验证**；正式库不迁移。�
    **本步骤的另一半——D7 的"Cloud 只在镜像就绪后写克隆输入"——尚未实现**：没有代码在镜像就绪之后才写
    `repositoryUrl`／`requestedRef`，也没有把该写入钉到核验过的提交上。就绪确认在**读取侧**已有调用方（Git Server
    服务前先问同一个存储，因此"未就绪即拒绝"是实测过的），缺的是写入侧的门控；在它落地之前，本步骤不得记为完成。
+   **裁决补充（2026-10-13）——写入侧的门控已在 Cloud 侧落地，形态与本节原先设想的"改写记录"不同。**
+   `cloud/internal/core` 现在只有**一处派生**（`mirror_preparation.go` 的 `cloneInputFor`）回答"这个 Workspace 能从
+   哪里 clone"，三个使用点共用它：`node` → `clone` 转换上的门禁（`requireMirrorPrepared`）、Controller 快照的克隆
+   输入（`projectMirrorInput`）、以及派发时对输入逐字相等的比对（`workspaceCloneDispatch`）。三点都拒绝读"上次写
+   下的值"而就地重算，因为准备记录的 `ready` 只在它被写下的那一刻为真：租户／Project／Workspace／上游仓库／
+   pinned ref／运行代次／凭据引用逐项与**实时行**重比，凭据**版本**只在门禁处比对（只有那里能从活动引用解析出权威
+   版本）。**基线在转换时钉住**：`workspaces.base_commit_id` 由门禁在放行同一次写入中钉成镜像的提交，因为 Git
+   Server 的读取授权要用这一列现算镜像键——写成"clone 成功之后再写"会让这次 clone 自己无处可读；`advanceClone`
+   随后要求 Node 报回的提交与它逐字相等，报另一个提交是被拒而不是"重绑 Workspace"。
+
+   **写入侧对 D7"必须同步修改的一项"的处理是让它在构造上不可能发生。** 本节原假设 Cloud 会把 Project 的
+   `repository_url` 改写成镜像地址，因此要求 `credentialed_clone.go` 同步改为以上游为准。实际采用的形态是
+   **只投影快照、不改任何行**：`projectMirrorInput` 改写的只有快照里的 `repository_url` 与 `requested_ref` 两个
+   字段，数据库里 Project 的 `repository_url`、凭据绑定、镜像键与读取授权全都继续以上游为准，因此"凭据授权绑定到
+   镜像"没有可发生的路径。这也让 D7 的"上游地址从不出现在这条记录里"成为可断言的：`clone_executions.input` 记的
+   是快照给出的地址，而门禁与派发用的是同一张派生表，上游地址的派发以 `mirror_not_ready` 被拒且不留下执行行。
+
+   **两个通道的关系同时被固定为"替代"而不是"先后"**：Cloud 是否命名内部 Git Server 是**一个部署值**
+   （`git_server.sandbox_base_url` → `Store.SetMirrorEndpoint`，只在启动时装配，任何请求与调用方都打不开也关不上
+   这条腿）。命名了它，Cloud 就不介入带凭据的 clone——内容由 Node 用既有匿名 HTTPS clone 从镜像取得；没命名它，
+   才是 Cloud 自己执行带凭据 clone 的那种部署。两种能力同时声明会让其中一条永远派发不出去，`internal/config` 因此
+   在启动时拒绝（命名了 Git Server 却开着 `clone_dispatch.enabled`；或命名了 Git Server 而
+   `clone_dispatch.mirror_enabled` 关闭，即没有发布者）。**仍未取得的证据**：本步骤的完成条件是隔离栈上真实的
+   Clone → Workspace → Agent，本轮**没有**做到——隔离栈尚未运行 Git Server、也没有把镜像卷接给执行器与读监听，
+   因此上面的门控与投影只有进程内证据（真实 PostgreSQL），没有容器级端到端证据。本步骤继续不得记为完成。
 6. **端到端验收与证据登记**：把 Clone → Workspace → Agent 的验收从 `Missing` 更新为实际证据，未运行项如实标注。
    **完成条件是 Clone → Workspace → Agent，本轮未达成**：已取得的证据是上述隔离读取链路（来源解析 → Cloud
    逐请求授权 → 只读 Git Clone）的容器级验收，执行侧的 Clone → Workspace → Agent 仍为 `Missing`。因为本 ADR
