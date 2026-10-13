@@ -221,13 +221,40 @@ Workspace 决定，请求既不需要、也不得声明自己服务哪个执行�
 **机制**已在 `cloud/internal/mirror` 与 `cloud/internal/mirrorpublish` 内实现并有测试覆盖。**创建侧现在有生产
 调用方**：`cloud/internal/core` 的镜像准备 worker（`PrepareMirrorsOnce` 配 `MirrorDispatcher`）领取 Operation、
 签发 `mirror_prepare` 授权并派发给 C，由 C 抓取后经"暂存—核验—原子发布"写入镜像卷；开关
-`CLOUD_CLONE_DISPATCH_MIRROR_ENABLED` 默认关闭，且**镜像内容今天仍无读者**——Cloud 被告知"沙盒从哪里读镜像"
-的那一项（`git_server.sandbox_base_url`，见 D7 的裁决补充）已经存在，但**没有任何部署为它赋值**，默认空值下
-`Store` 不持有镜像端点、带凭据的 Workspace 在 `clone` 转换上以 `mirror_not_ready` 被拒，所以没有任何 Workspace
-会从镜像 clone。**回收侧仍然没有调用方**，
-因此下列各项**不得记为完成**——有实现、无调用方、无生产证据：存储卷总量与每租户配额、孤儿回收（`Sweep`）、
-失败交付尝试留下的 ref 与对象的清理、删除 Project 时的清理，以及撤销与销毁的**触发者**。镜像记录的落点已按
-本次裁决定为受控持久卷上的文件系统记录，**不引入数据库 migration**（原先"很可能带来一次 migration"的推测作废）。
+`CLOUD_CLONE_DISPATCH_MIRROR_ENABLED` 默认关闭。
+
+**读者与回收者现在也有调用方，但只在可选的部署覆盖层里。** 覆盖层 `compose.git-server.yaml` 给
+`git_server.sandbox_base_url` 赋值（`Store` 因此持有镜像端点）、打开 `CLOUD_CLONE_DISPATCH_MIRROR_ENABLED`，
+并把**回收循环**交给 `cmd/git-server`：它是对账唯一可用的进程，因为只有它同时持有 Cloud 的数据库与镜像卷
+（Cloud 有库无卷，执行身份 C 有卷无库）。生产 `compose.yaml` 不含该覆盖层，**未应用它的部署与本文写作时逐位
+相同**：`Store` 不持有镜像端点、带凭据的 Workspace 在 `clone` 转换上以 `mirror_not_ready` 被拒，没有任何
+Workspace 从镜像 clone，也没有任何镜像被回收。
+
+**回收侧**因此有了唯一的调用方，且**默认关闭**（`-mirror-reclaim`；零值或负值的间隔在启动时被拒）。开启后它
+按 `-mirror-reclaim-interval` 反复执行 `mirrorpublish.Reconciler.Maintain`：只读 Cloud 的权威引用、只撤销、只
+清扫、只从存储上的记录回答"就绪"，**不发布**——发布要一枚 Cloud 为单次抓取签发的授权，而一次对账不是
+Operation，签不出这样的授权。`-mirror-grace` 是同一开关的另一半：在循环存在之前它是惰性 flag，因为无人调用
+清扫。据此，下列各项**从"无调用方"变为"有调用方"，但仍不记为完成**，因为各自的证据不在本轮：**每租户配额**
+（没有任何代码按 tenant 记账；卷总量上限只由写入方在发布时强制，`Sweep` 从不按容量回收）、**撤销与销毁在
+Cloud 侧的状态一致性**、**失败交付尝试留下的 ref 与对象在真实执行身份下的清理**。反之，**孤儿回收
+（`Sweep`）、Project 删除后引用消失、标记跨进程重启的持久性、宽限期内外的保留与销毁**已在隔离栈上取得真实
+端到端证据（见落地顺序第 3 步）。镜像记录的落点已按本次裁决定为受控持久卷上的文件系统记录，**不引入数据库
+migration**（原先"很可能带来一次 migration"的推测作废）。
+
+**裁决补充（2026-10-13）——镜像卷的属主是部署固定的一次性事实，每个写入方都必须保持它。** 镜像卷是**一个
+目录、两个身份**：C 以执行身份（部署取值，默认 uid 10002）写入，Git Server 以 root 读取、回收并对账。部署在
+两者启动之前把卷骨架与该属主一次性固定（`compose/git-server-setup.sh` 的 `chown -R "$MIRROR_OWNER_UID"
+/mirror`），正是为了让**先到的进程决定不了后到的进程能否打开这个卷**。这条承诺并不止于"准备一次"：**写入方
+新建的每一个文件都必须属于该属主，而不是属于写它的进程**。回收者是这条要求下的第一个新写入方——在它之前，
+卷上唯一的写入者是 C 自己。
+
+不满足时的失败模式已实测（隔离栈，2026-10-13），且比"一条记录读不到"严重得多：root 的回收循环把一条记录写成
+了 `root:root 0600`，而 `Preparation.Publish` 经 `publishedBytes` → `Records()` **读取 records 目录下的每一条
+记录**以核对卷总量上限，**一条不可读即整次调用失败**。于是一个键的记录不可读，会让此后**每一个键**的发布都
+失败，且报错指向一个与本次发布无关的文件：`mirror store is unavailable: open /mirror/records/<digest>.json:
+permission denied`。因此实现上的承诺是双向的：属于该属主的文件正常写入（对属主自身是空操作，对任何第三方身份
+失败关闭），**不能取得该属主时写入失败**，而不是留下一个"自己写得出、另一个打不开"的文件。锁文件与记录文件
+一视同仁——锁文件由 `flock` 创建，放宽目录权限救不了它。
 
 **裁决补充（2026-10-13）——"不引入 migration"限的是镜像记录，不是操作状态。** 本轮批准的镜像准备**前置
 Operation** 需要独立的、可审计、可重试的状态，绑定 tenant、project、workspace、operation、runtime
@@ -441,10 +468,12 @@ migration**，且**只在隔离 PostgreSQL 上验证**；正式库不迁移。�
    （preparing/ready/failed/revoked/destroyed），容量上限、键级锁、失败回收与孤儿扫描在同一包内。
    **本步骤新增的写入方（2026-10-13）**：`cloud/internal/mirrorpublish` 实现对账器与写入方——它先读 Cloud 的
    数据行得到"应当存在哪些镜像"，再据此撤销、发布、清扫，因此"不发布 Cloud 未引用的镜像"对进入它的每条路径都
-   成立（不变量 15）。**它没有生产调用方**：`Fetcher` 与 `MaterialSource` 是消费侧边界，部署要把它们接到执行
-   身份 C 所执行的带凭据抓取上，而那次抓取要兑换一枚 Cloud 为单个仓库签发的单次授权——Cloud 今天不签发镜像
-   授权，因此写入方无法部署、无法端到端测量；它所依赖的带凭据 clone 本身按设计 fail-closed。同理
-   `Sweep`／`Revoke`／`Destroy` 也没有生产调用方（见 D6 的完成状态）。生产 compose 未加入该服务，行为不变。
+   成立（不变量 15）。**发布侧与被撤销／清扫侧分开看**：发布需要 `Fetcher` 与 `MaterialSource` 两个消费侧边界
+   接到执行身份 C 所执行的带凭据抓取上，而那次抓取要兑换一枚 Cloud 为单个仓库签发的单次授权——一次对账不是
+   Operation，签不出这样的授权，所以**对账器从不发布**，只撤销与清扫，这是能力上的限制而非取舍。**撤销与清扫
+   现在有生产调用方**：`compose.git-server.yaml` 把 `mirrorpublish.Reconciler.Maintain` 交给 `cmd/git-server`
+   的循环（`-mirror-reclaim`，默认关闭），因为只有该进程同时持有 Cloud 的数据库与镜像卷。生产 `compose.yaml`
+   未使用该覆盖层，行为不变；循环存在之前的部署与本步骤写作时逐位相同（详见 D6 的完成状态）。
 4. **部署接线**：Git Server 加入 cluster 栈（默认网络 + 沙盒网络，不发布端口）；为沙盒容器挂载只含 `[http] sslCAInfo=`
    的 `clone.gitconfig` 与工作负载 uid 可读的 CA 文件。完成条件：容器内 `git ls-remote` 能对 Git Server 完成 TLS
    握手并被**拒绝**（授权未启用），证明信任链与 Node 的 Cloud 策略校验都已就位。至此仍不改变任何现有行为。
