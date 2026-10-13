@@ -54,10 +54,10 @@
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
 | 成员离开冻结 `personal`／`unknown`，且不改写归属与 `secret_ref` | `integration.repository_credentials_test.go` 的 `TestCredentialDepartureFreezesPersonalAndUnknownButRetainsTeamHistory` 用真实 PostgreSQL 断言冻结状态、`unavailable_reason`、owner 与 `secret_ref` 不变 | Covered |
-| 账号停用（`users.status`／`users.deleted_at`）走同一冻结语义 | 触发器路径仍缺，但**恢复扫描一侧本轮有了直接证据**：`core.TestFreezeSweepFreezesExactlyTheRowsWhoseOwnerIsGoneAndIsIdempotent` 为 `users.status='disabled'` 与 `users.deleted_at IS NOT NULL` 各配一行可用的 `personal` 凭据，且行写在账号状态改变**之后**（`users` 触发器看不到的那一批），断言 `freezeInactiveRepositoryCredentials`（`internal/core/repository_credentials.go:229`）把两行都冻结为 `frozen/associated_member_departed/2`。扫描对停用账号写入的是成员离开的 reason，测试把这个事实本身钉住，没有假装它区分两种原因。**仍缺**：`users` 触发器自身的路径测试（即不经扫描的那条路）| Partial |
+| 账号停用（`users.status`／`users.deleted_at`）走同一冻结语义 | 两侧各有直接证据，顺序相反、reason 不同，因此两条各自钉住的是写出那一行的那条路，而不是同一个结果被记了两次。**扫描一侧**：`core.TestFreezeSweepFreezesExactlyTheRowsWhoseOwnerIsGoneAndIsIdempotent` 为 `users.status='disabled'` 与 `users.deleted_at IS NOT NULL` 各配一行可用的 `personal` 凭据，且行写在账号状态改变**之后**（`users` 触发器看不到的那一批），断言 `freezeInactiveRepositoryCredentials`（`internal/core/repository_credentials.go:229`）把两行都冻结为 `frozen/associated_member_departed/2`。**触发器一侧**（本轮补上的缺口）：`core.TestADisabledOrDeletedAccountFreezesItsReferencesThroughTheTrigger` 反过来构造——凭据先写、账号状态后改，即触发器能看到而扫描不参与的顺序，`status='disabled'` 与 `deleted_at=now()` 两种写法各一个子测试，断言冻结为 `frozen/associated_user_disabled` 且 `version` 前进 1，随后派发被拒为 `repository_credential_frozen`、执行器零调用、`clone_executions` 零行。两侧的 reason 不同正是它们可区分的原因：扫描对停用账号写的是 `associated_member_departed`，触发器写的是 `associated_user_disabled`，两个测试都把这个事实本身钉住，没有假装扫描会区分两种原因 | Covered |
 | `team` 记录不因个人离开而冻结 | 同上测试的 `team` 分支断言 `availability='available'`；`internal/core` 的 `TestATeamReferenceSurvivesItsOwnersDepartureAtAdmission` 把它推进到**准入**：同样的记录、同样的离开，归属改成 `team` 后得到的第一个拒绝是部署级 `repository_credential_executor_unavailable`（而不是 `repository_credential_frozen`），且该行仍为 `available`——若个人规则被套用到 `team` 上，这条测试会在 owner 换角色时立刻失败；`TestTheRecoveryScanFreezesWhatTheTriggersCouldNotSeeAndLeavesTeamAlone` 另外断言恢复扫描不会把 `team` 行冻结 | Covered |
 | 冻结经由触发器，而不是可选的应用层路径 | `internal/core` 的 `TestADepartedOwnersReferenceIsFrozenAtAdmission` 用**纯 SQL** 把成员置为 `disabled`、整个过程没有任何产品代码参与，随后断言该行变成 `frozen` 且 `unavailable_reason='associated_member_departed'`，因此冻结来自数据库触发器而不是某条可选的应用路径；`TestTheRecoveryScanFreezesWhatTheTriggersCouldNotSeeAndLeavesTeamAlone` 覆盖触发器看不到的补漏路径（离开之后才写入的行）。**不能绕过这一半仍无证据，而且不可能有**：直接改 `credential_refs` 的 SQL 本来就能绕过任何触发器——这正是准入守卫独立复核同一条件的原因，该复核由上面那条测试的第二段断言（把行改回 `available` 后仍以 `repository_credential_frozen` 被拒）。恢复扫描本轮的精度与幂等也有直接证据：`TestFreezeSweepFreezesExactlyTheRowsWhoseOwnerIsGoneAndIsIdempotent` 用 11 个行见证断言"恰好这些行"——`personal`／`unknown`／第三租户／跨租户双成员四种离开形态冻结，而 `team`、已撤销行（保住 `invalid/revoked_by_owner/3`）、已冻结行（保住 `version=5`）、两个活跃 owner 的行逐字节不变，活跃 Project 的绑定列不被改写；紧接着断言第二次扫描**一个字节都不改**（version 即写见证）。`TestASweepFrozenReferenceIsRefusedAtAdmission` 把被扫描冻结的行推进到准入：`repository_credential_frozen`、执行器零调用、`clone_executions` 零行，因此"扫描冻结了但没有任何路径看它"这一形态被排除 | Partial |
-| 升级回填覆盖已非活跃成员 | 尚缺针对 `0023` 回填语句的迁移级测试 | Missing |
+| 升级回填覆盖已非活跃成员 | `integration` 的 `TestMigration0023FreezesReferencesWhoseOwnersWereAlreadyGone` 在**真实 PostgreSQL** 上走升级路径：先应用 `0023` 之前的全部迁移（并断言 `credential_refs` 确实还没有 `attribution` 列），再按 `0023` **之前**的形态写入三行——owner 分别是"成员已 `disabled`"、"成员仍 `active` 但 `users.deleted_at` 已置"与一个在场的对照行；然后由当前二进制应用剩余迁移，断言前两行变成 `frozen/associated_member_departed` 且 `version` 由 1 变 2，对照行逐项不变（`available`、无 reason、`version=1`）。三行都落到 `attribution='unknown'` 也被断言，否则"选择性"可以由归属过滤器解释而不是由成员谓词解释。删除用户那一行是**插入时即已删除**的：`users` 触发器只在 UPDATE 时触发，因此这一行只有回填能冻结它，而这正是"变更发生在升级之前"的形态 | Covered |
 
 ### 决策依据
 
@@ -96,7 +96,7 @@
 |---|---|---|
 | 重新加入不解冻 | `integration.repository_credentials_test.go` 的 `TestCredentialDepartureFreezesPersonalAndUnknownButRetainsTeamHistory` 在改回 `active` 后断言仍有两条 `frozen` 记录 | Covered |
 | 冻结不影响历史绑定与 `secret_ref` | 同上测试断言冻结后 `secret_ref` 不变；`integration.runtime_upgrade_test.go` 的 `TestRuntimeUpgradeOnlyBackfillsUniqueCreationEvidenceAndKeepsUnknownReferences` 断言升级不猜测 `attribution`、不改写 `credential_ref_id`／`repository_credential_ref_id` 绑定 | Partial |
-| 冻结是终态而非可逆缓存 | 尚缺"重新加入后再次尝试凭据 clone 仍被拒绝"的直接测试 | Missing |
+| 冻结是终态而非可逆缓存 | `core` 的 `TestARejoinedMemberDoesNotUnfreezeTheReferenceThatLeftWithThem` 按该义务唯一有判别力的顺序构造：先让离开发生，由 `0023` 触发器写下冻结并把 `version` 由 1 推到 2（测试读回这个 2，因为"被拒绝"也可能来自一行从未冻结的记录）；随后把成员重新置为 `active`，并**直接驱动恢复扫描** `freezeInactiveRepositoryCredentials`。于是第二次派发时，离开谓词读到的每一项关系都重新成立（成员 `active`、用户 `active`、未软删），唯一还能拒绝的就是记录下来的冻结本身；实测拒绝码是引用侧的 `repository_credential_frozen`，执行器零调用、`clone_executions` 零行，`version` 未再移动、reason 未被改写。**该测试自带对照**：紧接着把这一行改回 `available` 再派发一次，克隆被正常受理（本场景装有记录型执行器，实测执行器恰好一次调用、`clone_executions` 恰一行）。这一步是必须的——它证明重新加入确实让成员谓词重新成立，因此上面那条 `repository_credential_frozen` 只可能出自记录下来的冻结；少了它，一次"其实没生效的重新加入"会让同一个拒绝码再次出现，而测试看不出差别。该对照也是这条测试第一次运行时报出的真实差异：初版把对照的期望写成部署级拒绝，运行直接失败并显示克隆已被受理。把冻结实现成"按成员是否在场推导"的版本会通过本文件其余每一条离开用例，而单独在这一条上失败——那条路径正是"重新加入即恢复"。状态层的另一半早已有证据（`integration.repository_credentials_test.go` 在受控重新加入后断言仍有两行 `frozen`）；本行原先缺的是**准入层**的这一半 | Covered |
 
 ### 决策依据
 
@@ -134,7 +134,7 @@
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 迁移文件与校验和未被改动 | 尚缺显式的迁移校验和回归测试（当前依赖代码评审与 `internal/core/migrations` 的既有约定） | Missing |
+| 迁移文件与校验和未被改动 | `core` 的 `TestTheAppliedCredentialMigrationsAreByteForByteImmutable` 逐字钉住承载凭据语义的三份迁移的 SHA-256（`0001_core.sql`、`0023_repository_credential_continuity.sql`、`0033_user_git_credentials.sql`）：改动 `0023` 的任何一个字节都会在到达部署之前让这条测试失败，且失败信息要求改用前向迁移。本轮核对过三个摘要与磁盘上的文件逐位相等（`0023` 为 `12c936a2…a899c1`）。**边界照实写明**：它钉的是**仓库里的文件**，不是某个已部署库记录的校验和——后者的权威在启动期的 `CheckSchema`，由 `migratedTwice` 在每条升级路径上断言；两者合起来才排除"仓库文本与已部署状态分叉" | Covered |
 | 新增迁移不反向改写既有语义 | `integration.runtime_upgrade_test.go` 的 `TestRuntimeUpgradeOnlyBackfillsUniqueCreationEvidenceAndKeepsUnknownReferences` 覆盖升级不猜测 `attribution`、不重写凭据绑定；`integration/migration_upgrade_path_test.go` 的 `TestMigrationFullSequenceFreshDB` 覆盖全序列可应用（含本轮追加的 `0033_user_git_credentials.sql`），但两处都不专门断言归属列与冻结规则在升级后逐项不变 | Partial |
 | 补录 ADR 不引入行为变化 | 该补录本身不产生可执行证据；判定方式是核对 `specs` 与迁移的差异为零。**这属于评审证据，不是测试证据** | Missing |
 
