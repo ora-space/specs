@@ -104,7 +104,7 @@ Git Server 不可用时 `unchanged` 也会失败。
 
 | 情况 | 识别 | 处理 |
 | --- | --- | --- |
-| HTTP `401`、`403` 或其他 `4xx` | Git 报告服务端返回的状态码 | 不重试，`failed{push_rejected}` |
+| HTTP `401`、`403` 或 `429` 以外的其他 `4xx` | Git 报告服务端返回的状态码 | 不重试，`failed{push_rejected}` |
 | ref 更新被拒（`pre-receive` 拒绝、ref 已存在） | `--porcelain` 输出中该 ref 以 `!` 标记 | 不重试，`failed{push_rejected}` |
 | HTTP `5xx`（含 `503`）、`429`、连接失败、DNS、TLS 握手失败、低速中止、单次时限到期、无法识别的错误 | 其余情况 | 重试；共 3 次尝试，间隔 5 秒、30 秒；耗尽后 `failed{push_failed}` |
 | 本地准备失败（传输仓库无法建立、最终提交不在 checkout 中） | Node 自身 | `failed{snapshot_failed}` 或 `failed{checkout_unavailable}` |
@@ -146,15 +146,19 @@ Git Server 不可用时 `unchanged` 也会失败。
 | 情况 | `detail` |
 | --- | --- |
 | Git Server 上没有该交付 ref（`couldn't find remote ref`） | `prior_revision_base_unavailable` |
-| HTTP `401`、`403`（仓库不存在与无权访问返回相同响应） | `prior_revision_base_unavailable` |
+| HTTP `403`（仓库不存在与无权访问返回相同响应） | `prior_revision_base_unavailable` |
 | 取到的提交不等于 `finalCommit`，或不是提交 | `prior_revision_unavailable` |
-| `5xx`、网络、TLS、重试耗尽或时限到期 | `prior_revision_unavailable` |
+| HTTP `401`（Node 出示的身份不被接受）、`5xx`、网络、TLS、重试耗尽或时限到期 | `prior_revision_unavailable` |
 | 传输仓库、取入或检出在本地失败 | `prior_revision_unavailable` |
 
 - 名称保留以免改动契约与 Cloud 的结算规则，含义变为“前序 Revision 的 Git 内容在 Git Server 上永久取不到”：原含义
   “基础提交已从用户远端消失”在 Git Server 持有完整历史后不再出现。
 - `403` 也可能来自运行在恢复期间被取消；Cloud 在结算时对已请求取消的运行不标记不可续接（Cloud 后续决策 D7），
   所以 Node 不需要区分。
+- `401` 不归入 `base_unavailable`：Git Server 只在认证失败时返回它（Git Server 根决策 D2），说明的是 Node 自己的
+  git-access 身份不可用（材料配错或过期），与前序 Revision 是否存在无关；换一个身份正确的 Node 仍能取到。若标记
+  不可续接，一次部署配置错误就会让该 Revision 永久不可续作。推送一侧的 `401` 照旧不重试（D4），因为同一尝试内
+  重试不会换来正确的身份。
 - 不等于 `finalCommit` 只可能是缺陷（交付 ref 只能新建），按可重试的 `unavailable` 处理，不因一次缺陷永久放弃该
   Revision。
 
