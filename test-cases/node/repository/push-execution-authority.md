@@ -17,7 +17,8 @@ A–D、F 批准，E 不批准）。本文件登记写方向的长期承诺：�
 收紧」）已经落地，该义务现在有直接且可证伪的证据，已改为 `Covered`（见下表与下节）。本条更正**不改变**
 任何写方向的结论：推送仍不可被请求，其余义务仍为 `Missing`。同时更正：本文件与 D4 都把该缺口描述成
 「helper 今天只比对 `host`」，这在当前代码上已不成立；D4 那段现状描述属于**已批准 ADR 的正文**，
-不在此处单方面改写，见文末「需要裁决的一处」。
+不在此处单方面改写，见文末[已批准 ADR 里一段过期现状描述的更正](#已批准-adr-里一段过期现状描述的更正2026-10-13-已裁决并落地)
+（该处已按"只追加前向注记"更正，原文逐字保留）。
 
 ## Push Is Executed Only By The Deployment Fixed Executor And Never Requested By An Agent
 
@@ -281,26 +282,19 @@ Issue #16 验收第 2 项（推送一侧）的取证。
 
 D8 与不变量 12；[推送交付 ref 与取回前序版本](../../../decisions/node/revision/20261012-push-delivery-ref-and-fetch-prior-revision.md)。
 
-## 需要裁决的一处：已批准 ADR 里一段现状描述已经过期
+## 已批准 ADR 里一段过期现状描述的更正（2026-10-13 已裁决并落地）
 
-**不在此处改写，登记在此供裁决。** 上文把 helper 的 host＋path 校验记为 `Covered`，依据是当前代码与
-可证伪的测试；而[推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)
-（`approved`）里关于该缺口的**现状描述**已与代码不符：
+上文把 helper 的 host＋path 校验记为 `Covered`，依据是当前代码与可证伪的测试；而
+[推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`approved`）
+里关于该缺口的**现状描述**已与代码不符。这一处已按"只追加前向注记"的方式更正，原文逐字保留：
 
-| ADR 位置 | ADR 的说法 | 今天的实际 |
+| ADR 位置 | ADR 原文的说法 | 今天的实际 |
 |---|---|---|
-| D4「必须同时收紧的一点（现状缺口）」 | 「helper 今天只比对 Git 报出的 `host`」「物化的 scope 文件只存 host」 | 物化写的是 `host=`／`path=` 两行记录，helper 比对 host **与** path（`cloud/internal/credentialmaterial/material.go` 的 `Stage`／`formatScope`／`ReadScope`，`cmd/git-credential-ora/main.go` 的比对） |
-| 同上，引用的行号 | `internal/credentialmaterial/material.go:157` 是 scope 只存 host 的证据 | 该行落在 `ValidExecutionID` 的函数体内，与 scope 无关；scope 的写入点是同文件的 `Stage`（`formatScope`） |
-| 同上，引用的行号 | `internal/cloneexec/git.go:126-129` 把 `useHttpPath` 描述成 path 绑定 | 该注释现在在 `internal/cloneexec/git.go:191-196`，且**已经**如实写成「比对 path 与 host」，与代码一致 |
+| D4「必须同时收紧的一点（现状缺口）」 | 「helper 今天只比对 Git 报出的 `host`」「物化的 scope 文件只存 host」 | 物化写的是 `host=`／`path=` 两行记录（`cloud/internal/credentialmaterial/material.go:48-56` 记录了格式变更与旧格式的拒绝口径），helper 比对 host **与** path（`cmd/git-credential-ora/main.go:84-92`） |
+| 同上，引用的行号 | `internal/credentialmaterial/material.go:157` 是 scope 只存 host 的证据 | 该行落在 `ValidExecutionID` 的函数体内，与 scope 无关；scope 的写入点是同文件的 `Stage`（`:211`）与 `formatScope`（`:241`），读取点是 `ReadScope`（`:310`） |
+| 同上，引用的行号 | `internal/cloneexec/git.go:126-129` 把 `useHttpPath` 描述成 path 绑定 | 该注释现在在 `internal/cloneexec/git.go:201-207`，且**已经**如实写成「比对 path 与 host」，与代码一致 |
 | 批准边界第 2 条、D4 前置说明 | 「未补齐前不得启用推送」 | 前置条件已满足，但该边界**仍不是唯一的门**：启用推送还受 E 那篇独立的词汇表决策约束 |
 
-**为什么不在本轮直接改**：这是**已批准 ADR 的正文**。该 ADR 的安全边界（「未补齐前不得启用推送」）
-本身没有变化，过期的是它对**当前状态**的描述；但修改已批准 ADR 的正文属于第 12 节意义上的边界动作，
-不自行处置。
-
-**建议的最小更正**：在 D4 与该边界处各加一段前向注记——记明该收紧已于 2026-10-13 落地并单独验收
-（证据见上文 `Covered` 行），D4 的决策、不变量 8 与启用门禁**逐字不变**。这样既消除 ADR 与代码的
-矛盾，也不改变任何裁决。
-
-**需要你回答的一个问题**：是否同意按上面的最小更正更新那篇已批准 ADR 的现状描述（不改决策与边界），
-还是保持原文、把这段过期描述留到词汇表扩展决策时一并处理？
+**更正方式**：在 D4 与该边界处各追加一段前向注记（日期 2026-10-13），只更正**现状描述与证据引用**。
+被批准的原文、批准记录、D4 的决策、不变量 8 与"未补齐前不得启用推送"这一安全边界**逐字未变**；
+E 未被追认，`push` 仍在词汇表之外，本文与那篇 ADR 的其余 `Missing` 项一条都没有转状态。

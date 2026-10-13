@@ -45,8 +45,16 @@ Credential Service 已经落地，证据集中在 `integration.git_credentials_t
 词汇表：推送一侧由独立的
 [推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`approved` 2026-10-12，
 E 不批准：`push` 仍不在词汇表中）承载，其核心用例登记在
-[推送执行权限核心用例](../../node/repository/push-execution-authority.md)，除"推送不可被请求"一条外全部为
-`Missing`。规则侧获批、Cloud 侧落地与新能力码都不解除任何拒绝。
+[推送执行权限核心用例](../../node/repository/push-execution-authority.md)：除"推送不可被请求"与
+"helper 精确到 host＋path 的作用域校验"（2026-10-13 由 `Missing` 转 `Covered`，该收紧是读写共用的同一个
+helper 的行为）两条外，其余全部为 `Missing`。规则侧获批、Cloud 侧落地与新能力码都不解除任何拒绝。
+
+**2026-10-13 新增一篇 `proposed` 决策**：
+[`push` 进入能力词汇表](../../../decisions/cloud/identity-access/20261013-push-capability-vocabulary-extension.md)
+（`proposed`）提出把 `push` 加入枚举并写定端到端写入协议（一个 upstream、一个 ref、一对提交、一次人工
+授权、只由身份 C 执行）。**按本目录的规则，`proposed` 不构成验收依据**：它尚未获批，`push` 仍不在词汇表
+中，它也不维护核心测试用例（获批后才补充）。本目录与
+[推送执行权限核心用例](../../node/repository/push-execution-authority.md) 中由它引出的一切仍按原状态登记。
 
 ## 阅读与维护规则
 

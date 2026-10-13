@@ -54,6 +54,11 @@ D1–D8 与不变量 1–12 随本次批准成为本决策的正式内容。D4 �
 `host`，而 `internal/cloneexec/git.go` 的注释描述的是 path 绑定）是不变量 8 的前置条件：**未补齐前不得
 启用推送**，补齐本身属于读向收紧，不需要等待词汇表扩展。
 
+> **前向注记（2026-10-13）：括号里那句现状描述已经过时，正文保留原文不改写。** 该缺口已于
+> 2026-10-13 按落地顺序第 2 步补齐并单独验收：helper 今天比对 host **与** path。**本条边界的规则
+> 本身不变**——"未补齐前不得启用推送"依然成立，且它从来不是唯一的门（第 3 条与 D6 所述词汇表扩展
+> 决策同样是前置）。证据与代码位置见 D4 的前向注记。本文不因这次更正而把 E 追认为已批准。
+
 ## 继承与修改
 
 本叶子此前的最后一篇决策是
@@ -172,6 +177,22 @@ Issue #16 的验收第 2 项要求"读取与推送能力分别验证"，因此�
 scope"——**helper 实际上没有使用 path**。读向由执行器自己构造并校验 URL 兜住；写向必须在落地时补上
 **仓库范围校验**（把授权里的规范化仓库身份作为物化 scope 的一部分，并由 helper 比对请求的
 `host`＋`path`）。这一条属于本文裁决范围内的收紧，未补齐前不得启用推送。
+
+> **前向注记（2026-10-13）：上面这段对"现状"的描述已经过时，正文保留原文不改写。**
+> 上文写在读向收紧落地之前。今天的实际是：物化写的是 `host=`／`path=` 两行记录而不是裸 host
+> （`cloud/internal/credentialmaterial/material.go:48-56` 记下了这次格式变更，并规定旧格式在
+> `ReadScope` 处被**拒绝**而不是按 host 解读；写入点是同文件的 `Stage`（`:211`）与 `formatScope`
+> （`:241`），读取点是同文件的 `ReadScope`（`:310`）），helper 比对的是 host **与** path
+> （`cmd/git-credential-ora/main.go:84-92` 的 `requestScope != scope`，两端经同一个
+> `credentialmaterial.NormalizeScope`），`internal/cloneexec/git.go:201-207` 的 `useHttpPath`
+> 注释也已如实写成"path 与 host 一起比对"。因此本段引用的两处行号不再指向它所说的内容：
+> `internal/credentialmaterial/material.go:157` 落在 `ValidExecutionID` 的函数体内，与 scope 无关；
+> `internal/cloneexec/git.go:126-129` 已不是该注释的位置。
+>
+> 这次注记只更正**现状描述与证据引用**：D4 的决策、不变量 8、以及"未补齐前不得启用推送"这一边界
+> **逐字不变**。该收紧已于 2026-10-13 按第 2 步落地并单独验收（直接证据与可证伪的变异测试见
+> [推送执行权限核心用例](../../../test-cases/node/repository/push-execution-authority.md) 的
+> `Covered` 行）。注记不重新裁决任何事项，尤其**不构成对 E 的追认**——`push` 仍不在词汇表中。
 
 ### D5：Agent 取得不了秘密，也换不来一次推送
 
