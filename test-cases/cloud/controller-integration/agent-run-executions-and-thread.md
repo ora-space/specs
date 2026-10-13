@@ -3,6 +3,9 @@
 依据[已批准的 controller-integration 后续决策](../../../decisions/cloud/controller-integration/20260928-agent-run-executions-thread-and-upload-grants.md)。
 proto 已在 `ora-space/cloud` 合并（cloud#35）；服务端证据来自 [cloud#41](https://github.com/ora-space/cloud/pull/41)
 原分支后续提交中经真实 gRPC、PostgreSQL、RustFS 的集成测试。以下覆盖控制面；生产 Rust Node/Controller 与 B 业务投影仍需各自验收。Revision 草案状态保留，实际实现差异见[实现与验收记录](../../../implementation/agent-control-plane-a.md)。
+2026-10-12 获批的 [Git 交付后续决策](../../../decisions/cloud/controller-integration/20261012-git-delivery-inputs-without-bundle-grants.md)
+把代码改动改为经 Git Server 交付：上传授权只剩会话 JSONL，交付核验改为 ref 查询加 JSONL `HEAD`。下文相应义务已按它改写，
+新契约的其余义务见 [Git 交付输入、授权方法与交付终态](git-delivery-inputs.md)。
 
 ## Session And Delivery Work Is Registered On Its Cloud-Chosen Node
 
@@ -95,7 +98,8 @@ Cloud 有未投递的 Thread 命令；运行处于 `delivering`，交付执行�
 
 - 未登记投递的命令在重新领取时再次返回；登记后不再返回；重复登记幂等。
 - 会话执行尚未登记时，命令留在 Cloud、不返回。
-- 授权只对尚无结果的交付签发，对象键等于交付输入中的键；Cloud 不留下任何授权记录。
+- 授权只对尚无结果的交付签发，只针对交付输入中的会话 JSONL 键；Cloud 不留下任何授权记录。
+- 成功交付先经 Cloud 核验：ref 查询确认交付 ref 指向声明的最终提交，JSONL 经 `HEAD` 核对，之后才接管并登记。
 
 ### 禁止结果
 
@@ -107,10 +111,10 @@ Cloud 有未投递的 Thread 命令；运行处于 `delivering`，交付执行�
 |---|---|---|
 | 命令至少投递一次 | `TestThreadCommandsAndUploadGrantsAreNotLostOrStored`：未登记会话时保留；领取后重领、重复登记和投递后为空 | Covered |
 | 命令与模拟器恢复 | `TestThreadCommandsPreserveOrderWithinOneBusinessTransaction` 保持同事务顺序；`TestSimulatorRelaysEchoTurnsAcrossControllerRestart` 重开磁盘日志后追加并结束同一会话；`TestSimulatorServicesEndCommandsWhileRunDeletionIsQueued` 防止 quiesce 饿死命令。尚无真实 Controller/Node 恢复验收 | Partial |
-| 授权不持久化 | `TestThreadCommandsAndUploadGrantsAreNotLostOrStored` 扫描数据库，终态拒绝授权；`TestSimulatorDeliversRevisionToS3AcrossRestart` 真实上传/刷新后扫描替身磁盘无签名/凭据；sandbox PUT 不挂载 root 凭据。生产 Rust Controller/Node 日志仍未验收 | Partial |
+| 授权不持久化 | `TestThreadCommandsAndUploadGrantsAreNotLostOrStored` 扫描数据库，终态拒绝授权；`TestSimulatorDeliversRevisionToS3AcrossRestart` 真实上传/刷新后扫描替身磁盘无签名/凭据；sandbox PUT 不挂载 root 凭据。生产 Rust Controller/Node 日志仍未验收；授权只针对 JSONL 键尚无测试（见 [Git 交付输入](git-delivery-inputs.md#agent-run-service-has-no-download-grant-and-upload-grants-cover-only-the-session-jsonl)） | Partial |
 | 前版升级 | `integration/agent_control_upgrade_test.go` 的 `TestAgentControlUpgradePreservesPendingCommandOrder`：从 0024 升级并重复迁移，既有次序保留，新序号连续 | Covered |
-| 成功交付等待 Cloud 验证 | `TestRevisionS3VerificationAndAtomicTakeover` 真实 RustFS changed/unchanged、缺失/大小/摘要不符、hook/提交回滚、原始证据保留及重放；`TestRevisionNetworkFailureRemainsReplayable` 网络故障无 ACK；`TestRevisionLeaseAndStateAreRecheckedAfterExternalVerification` 外部 I/O 后重新围栏 | Covered |
+| 成功交付等待 Cloud 验证 | `TestRevisionS3VerificationAndAtomicTakeover` 真实 RustFS changed/unchanged、缺失/大小/摘要不符、hook/提交回滚、原始证据保留及重放；`TestRevisionNetworkFailureRemainsReplayable` 网络故障无 ACK；`TestRevisionLeaseAndStateAreRecheckedAfterExternalVerification` 外部 I/O 后重新围栏。以上证明 JSONL 一侧与顺序；Cloud 尚无 ref 查询，交付 ref 的核验见 [Revision Is Registered Only After The Ref Query Confirms The Delivery Ref](../revision/git-delivery-verification.md#revision-is-registered-only-after-the-ref-query-confirms-the-delivery-ref) | Partial |
 
 ### 决策依据
 
-controller-integration D3、D4，不变量 5、6。
+controller-integration D3、D4，不变量 5、6；Git 交付后续决策 D3、D4，不变量 3。

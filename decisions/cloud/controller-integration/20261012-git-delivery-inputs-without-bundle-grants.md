@@ -109,6 +109,17 @@ Controller 在 `TakeOverNodeEvent` 之前核对：`base_commit`、`revision_ref`
 
 - Controller 遇到能力不足的工作项时的队头阻塞（20261010 未解决项，不变）。
 
+## 核心测试用例
+
+本 ADR 获批后依据最终方案补充的核心用例如下。本 ADR 尚未实现，新增义务的证据大多为 `Missing`，实现时按用例逐项
+补充直接测试并更新状态。
+
+- [Git 交付输入、授权方法与交付终态](../../../test-cases/cloud/controller-integration/git-delivery-inputs.md)：仓库地址、
+  交付 ref 与会话前序逐字转交，Controller 不持有 Git 凭据；没有下载授权，上传授权只针对 JSONL；交付终态在接管前
+  核对；`buf breaking` 豁免只在本次修改中存在。
+- [Agent 运行执行、Thread 与上传授权](../../../test-cases/cloud/controller-integration/agent-run-executions-and-thread.md)：
+  “成功交付等待 Cloud 验证”改为 ref 查询加 JSONL `HEAD`，“授权不持久化”中只剩 JSONL 上传授权。
+
 ## 落地
 
 随主 ADR 落地顺序第 2、3 步：cloud 的 proto、生成物与 `internal/controlgrpc` 编解码；desktop 锁定新契约 commit，

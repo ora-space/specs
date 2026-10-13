@@ -307,8 +307,9 @@ Controller 拿不到仓库地址与交付 ref，无论 `v1` 是否保留都无�
   可重放，`unchanged` 也登记交付 ref；`revisions` 的两种形态；公开投影保持形状。
 - [从交付 ref 续作前序 Revision](../../../test-cases/cloud/revision/git-revision-resume.md)：续作候选只含有交付 ref
   且最终提交不等于基础提交的 Revision；会话输入的前序形状；取消的运行不标记不可续接。
-- `test-cases/cloud/controller-integration/agent-run-executions-and-thread.md`：“成功交付等待 Cloud 验证”改为 ref 查询
-  加 JSONL `HEAD`；“授权不持久化”中只剩 JSONL 上传授权。
+- [Agent 运行执行、Thread 与上传授权](../../../test-cases/cloud/controller-integration/agent-run-executions-and-thread.md)：
+  “成功交付等待 Cloud 验证”改为 ref 查询加 JSONL `HEAD`；“授权不持久化”中只剩 JSONL 上传授权。契约形状与
+  Controller 行为的用例见 controller-integration 后续决策的“核心测试用例”一节。
 - `test-cases/node/protocol/agent-run-messages.md`：交付输入的 ref 与对象键校验改为交付 ref 与 JSONL 键，删除下载
   授权相关义务。
 - `test-cases/cloud/model-access/personal-model-access.md`：“JSONL 与 bundle 保存并校验”改为 JSONL 保存、交付 ref 核验。
