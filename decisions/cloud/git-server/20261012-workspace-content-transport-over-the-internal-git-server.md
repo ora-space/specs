@@ -181,8 +181,16 @@ Git Server 在不持事务的只读查询中，依据 Cloud 数据库的当前�
 1. 解析出的容器是当前存活的沙盒，其沙盒实例是 Cloud 记录里该 Workspace 的当前实例（旧代次、已终止、已强停的实例
    拒绝）；
 2. 请求定位到的 Project 属于该 Workspace——路径中的标识只用于**定位**，不用于授权：不匹配即拒绝，匹配也不因此
-   获得任何额外权限；
+   获得任何额外权限。该 Project 还必须处于仍可服务自身内容的状态：`provisioning` 与 `active` 可读，`deleting`
+   与 `deleted` 拒绝；
 3. 要读的 ref 属于该 Workspace 本次克隆已核验的镜像与提交。
+
+第 2 条把 `provisioning` 计为可读，是**必须**而不是放宽：带凭据 Project 的**第一个** Workspace 正是**在 Project
+仍为 `provisioning` 时**克隆自己的镜像的——把 Project 置为 `active` 的 `openWorkspace` 写在同一次 operation 的末尾，
+而这次 operation 的 clone 步骤就是该读取本身。只承认 `active` 会让读取被自己将要促成的那个状态拒绝，通道永远送不出
+第一个 Workspace。隔离栈上实测过这一形态：Workspace、其沙盒实例与代次、钉住的提交、已发布的镜像全部匹配，Git Server
+仍以 `container_not_live` 拒绝，唯一不同的是 `projects.lifecycle='provisioning'`。这不是身份边界的改动——调用方仍然
+必须是该 Workspace 的存活沙盒，镜像键仍然由该 Workspace 的 Project 派生，因此能读到内容的 Project 仍然只有它自己。
 
 | 情况 | 响应 |
 | --- | --- |
