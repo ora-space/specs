@@ -4,6 +4,9 @@
 消息与校验已在 desktop `crates/node-protocol` 合并（desktop#629），证据来自
 `crates/node-protocol/tests/protocol/{plugin,agent_session,revision}.rs`。协议往返测试只证明线上形状，
 持久化、重放与恢复由 Node/Controller 测试承担，因此相应义务为 `Partial` 或 `Missing`。
+2026-10-12 获批的 [node/revision Git 交付决策](../../../decisions/node/revision/20261012-push-delivery-ref-and-fetch-prior-revision.md) D8
+修改了交付输入、会话前序、结果与授权消息，下文“Upload Grants Stay In Memory And Deliveries Stay In Their Namespace”
+已按它改写；协议尚未修改，新增义务为 `Missing`。
 
 ## Thread Events Share One Gap Free Sequence With The Terminal Event
 
@@ -89,26 +92,34 @@ Thread 事件与终态事件序号冲突或出现空洞，Controller 无法按�
 
 ### 触发
 
-收到 `UploadGrant`；授权过期或 Node 重启后需要上传；交付输入使用 `refs/ora/revisions/` 之外的 ref 或非规范对象键。
+收到 `UploadGrant`；授权过期或 Node 重启后需要上传；交付输入的 `revision_ref` 不在 `refs/ora/revisions/` 下、
+`delivery_ref` 不在 `refs/ora/deliveries/` 下或 JSONL 键非规范；会话前序缺少仓库地址、交付 ref 或基础提交。
 
 ### 必须成立
 
 - `UploadGrant`/`UploadGrantNeeded` 无序号、无确认，不写账本与日志；`Debug` 不输出 URL。
 - 没有有效授权时发送 `UploadGrantNeeded` 并等待，执行保持 `Running`。
-- 交付 ref 必须在 `refs/ora/revisions/` 下，两个对象键规范且不同；`unchanged` 与 `delivered` 与 commit 是否变化一致。
+- `DeliverRevision` 的 `revision_ref` 必须在 `refs/ora/revisions/` 下，`delivery_ref` 必须在 `refs/ora/deliveries/` 下，
+  同时带 `git_repository_url`，不带 `bundle_key`；JSONL 键规范。`RevisionDelivered` 不带 bundle；`unchanged` 与
+  `delivered` 与 commit 是否变化一致；失败码有 `push_rejected`、`push_failed`，没有 `bundle_failed`。
+- 会话的 `PriorRevision` 带 `git_repository_url`、`delivery_ref`、`base_commit`，不带 bundle；交付的
+  `PriorRevisionCommit` 不变。
+- `UploadGrantNeeded` 的 `checksums` 只含 JSONL 键；没有 `DownloadGrantNeeded` 与 `DownloadGrant`。
 
 ### 禁止结果
 
-授权持久化或出现在日志；交付移动分支。
+授权持久化或出现在日志；交付移动分支；交付推送到 `refs/ora/deliveries/` 之外的 ref。
 
 ### 验证义务与证据
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
 | 授权脱敏与形状 | `revision.rs` `upload_grants_round_trip_without_exposing_the_url`；`UploadGrantNeeded` 的 checksums 必须非空、键规范、摘要为小写规范形式（同文件 upload grant needed 用例），`ControlledDeliverRevision` 的许可必须精确对应执行、node operation 与 Node（`controlled_delivery_requires_a_matching_runtime_permit`）；desktop `apps/ora-controller/tests/workspaces/deliveries.rs::delivery_waits_for_its_permit_and_relays_checksum_bound_grants_unlogged` 以作用域内的记录型 subscriber 捕获 Controller 全部日志，断言其中没有存储主机与签名；Node 侧日志尚无同等断言 | Partial |
-| ref 与对象键校验 | `revision.rs` `deliver_revision_rejects_refs_keys_and_commits_outside_the_contract`、`revision_results_round_trip_and_keep_commits_consistent` | Covered |
+| ref 与对象键校验 | `revision.rs` `deliver_revision_rejects_refs_keys_and_commits_outside_the_contract`、`revision_results_round_trip_and_keep_commits_consistent`：`revision_ref` 越界、对象键非规范与 commit 不一致被拒绝。缺口：`delivery_ref`、`git_repository_url` 与去掉 bundle 后的形状尚无测试 | Partial |
+| 会话前序与失败码的形状 | `revision_restore.rs` `prior_revision_round_trips_in_session_and_delivery_inputs` 证明的是带 bundle 的旧前序；新字段、`push_rejected`、`push_failed` 尚无测试 | Missing |
+| 没有下载授权消息 | `revision_restore.rs` `download_grants_round_trip_without_exposing_the_url` 仍证明下载授权存在；删除后需由协议测试证明这些消息无法解码 | Missing |
 | 授权不落盘、过期重请求 | desktop `apps/ora-node/tests/standalone/agent_sessions/delivery.rs::ended_session_is_delivered_with_requested_grants`：真实 Node 二进制完成交付后，账本文件字节中不含签名 URL；`apps/ora-node/src/revision/tests/upload.rs::grant_requests_carry_frozen_checksums_and_headers_travel_verbatim`：过期授权被丢弃并以冻结的 checksums 重新请求，`forbidden_grant_is_replaced`：403 后重新请求；Node 日志无授权尚未直接断言，Controller 重启后由 Node 在新连接上重发请求尚无真实重连测试 | Partial |
 
 ### 决策依据
 
-协议后续决策 D1、D5，不变量 5、6。
+协议后续决策 D1、D5，不变量 5、6；node/revision Git 交付决策 D8。

@@ -310,10 +310,12 @@ Controller 拿不到仓库地址与交付 ref，无论 `v1` 是否保留都无�
 - [Agent 运行执行、Thread 与上传授权](../../../test-cases/cloud/controller-integration/agent-run-executions-and-thread.md)：
   “成功交付等待 Cloud 验证”改为 ref 查询加 JSONL `HEAD`；“授权不持久化”中只剩 JSONL 上传授权。契约形状与
   Controller 行为的用例见 controller-integration 后续决策的“核心测试用例”一节。
-- `test-cases/node/protocol/agent-run-messages.md`：交付输入的 ref 与对象键校验改为交付 ref 与 JSONL 键，删除下载
-  授权相关义务。
-- `test-cases/cloud/model-access/personal-model-access.md`：“JSONL 与 bundle 保存并校验”改为 JSONL 保存、交付 ref 核验。
-- 端到端证据：cluster 的 `revision:acceptance` 与 `revision:resume:acceptance` 改走 Git，作为本组 ADR 的验收。
+- [Agent 运行的协议消息](../../../test-cases/node/protocol/agent-run-messages.md)：交付输入的 ref 与对象键校验改为
+  `revision_ref`、交付 ref 与 JSONL 键；会话前序带仓库地址、交付 ref 与基础提交；没有下载授权消息。
+- [个人模型访问](../../../test-cases/cloud/model-access/personal-model-access.md)：真实 CLI 的交付改为 JSONL 保存、
+  交付 ref 核验。
+- 端到端证据：cluster 的 `revision:acceptance` 与 `revision:resume:acceptance` 改走 Git，作为本组 ADR 的验收；验收只
+  作补充证据，不替代上列义务的直接测试。
 
 ## 落地顺序
 

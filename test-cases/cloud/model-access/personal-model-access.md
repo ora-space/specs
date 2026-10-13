@@ -55,6 +55,6 @@
 - 风险：只有 Echo 或模拟器跑通，实际 CLI、工具调用、成果保存及释放未接通。
 - 前置：独立真实 Compose 栈，安装固定版本官方 OpenCode，用户通过页面配置连接和模型。
 - 触发：登录、创建项目并 clone、@OpenCode、追加轮次、结束会话。
-- 必须成立：真实 CLI 读取/修改 checkout，JSONL 与 bundle 保存并校验，Git 作者归发起者，运行 Workspace 释放。
+- 必须成立：真实 CLI 读取/修改 checkout，JSONL 保存并校验，代码改动推送到交付 ref 并经 Cloud 的 ref 查询核验（[Cloud Revision Git 交付决策](../../../decisions/cloud/revision/20261012-git-server-delivery-and-verified-delivery-refs.md)），Git 作者归发起者，运行 Workspace 释放。
 - 禁止结果：以替身代替 CLI、Key/临时令牌进入 Git/日志/截图、未登记成果就宣称完成。
-- 证据与义务：[独立实际 CLI 验证记录](https://github.com/ora-space/cluster/pull/15#issuecomment-6107672919)覆盖两协议的页面配置、clone、两轮读写、结束及同 Run 的 Revision 恢复、Git 作者、对象摘要和容器/卷释放。API 链路作为补充；[实施阶段历史记录](https://github.com/ora-space/cluster/pull/15#issuecomment-6107672503)不替代后续代码验证。状态 `Partial`：受控正常路径已有直接证据，页面已有真实默认模型的两协议供应商验证仍 `Missing`；多身份、崩溃和灾备义务保持各自缺口。
+- 证据与义务：[独立实际 CLI 验证记录](https://github.com/ora-space/cluster/pull/15#issuecomment-6107672919)覆盖两协议的页面配置、clone、两轮读写、结束及同 Run 的 Revision 恢复、Git 作者、对象摘要和容器/卷释放。API 链路作为补充；[实施阶段历史记录](https://github.com/ora-space/cluster/pull/15#issuecomment-6107672503)不替代后续代码验证。状态 `Partial`：受控正常路径已有直接证据，页面已有真实默认模型的两协议供应商验证仍 `Missing`；多身份、崩溃和灾备义务保持各自缺口。该记录核对的是改为 Git 交付之前的 bundle 对象，代码改动经交付 ref 保存与核验的同一路径尚无记录。
