@@ -21,6 +21,16 @@
 
 ## The Capability Vocabulary Admits Only Clone And Never Implies Read Or Push
 
+> **2026-10-13 的状态说明（只在此处登记，标题与索引链接逐字保留）**：标题里的 "Admits Only Clone"
+> 描述的是 `2026-10-12` 那次决策定下的词汇表。当天晚些时候，[能力词汇表扩展](../../../decisions/cloud/identity-access/20261013-push-capability-vocabulary-extension.md)
+> 按本文件自己的规则（"加宽词汇表是一次决策而不是一次编辑"）被独立裁决为 `approved`，词汇表因此
+> 变成 `["clone","push"]`，`push` 已不是词汇表外的成员。**标题因此命名的是一个已经结束的状态**，
+> 但它要守的承诺没有结束，只是**从"只有一个成员"变成"恰好是决策所固定的那组成员"**——`read`／
+> `write`／`fetch`／`pull`／`admin` 与一切拼写变体仍然在任何时候都不被接受，加宽仍然必须先有一篇决策。
+> 本文件据此把两条义务按实测改写（见下表），**没有**把它改成"词汇表可以随手加宽"。
+> 标题改名留待一次专门的变更：按 `specs/AGENTS.md`，改名要先更新代码中的全部引用与本目录的索引链接，
+> 经查今天除本文件与 `README.md` 的索引行外没有其他引用。
+
 ### 风险
 
 为了让某个验收行"看起来满足"，或因为一个常量看起来少了一项，词汇表被顺手加宽：`read`、`push`、
@@ -39,7 +49,10 @@
 
 ### 必须成立
 
-- 词汇表恰为 `["clone"]`；`read`、`write`、`push`、`fetch`、`pull`、`admin` 与空字符串都不是已知能力。
+- 词汇表恰为**决策所固定的那组成员**，而不是"恰好一个"：`2026-10-12` 为 `["clone"]`，
+  `2026-10-13` 起为 `["clone","push"]`（由[能力词汇表扩展](../../../decisions/cloud/identity-access/20261013-push-capability-vocabulary-extension.md)
+  那篇独立决策按本条第三项办完）。`read`、`write`、`fetch`、`pull`、`admin` 与空字符串**在任何时候
+  都**不是已知能力。
 - `clone` 是 D1 的六条语义（一次性、只读、单仓库、有期限、身份绑定、归属绑定），它不蕴含 fetch、
   pull、push，也不蕴含"可以读"这一无限次解释。
 - 未知、重复、空集合与不按规范顺序的集合一律被拒绝，且在**签发**阶段就被拒绝，任何这样的集合都不能
@@ -55,7 +68,7 @@
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 词汇表恰为 `["clone"]`，未定义成员不被接受 | `cloneauth.TestCapabilityVocabularyIsClosedToWhatTheDecisionFixes`：断言词汇表长度为 1 且为 `clone`，并逐个断言 `read`／`write`／`push`／`fetch`／`pull`／`admin`／空串不被 `KnownCapability` 接受。测试注释写明"加宽这份清单是一次决策而不是一次编辑" | Covered |
+| 词汇表恰为决策所固定的成员，未定义成员在任何时候都不被接受 | **2026-10-13 按实测改写**。`cloneauth.TestCapabilityVocabularyIsClosedToWhatTheDecisionFixes`：断言词汇表**恰为** `["clone","push"]` 且顺序如此（`reflect.DeepEqual`，因此多一个、少一个、换顺序都失败），并逐个断言 `read`／`write`／`fetch`／`pull`／`admin`／`Clone`／`PUSH`／`push␠`／空串不被 `KnownCapability` 接受——大小写与尾随空格变体也在内。测试注释写明"加宽这份清单是一次决策而不是一次编辑"，且成员写成测试常量而不是"看起来完整"的枚举，下次扩展仍须先改决策。本条**不因第二个成员的出现而降级**：被断言的仍是"关闭于决策所固定之处"，只是决策固定在两处而不是一处。改写的依据是 cloud `16e0c40`（公开契约枚举、准入、签发、执行四处强制点在同一次变更里就位）与该扩展决策本身 | Covered |
 | 只有规范集合可通过，其余一律拒绝 | `cloneauth.TestCanonicalCapabilitiesRefusesEverySetItCannotHaveIssued` 的八组输入：`["clone"]` 通过；nil、空集合、越界成员、`["clone","fetch"]`、重复、大小写不同、空字符串成员全部返回 `ErrIncomplete` | Covered |
 | `clone` 的六条语义作为此后成员的基准 | 语义本身是文字化承诺，其可测部分分别登记在[凭据元数据](repository-credential-metadata.md)（归属与版本绑定）与[凭据 Secret Store](repository-credential-secret-store.md)（一次性消费与重放拒绝），本文件不重复登记同一义务 | Partial |
 | 加宽词汇表必须同时变更公开契约枚举 | 契约侧证据登记在[凭据元数据](repository-credential-metadata.md)的公开 API 义务；本文不重复 | Partial |
@@ -128,7 +141,8 @@ D3、D5；不变量 3、4、6；[把带凭据的拒绝结算为终态](../../../
 ### 必须成立
 
 - 签发侧只接受规范集合：空、未定义、重复、越界的能力集合都无法获得签名。
-- 执行计划携带准入判定所要求的能力（今天恒为 `["clone"]`），而不是由执行器或 Node 自行推断。
+- 执行计划携带准入判定所要求的能力（对一次 clone 执行恒为 `["clone"]`；`2026-10-13` 起写向执行
+  同理恒为 `["push"]`），而不是由执行器或 Node 自行推断。
 - 执行器在执行任何 Git 命令、花掉任何预算之前再比对一次，并拒绝非法集合。
 - 执行器不因调用方自述、环境变量或配置而获得调用方未声明的能力。
 

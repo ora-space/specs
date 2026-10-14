@@ -39,22 +39,35 @@ Credential Service 已经落地，证据集中在 `integration.git_credentials_t
 启用镜像通道的隔离栈上已有一轮真实 Cloud 进程签发 → 真实 Store 兑换 → 私有上游抓取的端到端证据
 （代码仓库 `docs/internal-git-server-mirror-acceptance.md`）。镜像通道是**另一套部署状态**：凭据只在执行器
 手里用一次，Node 拿到的是内部地址，从未接触上游凭据，所以它不改变本文件其余各项的判断。能力词汇表已于 2026-10-12 裁决并进入 `approved`：
-词汇表保持 `["clone"]`，本次不引入 `read`、不开放 `push`，候选验证复用受限 `clone`；旧式
+**当时**词汇表保持 `["clone"]`，那次不引入 `read`、不开放 `push`，候选验证复用受限 `clone`；旧式
 `capabilities=[]` 引用走**逐条核验 + 逐条显式迁移**（不得批量授权，无法证明授权依据者保持冻结），
-实现与既有行的迁移落在解禁那次变更里。Issue 验收要求的"读取与推送能力分别验证"因此仍超出今天的
-词汇表：推送一侧由独立的
+实现与既有行的迁移落在解禁那次变更里。**「不开放 `push`」这一半已于 2026-10-13 被下一段那篇决策取代**
+（`read` 仍未引入，迁移一侧仍 `Missing`）。推送一侧由独立的
 [推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`approved` 2026-10-12，
-E 不批准：`push` 仍不在词汇表中）承载，其核心用例登记在
-[推送执行权限核心用例](../../node/repository/push-execution-authority.md)：除"推送不可被请求"与
-"helper 精确到 host＋path 的作用域校验"（2026-10-13 由 `Missing` 转 `Covered`，该收紧是读写共用的同一个
-helper 的行为）两条外，其余全部为 `Missing`。规则侧获批、Cloud 侧落地与新能力码都不解除任何拒绝。
+E 不批准）承载，其核心用例登记在
+[推送执行权限核心用例](../../node/repository/push-execution-authority.md)：**2026-10-13 已按实测逐行重估**——
+原先写在那里的「除'推送不可被请求'与'helper 精确到 host＋path 的作用域校验'两条外，其余全部为 `Missing`」
+不再成立；今天的状态是读向的 helper 作用域、写向的准入／签发／执行／兑换各在容器级或进程内取得直接证据，
+未取得的部分逐条列在该文件文末的 D9 表里。规则侧获批、Cloud 侧落地与新能力码都不解除任何拒绝。
 
-**2026-10-13 新增一篇 `proposed` 决策**：
+**2026-10-13 新增并已获批、且当天已实现的一篇决策**：
 [`push` 进入能力词汇表](../../../decisions/cloud/identity-access/20261013-push-capability-vocabulary-extension.md)
-（`proposed`）提出把 `push` 加入枚举并写定端到端写入协议（一个 upstream、一个 ref、一对提交、一次人工
-授权、只由身份 C 执行）。**按本目录的规则，`proposed` 不构成验收依据**：它尚未获批，`push` 仍不在词汇表
-中，它也不维护核心测试用例（获批后才补充）。本目录与
-[推送执行权限核心用例](../../node/repository/push-execution-authority.md) 中由它引出的一切仍按原状态登记。
+（`approved` 2026-10-13，A–G 全部按建议批准）把 `push` 加入枚举的规则写定，并写定端到端写入协议（一个
+upstream、一个 ref、一对提交、一次人工授权、只由身份 C 执行）；同一次批准还修订了
+[推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md) 的两处绑定项与结果
+语义（该 ADR 正文已按它自己的前向注记约定同步）。**它已不再是"规则获批但行为不变"**：同日两个提交
+把它落成实现——`16e0c40` 把词汇表扩成 `["clone","push"]` 并同步公开契约枚举、在准入／签发／执行／兑换
+四处强制点上就位，`2bd610d` 落成单次授权的签发、受控执行与五态结算。因此本文件上面两段里
+「词汇表保持 `["clone"]`」「`push` 仍不在词汇表中」「推送一侧其余全部为 `Missing`」这三句
+**已被当天的事实取代**；本目录的
+[凭据能力词汇表](repository-credential-capability-vocabulary.md) 与
+[推送执行权限核心用例](../../node/repository/push-execution-authority.md) 已按实测逐行重估。
+**生产行为仍未改变**：`CLOUD_CLONE_DISPATCH_PUSH_ENABLED` 与执行器的 push root 都只出现在验收专用的
+隔离 overlay 里，生产 `compose.yaml` 未动，四处强制点在生产配置下逐位不变，D9 九条里也仍有
+三条只到 `Partial`（其中一条是实测到的产品缺陷）。该 ADR 的核心测试用例按 `specs/AGENTS.md` 在获批后
+补充——本目录尚未新建独立文件，其写向义务目前登记在
+[推送执行权限核心用例](../../node/repository/push-execution-authority.md) 与
+[凭据能力词汇表](repository-credential-capability-vocabulary.md) 两处。
 
 ## 阅读与维护规则
 
