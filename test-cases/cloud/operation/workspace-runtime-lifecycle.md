@@ -50,6 +50,51 @@ clone 未成功时开放准入；计划 `storage_ensure`、`worktree_ensure`、`
 
 运行时 Workspace 生命周期 D1、D2，不变量 1、2、5。
 
+## A Clone Step Is Attempted At Most Three Times Before Its Operation Is Failed
+
+### 风险
+
+clone 步骤的失败被无界重试：一个仓库在这套部署里不可达时，Operation 在 `retry_wait` 与 `running` 之间
+永久循环，Workspace 永不 ready、Project 永远停在 `provisioning`；并且由于它始终是最旧的候选，它后面
+的 Operation 全部得不到调度。
+
+### 前置状态
+
+一个已领取的 `create_project` Operation，停在 `clone` 步骤，其 Node 持续上报克隆失败（例如
+`CLONE_FAILURE_REASON_INTERRUPTED`）。
+
+### 触发
+
+Controller 对同一步骤重复上报失败，第三次失败到达 Cloud。
+
+### 必须成立
+
+- 预算由 Cloud 持有并施加。前两次失败进入 `retry_wait`/`clone_failed`，退避依次为 5 秒与 10 秒；Controller
+  在 defer 中提出的延迟不决定这两次的时间（它只是一个 Controller 常量）。
+- 第三次已知失败把 Operation 结算为 `failed`/`clone_failed`，并清空 `retry_at`。
+- 计数来自持久执行记录（每次尝试一条 `clone_executions`），因此每条记录都保留；人工 retry、重复提交与
+  Controller 重启都不重置预算。
+- 结算后的 Operation 不再被领取，也不能经 `POST /operations/{oid}/retry` 重试
+  （`409 operation_not_retryable`）。
+- 两条路径上准入都保持关闭：只有 clone 成功才开放准入。
+
+### 禁止结果
+
+出现第四次克隆尝试；把预算记在 Controller 或进程内存里；结算时删除或改写执行记录；结算为 `failed`
+时留下非空 `retry_at`（`claim` 会把它读回成一次待重试）。
+
+### 验证义务与证据
+
+| 义务 | 所需直接证据 | 状态 |
+|---|---|---|
+| 前两次失败按 5／10 秒退避且各留一条执行记录 | `integration/workspace_lifecycle_test.go` `TestCloneStepStopsAfterItsThirdFailure`：逐次断言 `retry_wait`/`clone_failed`、`retry_at - now` 落在 5±1 秒与 10±1 秒、执行记录数等于本次尝试序号 | Covered |
+| 第三次失败结算为终态 | 同一测试：第三次失败后 `state='failed'`、`error_code='clone_failed'`、`retry_at IS NULL`、准入未开放、下一次 claim 无工作、`POST /operations/{oid}/retry` 返回 `409 operation_not_retryable` | Covered |
+| 预算不因人工 retry 重置 | 同一测试：每次 park 后用公开 retry 入口使其立即到期以驱动三次尝试，退避仍按执行记录递增，结算时三条记录都在 | Covered |
+
+### 决策依据
+
+运行时 Workspace 生命周期 D2（2026-10-11 检视修订），不变量 2、5。
+
 ## Workspace Data Is Deleted Only After Every Sandbox Is Terminated
 
 ### 风险

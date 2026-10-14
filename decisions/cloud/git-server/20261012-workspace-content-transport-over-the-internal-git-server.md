@@ -539,6 +539,17 @@ migration**，且**只在隔离 PostgreSQL 上验证**；正式库不迁移。�
    仍是 `proposed`，按仓库规则其核心测试用例尚未建立，故本轮的证据登记在本文内如实记录，待状态变为 `approved`
    后再按核心用例重新登记。
 
+   **前向注记（2026-10-14 补，不改写上面两次运行当时的结论）**：第 5 步"没有容器级端到端证据"这一句已被之后的
+   运行取代——隔离栈与共享开发栈上都跑过内容通道：Cloud 命名内部 Git Server 时，带凭据的 Project 由执行器抓取
+   只承认 token 的私有上游、发布镜像，Node 以既有的**匿名** HTTPS clone 从镜像取得内容并落到 Workspace。
+   逐项断言、失败产物与一次被证伪的守界缺陷见代码仓库
+   `docs/internal-git-server-mirror-acceptance.md`（§2、§5、§6、§7）。其中"公开匿名仓库保留现有路径（不进入
+   这条通道）"这一条在共享开发栈上以真实公开上游取得了一次直接证据：无凭据 Project 的 Operation 达到
+   `succeeded`、克隆输入是它自己的上游与 ref、`mirror_preparations` 零行、Workspace 基线等于上游自己报出的
+   提交（`scripts/anonymous-clone-acceptance.py --upstream-ls-remote-container`，证据
+   `.acceptance/cluster-public-clone.json`）。**仍未取得**的是执行侧 Agent 读文件那一步，以及本步骤其余各项在
+   隔离栈之外的证据。
+
 第 1–4 步在授权未启用时不改变任何现有行为，因此安全边界可以先于业务调用方单独评审；任何一步失败都不影响现有的
 对象存储路径与 fail-closed 语义。`desktop/` 在全部六个阶段中都不修改。
 

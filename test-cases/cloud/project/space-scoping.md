@@ -73,7 +73,41 @@
   deleting；编排完成后 `deleted_at` 置值。
 - 禁止结果：member 删除成功、admin 删除不走状态机、或删除被静默降级为软删。
 - 验证义务与证据：**Covered** — `integration TestProjectSpaceScopingAndRoleGates` 断言 403、
-  deleting 状态、drain 后 deleted_at 置值。
+  deleting 状态、drain 后 deleted_at 置值。本用例的前置 `lifecycle=active` 是场景而非不变量：
+  admin 可删除的 Project 状态由下一条用例固定。
+
+## Deleting a project supersedes what is still running on it
+
+- 风险：删除被要求依赖普通用户无法制造的中间状态，导致失败或永远停在创建中的 Project 永久不可删；
+  或反过来，为了删掉它而把仍可被领取的 Operation 留在队列里，使已被删除的 Project 在删除之后继续被
+  provisioning；或为了让删除通过而改写、丢弃既有执行记录与失败事实。
+- 前置状态：admin 拥有的 Project，其 provisioning 已经失败（`lifecycle` 仍是 `provisioning`，其
+  唯一 Operation 为 `failed`，Workspace 的 runtime control 仍由该已结束的 Operation 持有的
+  `maintenance` 占据）；另一种前置是同一 Project 的 Operation 仍为 `queued`，尚未被任何 Controller
+  领取。
+- 触发：admin `DELETE /projects/:pid`，随后 Controller 推进该删除 Operation。
+- 必须成立：两种前置都返回 202 并走既有 quiesce→terminate→cleanup 编排；删除请求把该 Project 上
+  仍然存活的 Operation 结算为 `failed` + 该动作自己的 `error_code`、清空 `retry_at`，因此删除之后
+  没有任何 Operation 会被领取或派发；已结束 Operation 遗留的 `maintenance` 占用（其 Operation 已
+  不存活）可被删除接管，而已不存在的沙箱不构成拒绝理由；编排完成后 Project `lifecycle='deleted'`、
+  其 Workspace 与沙箱按既有机制清理；既有 clone 执行记录、Operation 的 request 与 actor 原样保留，
+  且该 Operation 不会因被删除而变成 `succeeded`。
+- 禁止结果：以 `resource_unavailable` 或 `runtime_control_held` 笼统拒绝上述任一前置；把未完成的
+  Operation 留在队列中导致 Project 删除后仍被 provisioning；丢弃或改写执行记录与失败原因；把删除
+  降级为直接物理删除（绕过 quiesce 与数据清理）。
+- 验证义务与证据：**Covered** — `integration
+  TestProjectDeleteAcceptsAProjectWhoseProvisioningFailed`（clone 预算耗尽 → Operation `failed`、
+  Project 仍为 `provisioning`、runtime control 仍被遗留占用 → 删除 202、重复删除
+  `operation_in_progress`、drain 后 `lifecycle='deleted'`、无存活 Workspace／沙箱、clone 执行记录与
+  `failed` 原因保留）与 `integration TestProjectDeleteSupersedesWaitingWorkAndDeletesTheProject`
+  （`queued` Operation 被结算为 `failed` + `superseded_by_project_deletion`、`retry_at` 为空、未被
+  执行、Project 被删除）。正常 `active` Project 的删除路径不回归由既有
+  `TestProjectDeleteClosesEveryWorkspaceAndWaitsForCleanup` 继续证明。
+- 决策依据：[Project 归属 Space](../../../decisions/cloud/project/0-project-space-scoping.md) D1
+  （删除仍走既有 lifecycle 状态机且要求 admin/owner）与
+  [凭据化 Clone 拒绝即终态](../../../decisions/cloud/operation/20261012-credentialed-clone-refusal-is-terminal.md)
+  （拒绝被结算为 `failed` 后 Project 仍停在 `provisioning`）。本用例不改变该决策未决的"失败 Project
+  如何重新驱动"问题：删除是用户的退出路径，不是对失败 Project 的重新驱动。
 
 ## Project lists include only projects from spaces the caller joined
 
