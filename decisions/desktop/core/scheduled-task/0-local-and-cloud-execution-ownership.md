@@ -2,101 +2,105 @@
 status: proposed
 ---
 
-# 定时任务以持久定义产生幂等触发，本地与 Cloud 互斥拥有未来触发
+# 定时任务以持久定义产生幂等触发，执行归属在创建时确定且不支持切换
 
 用户可以在 Desktop 左侧进入“定时任务”，创建周期性的代码质量检查、工作汇报、待办整理等任务，并为每个任务选择
-`local` 或 `cloud` 执行模式。`local` 只在 Desktop 进程运行时触发；`cloud` 由服务端拥有未来触发，因此 Desktop 关闭后
-仍可运行。两种模式共享任务定义、触发身份和运行历史语义，但不把浏览器计时器、内存状态或示例模板当作执行事实。
+`local` 或 `cloud` 执行模式。执行归属在创建时确定，之后不支持在两端间切换；需要换执行位置时，复制成新任务并停用
+旧任务。`local` 只在 Desktop 进程运行时触发；`cloud` 由服务端拥有未来触发，因此 Desktop 关闭后仍可运行。两种模式
+共享任务定义、触发身份和运行历史语义，但不把浏览器计时器、内存状态或示例模板当作执行事实。
 
-本 ADR 处于 `proposed`。它定义 Scheduled Task 新领域的执行归属、持久状态与切换边界，不宣称 Cloud 调度、远程凭据、
-计费或任意 Workflow 已经交付。首个落地阶段只允许实现本地管理与调度；只有 Cloud 契约和真实执行适配器就绪后，
-`cloud` 才能成为可选值。
+本 ADR 处于 `proposed`。它定义 Scheduled Task 新领域的执行归属、持久状态与分阶段交付边界，只冻结共用语义与本地
+模式，不宣称 Cloud 调度、远程凭据、计费或任意 Workflow 已经交付。Cloud 的存储、调度、执行与凭据费用细节在
+#67 及 Workflow server 执行链路定案后，作为 `decisions/cloud/` 下的独立 ADR 另行提出。首个落地阶段只允许实现本地
+管理与调度；只有 Cloud 契约和真实执行适配器就绪后，`cloud` 才能成为可选值。
+
+> 本版依据 issue #84 的成员评审意见修订：删除执行归属切换握手，幂等键改为 `taskId + scheduledAt`，补触发迟到与
+> 睡眠唤醒的 missed 规则，Cloud 部分收缩为另行决策。最终以 owner 拍板结论为准。
 
 ## 决策
 
 ### D1：Scheduled Task 是持久定义，模板只负责预填
 
-`ScheduledTask` 至少持久化：稳定 ID、名称、启用状态、schedule、IANA 时区、执行目标引用及其冻结版本、
-`executionOwner`、定义 revision、创建/更新时间和下一次触发投影。代码质量检查、每日工作汇报和待办整理是可编辑的
+`ScheduledTask` 至少持久化：稳定 ID、名称、启用状态、schedule、执行目标引用及其冻结版本、执行归属、定义 revision、
+创建/更新时间和下一次触发投影。执行归属在创建时写入，此后不可变更。代码质量检查、每日工作汇报和待办整理是可编辑的
 模板；保存后都是普通 `ScheduledTask`，不会在运行时分叉出三套特殊逻辑。
 
-schedule 首版只承诺可由产品表单完整表达的周期规则；若暴露 cron，存储与校验必须使用同一语法和时区规则，不能把
-未经校验的字符串直接交给不同执行端解释。任务列表中的 `nextRunAt` 是可重算投影，不是触发事实。
+schedule 首版只承诺可由产品表单完整表达的周期规则；若暴露 cron，存储与校验必须使用同一语法，不能把未经校验的
+字符串直接交给执行端解释。local 任务不提供时区选择，schedule 按系统当前时区求值；时区作为持久化字段留给 Cloud
+任务随 Cloud 决策定义。任务列表中的 `nextRunAt` 是可重算投影，不是触发事实。
 
 ### D2：每个到期点产生稳定的 occurrence，接纳运行是幂等操作
 
-一次计划触发由 `ScheduledOccurrence{taskId, taskRevision, scheduledAt}` 唯一标识，其中 `scheduledAt` 是 UTC 时间点。
-同一个 occurrence 最多接纳一个 Scheduled Run；进程重启、事件重复投递或网络重试必须复用该身份，不能另建一次运行。
-运行的实际副作用仍遵循目标执行器自己的重试与幂等约束；本决策只保证调度层不会把同一到期点重复接纳为多个运行。
+一次计划触发由 `ScheduledOccurrence{taskId, scheduledAt}` 唯一标识，其中 `scheduledAt` 是 UTC 时间点。同一个
+occurrence 最多接纳一个 Scheduled Run；进程重启、事件重复投递、系统时间回拨或网络重试必须复用该身份，不能另建
+一次运行。执行归属在创建时即固定，不参与身份计算；local 与 cloud 各自在自己的持久库中保证不重复，幂等是各端内部
+规则而不是跨端协议。运行的实际副作用仍遵循目标执行器自己的重试与幂等约束；本决策只保证调度层不会把同一到期点重复
+接纳为多个运行。
 
-修改 schedule、时区、执行目标或执行归属会增加 task revision。名称等纯展示修改不改变 revision。已经接纳的运行冻结
-原 revision 和执行目标，不随任务后续编辑漂移。
+修改 schedule 或执行目标会增加 task revision。名称等纯展示修改不改变 revision。已经接纳的运行冻结原 revision 和
+执行目标，不随任务后续编辑漂移；运行记录中的 `revision` 只标识这次运行使用的定义版本，不参与幂等。
 
 ### D3：执行目标引用既有真实用例，不由调度器解释 Prompt 或 Workflow
 
-Scheduled Task 保存带版本的 `ExecutionTargetRef`，到期后把 occurrence 交给相应的 application use case。目标可以在
-后续决策中扩展为 Agent Task、冻结 Workflow revision 等，但每种目标必须先定义：输入如何冻结、由谁取得凭据、运行
+Scheduled Task 保存带版本的 `ExecutionTargetRef`，到期后把 occurrence 交给相应的 application use case。目标可以
+在后续决策中扩展为 Agent Task、冻结 Workflow revision 等，但每种目标必须先定义：输入如何冻结、由谁取得凭据、运行
 与 session 如何关联、取消及结果如何投影。调度器不得直接调用模型、拼装未版本化 Prompt，或把内存 Workflow runtime
-的模拟成功写成真实运行。
+的模拟成功写成真实运行。本地首版的执行目标是提示词，由已定义的 application use case 承载。
 
-选择 `cloud` 时，目标还必须声明 Cloud 可执行；只存在于本机的工作区路径、个人本地凭据或尚未发布的 Workflow 不能
-因切换模式而被默默上传或降级执行。模型授权、仓库访问和费用归属继承对应 Agent / Workflow / Cloud 决策，不在本领域
-另建旁路。
+Cloud 首版只接受已发布 Workflow 版本作为执行目标，不接受“直接运行提示词”；若未来增加，另立决策。Cloud 的目标
+校验与凭据边界随 Cloud 决策定义，不在本领域另建旁路。
 
-### D4：local 由 Desktop 进程内 scheduler 拥有，不承诺关机补跑或唤醒
+### D4：local 由 Desktop 进程内 scheduler 拥有，错过与迟到的到期点一律记 missed
 
 `local` 任务由 Desktop 后端的持久 repository 与原生 scheduler 组合驱动。WebView 只读取、编辑和订阅状态，不运行
 计时器作为事实源。首版不注册操作系统服务、不设置开机自启，也不在 Desktop 关闭时唤醒机器。
 
-Desktop 未运行期间的到期点默认不补跑。下次启动时把 `nextRunAt` 推进到未来，并为该任务记录一个覆盖离线区间的
-`missed` 观察，供 UI 说明“关闭期间已错过”；不为离线区间逐条制造运行。用户可显式“立即运行”，它产生独立的
+实际触发时间晚于 `scheduledAt` 超过 10 分钟（固定阈值，不提供配置）的到期点一律记为 `missed`，不执行也不补跑。
+这同时覆盖 Desktop 未运行、笔记本合盖睡眠后唤醒补触发和系统繁忙导致的迟到；10 分钟内的迟到触发照常执行。
+`missed` 是任务级观察，在历史中可见并写明原因；不为离线区间逐条制造运行。用户可显式“立即运行”，它产生独立的
 manual occurrence，不冒充原计划时间。未来若增加 catch-up，必须另行决定上限、合并、过期和并发策略。
 
-### D5：cloud 由服务端拥有，并以能力门禁阻止虚假可用
+每次本地定时运行在独立 worktree 中执行目标项目，不直接改动用户正在编辑的目录；worktree 创建复用 Desktop 已有的
+初始化端口，其复用与清理策略在实现阶段细化。
 
-`cloud` 任务的未来 occurrence 只由 Cloud 持久调度器产生；Desktop 关闭不影响它。Cloud 必须持有冻结定义、时区、
-owner epoch 和运行记录，并通过真实的 Agent / Workflow 执行链路接纳运行。
+### D5：cloud 交由服务端拥有的语义冻结，细节另行决策
 
-在 Cloud 尚未同时具备任务登记、调度、目标执行、幂等接纳、取消、状态读取与授权检查时，Desktop 可以展示 Cloud
-模式及其说明，但必须标为不可用，不能保存为 active owner、不能用本地 timer 代跑，也不能展示模拟成功。能力可用性
-来自后端协商或构建期明确配置，不能仅由前端开关宣称。
+`cloud` 任务的未来 occurrence 只由 Cloud 持久调度器产生，Desktop 关闭不影响它；这是需要提前冻结的共用语义。
+Cloud 的任务登记、存储、调度、幂等接纳、取消、状态读取、授权检查，以及发起者归属与费用（含“无人在场”的补充规则，
+如创建者付费、每次触发复查权限、最小运行间隔、Workflow 版本冻结与 Start 参数校验）在 #67 及 Workflow server
+执行链路定案后，作为 `decisions/cloud/` 下的独立 ADR 提出，本决策不预置协议。
 
-### D6：执行归属切换采用先停旧 owner、再启新 owner 的持久握手
+在上述 Cloud 决策获批且真实执行链路就绪之前，Desktop 可以展示 `cloud` 模式及其说明，但必须标为不可用，不能保存为
+执行归属、不能用本地 timer 代跑，也不能展示模拟成功。
 
-任一 task revision 在稳定状态下只有一个 `activeOwner`。切换不迁移或取消已经接纳的运行，只影响切换生效后的未来
-occurrence，并遵循以下顺序：
+### D6：时区求值、夏令时和并发规则
 
-1. 持久化 `transferring`，旧 owner 停止接纳新的 occurrence；
-2. 等待旧 owner 已取得的接纳决定落定，记录 cutover 时间；
-3. 新 owner 持久化定义与更大的 owner epoch，并确认从 cutover 之后开始接纳；
-4. Desktop 持久化新的 `activeOwner`，任务恢复 active。
+schedule 按系统当前时区求值，occurrence 落盘后只以 UTC `scheduledAt` 标识。夏令时跳过的本地时间不补跑；重复的
+本地时间对应两个不同 UTC 时间点，因此是两个 occurrence。系统时区变化只影响尚未求值的未来触发，不改写已落盘的
+occurrence；local 任务不接受用户单独指定时区。
 
-`local -> cloud` 时必须先在本地停用，再请求 Cloud 激活；`cloud -> local` 时必须先取得 Cloud 已停用的确认，再在本地
-激活。中途崩溃时任务保持 `transferring` 或暂停，并可通过重试同一 transfer 收敛；不允许两个 owner 同时继续。该取舍
-允许切换窗口漏过一次计划点，但不允许双重执行。切换失败时 UI 显示失败与重试/回退动作，不能静默恢复旧 owner。
-
-### D7：时区、夏令时和并发规则是定义的一部分
-
-schedule 使用 IANA 时区计算，occurrence 落盘后只以 UTC `scheduledAt` 标识。夏令时跳过的本地时间不补跑；重复的本地
-时间对应两个不同 UTC 时间点，因此是两个 occurrence。改变时区会增加 revision，只影响尚未接纳的未来触发。
-
-同一任务的默认并发策略为 `skip_if_running`：到期时若前一 Scheduled Run 仍未终止，记录 `skipped_busy`，不排队补跑。
+同一任务的默认并发策略为 `skip_if_running`：到期时若前一 Scheduled Run 仍未终止，记录 `skipped_busy`，不排队
+补跑。所有本地定时任务共享一个全局并发上限（首版固定 16）；达到上限时该到期点同样跳过并记录可区分的原因，不排队。
 后续若提供 queue 或 parallel，必须显式进入任务定义并由目标执行器声明支持，不能只在 UI 增加选择项。
 
-### D8：运行记录统一表达计划结果，删除任务不删除审计事实
+### D7：运行记录统一表达计划结果，删除任务不删除审计事实
 
-Scheduled Run 至少关联 task、revision、occurrence、owner、目标运行/session ID，并使用
-`accepted / running / succeeded / failed / cancelled / skipped_busy` 等可区分状态。`missed` 是任务级离线观察，不是伪造的
-运行。UI 的 last run、失败提示和历史列表来自这些持久事实，不从当前时间反推。
+Scheduled Run 至少关联 task、revision、occurrence、目标运行/session ID，并使用
+`accepted / running / succeeded / failed / cancelled / skipped_busy` 等可区分状态；全局并发上限导致的跳过记录
+可区分的原因。`missed` 是任务级观察，不是伪造的运行，需写明错过原因。UI 的 last run、失败提示和历史列表来自这些
+持久事实，不从当前时间反推。
 
-禁用任务只阻止未来接纳，不取消已经运行的工作。删除任务采用软删除或等价墓碑，保留既有运行关联；数据保留期由
-对应产品与 Cloud 决策定义。
+每次定时运行开始时发出桌面通知，点击进入对应会话；通知是交互辅助，不是运行事实源。
 
-### D9：发起者、权限和费用在保存与每次运行时都检查
+禁用任务只阻止未来接纳，不取消已经运行的工作。删除任务采用软删除或等价墓碑，保留既有运行关联；数据保留期由对应
+产品决策定义。
 
-Scheduled Task 记录创建者及执行授权引用，但不复制长期密钥。创建或切换 owner 时检查目标、仓库、模型及 Cloud 能力；
-每次接纳运行时再次检查授权仍有效。授权失效时该 occurrence 以明确失败结束并提示用户，不回退到其他 owner、其他模型
-或本地执行。Cloud 运行的资源消耗归属、限额与审计继承 Cloud 的 Run Initiator 和模型访问决策。
+### D8：发起者、权限和费用在保存与每次运行时都检查
+
+Scheduled Task 记录创建者及执行授权引用，但不复制长期密钥。保存任务时检查目标、仓库与模型访问；每次接纳运行时
+再次检查授权仍有效。授权失效时该 occurrence 以明确失败结束并提示用户，不回退到其他模型或本地执行。本地任务沿用
+Desktop 当前用户的配置与权限；Cloud 运行的发起者归属、Workspace、模型凭据与费用继承 #67 的最终契约并补充
+“无人在场”的检查规则，随 Cloud 决策一并定案。
 
 无人值守执行还必须冻结明确的工具批准策略。Scheduled Task 不能静默继承交互式 Session 的临时选择，也不能把 runtime
 当前的自动 allow 行为当作用户已经授权定时运行。目标只有在其 approval policy 可持久表达、创建者已明确同意且每次运行
@@ -104,16 +108,17 @@ Scheduled Task 记录创建者及执行授权引用，但不复制长期密钥�
 
 ## 不变量
 
-1. 同一稳定 task revision 的未来触发只有一个 active owner。
-2. 同一 `taskId + taskRevision + scheduledAt` 最多接纳一个 Scheduled Run。
+1. 任务的执行归属在创建时确定，之后不可切换；每个任务的未来触发始终只由一个执行端产生。
+2. 同一 `taskId + scheduledAt` 最多接纳一个 Scheduled Run。
 3. WebView timer、模板和 `nextRunAt` 投影都不是触发事实源。
-4. local 不承诺 Desktop 关闭期间运行，也不默认补跑离线到期点。
-5. cloud 未通过完整能力门禁时不能成为 active owner。
-6. 已接纳运行冻结原 task revision 与执行目标，不因后续编辑或切换漂移。
-7. owner 切换先停旧端、再启新端；故障可造成暂停，不能造成双 owner。
-8. 调度器只调用已定义的 application use case，不自行解释或模拟执行目标。
-9. 任务禁用或删除不改写既有运行事实。
-10. 没有已冻结且仍有效的无人值守工具批准策略时，不接纳真实执行。
+4. local 不承诺 Desktop 关闭或睡眠期间运行；实际触发晚于 `scheduledAt` 超过 10 分钟的到期点记 `missed`，不执行
+   也不补跑。
+5. cloud 未通过真实调度与执行链路前不能成为可选执行模式。
+6. 已接纳运行冻结原 task revision 与执行目标，不因后续编辑漂移。
+7. 调度器只调用已定义的 application use case，不自行解释或模拟执行目标。
+8. 任务禁用或删除不改写既有运行事实。
+9. 没有已冻结且仍有效的无人值守工具批准策略时，不接纳真实执行。
+10. 本地定时运行不直接改动用户正在编辑的目录，默认在独立 worktree 中执行。
 
 ## 为什么不是这些替代方案
 
@@ -121,7 +126,8 @@ Scheduled Task 记录创建者及执行授权引用，但不复制长期密钥�
 | --- | --- |
 | React / WebView `setInterval` 直接触发 | UI 开着时实现快，但刷新、休眠和多窗口会漏触发或重复触发，也没有持久幂等事实 |
 | local 与 cloud 同时监听，谁先抢到谁执行 | 能自动容灾，但需要跨端强一致租约；离线 local 无法证明 Cloud 未执行，容易重复产生有费用的 Agent 运行 |
-| 切换 owner 时先启新端再停旧端 | 减少漏触发窗口，但存在双 owner；本决策选择可见暂停而不是重复副作用 |
+| 允许任务在 local 与 cloud 间迁移切换 | 看似灵活，但两端执行环境、凭据与执行内容完全不同，切换实质是重新绑定执行目标，并引入双 owner 与幂等键漂移风险；复制成新任务、停用旧任务更简单可预期 |
+| 为迟到触发提供可配置的补跑窗口 | 表面体贴，但阈值、合并和并发策略都会成为新的决策面；首版选择“10 分钟内照跑、之外记 missed”的最简单可预期行为 |
 | Desktop 重启后补跑全部离线 occurrence | 看似完整，但长时间离线会形成无界队列，日报等时效任务也会产生失真结果 |
 | Cloud 不可用时自动回退 local | 提高表面成功率，却改变用户选择、授权边界与费用归属，并可能在 Desktop 重开后重复执行 |
 | 为三个首发模板分别实现 scheduler | 初期代码直观，但模板行为会分叉，用户自定义任务也无法复用同一运行与审计模型 |
@@ -131,24 +137,29 @@ Scheduled Task 记录创建者及执行授权引用，但不复制长期密钥�
 - 首版表单采用受限周期枚举还是公开 cron，以及精确的输入 schema。
 - 首个可交付 `ExecutionTargetRef` 是 Agent Task、Workflow revision，还是两者分阶段进入。
 - 无人值守工具批准策略的可选范围、撤销方式，以及与现有 Session approval 行为的迁移关系。
-- Cloud Scheduled Task 的公开 API、存储、owner transfer 协议、通知与配额细节。
-- 运行失败后的自动重试策略、通知渠道和历史保留期。
-- 操作系统后台服务、开机自启、机器休眠唤醒及显式 catch-up。
+- 本地运行 worktree 的复用、清理与数量上限。
+- Cloud Scheduled Task 的全部细节：公开 API、存储、调度、发起者与费用归属、“无人在场”检查（创建者付费、触发时
+  权限复查、最小运行间隔、Workflow 版本冻结、Start 参数校验）、通知与配额，在 #67 及 Workflow server 执行链路
+  定案后以 `decisions/cloud/` 下的独立 ADR 提出。
+- 运行失败后的自动重试策略、失败通知与历史保留期。
+- 操作系统后台服务、开机自启及显式 catch-up。
 
 ## 核心测试用例
 
-按仓库规则，本 ADR 状态变为 `approved` 后在 `test-cases/desktop/core/scheduled-task/` 补充核心用例。至少覆盖：同一
-occurrence 重放只接纳一次；Desktop 关闭期间 local 不执行且重启记录 missed；manual run 不冒充计划触发；运行中到期
-产生 `skipped_busy`；任务编辑冻结旧运行；两种 owner 切换在每个崩溃点都不会形成双 owner；Cloud 能力不足时不能激活；
-授权失效明确失败且不自动回退；禁用/删除保留历史。
+按仓库规则，本 ADR 状态变为 `approved` 后在 `test-cases/desktop/core/scheduled-task/` 补充核心用例。至少覆盖：
+同一 occurrence 重放只接纳一次；Desktop 关闭期间 local 不执行且重启记录 missed；实际触发晚于 `scheduledAt`
+超过 10 分钟记 `missed` 且不执行、10 分钟内迟到照常执行；manual run 不冒充计划触发；运行中到期产生
+`skipped_busy`；达到全局并发上限时跳过并记录原因；本地运行在独立 worktree 中进行且不改动用户当前工作区；任务
+编辑冻结旧运行；Cloud 能力不足时不能激活；授权失效明确失败且不自动回退；禁用/删除保留历史。
 还需覆盖：未配置无人值守批准策略时不接纳运行；策略撤销后后续 occurrence 失败且既有运行事实不被改写。
 
 ## 落地顺序
 
 1. **specs**：本根决策获批，并据批准内容补核心测试用例。
-2. **desktop / local definition**：新增 domain、repository 与应用用例，契约生成后接入左侧入口、列表和编辑器；Cloud
-   选项保持可见但不可激活。
-3. **desktop / local scheduler**：用后端 scheduler 重建 active local jobs，落实 occurrence 幂等、missed、
-   `skip_if_running` 和真实 ExecutionTarget adapter；没有真实 adapter 时不得把模拟运行作为 MVP 完成。
-4. **cloud + contracts**：另行批准 Cloud 存储、调度、执行和 transfer 协议，端到端证明 Desktop 关闭仍运行及授权边界。
-5. **desktop / cloud owner**：锁定 Cloud 契约版本，启用能力协商与 owner transfer UI；最后再开放 `cloud` 选择。
+2. **desktop / local definition**：新增 domain、repository 与应用用例，契约生成后接入左侧入口、列表和编辑器；
+   Cloud 选项保持可见但不可激活。
+3. **desktop / local scheduler**：用后端 scheduler 重建 active local jobs，落实 occurrence 幂等、迟到/离线
+   missed、独立 worktree 执行、全局并发上限、`skip_if_running` 和真实 ExecutionTarget adapter；没有真实
+   adapter 时不得把模拟运行作为 MVP 完成。
+4. **cloud**：Cloud 的存储、调度、执行与凭据费用在 #67 及 Workflow server 执行链路定案后，以 `decisions/cloud/`
+   下的独立 ADR 另行提出；届时再开放 `cloud` 选择，本决策不预置其协议。
