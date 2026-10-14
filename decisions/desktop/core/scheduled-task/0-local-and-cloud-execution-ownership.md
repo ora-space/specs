@@ -98,6 +98,10 @@ Scheduled Task 记录创建者及执行授权引用，但不复制长期密钥�
 每次接纳运行时再次检查授权仍有效。授权失效时该 occurrence 以明确失败结束并提示用户，不回退到其他 owner、其他模型
 或本地执行。Cloud 运行的资源消耗归属、限额与审计继承 Cloud 的 Run Initiator 和模型访问决策。
 
+无人值守执行还必须冻结明确的工具批准策略。Scheduled Task 不能静默继承交互式 Session 的临时选择，也不能把 runtime
+当前的自动 allow 行为当作用户已经授权定时运行。目标只有在其 approval policy 可持久表达、创建者已明确同意且每次运行
+仍可校验时才能激活；否则保存为 inactive 或在接纳前明确失败，不能启动后无限等待人工确认或自动扩大权限范围。
+
 ## 不变量
 
 1. 同一稳定 task revision 的未来触发只有一个 active owner。
@@ -109,6 +113,7 @@ Scheduled Task 记录创建者及执行授权引用，但不复制长期密钥�
 7. owner 切换先停旧端、再启新端；故障可造成暂停，不能造成双 owner。
 8. 调度器只调用已定义的 application use case，不自行解释或模拟执行目标。
 9. 任务禁用或删除不改写既有运行事实。
+10. 没有已冻结且仍有效的无人值守工具批准策略时，不接纳真实执行。
 
 ## 为什么不是这些替代方案
 
@@ -125,6 +130,7 @@ Scheduled Task 记录创建者及执行授权引用，但不复制长期密钥�
 
 - 首版表单采用受限周期枚举还是公开 cron，以及精确的输入 schema。
 - 首个可交付 `ExecutionTargetRef` 是 Agent Task、Workflow revision，还是两者分阶段进入。
+- 无人值守工具批准策略的可选范围、撤销方式，以及与现有 Session approval 行为的迁移关系。
 - Cloud Scheduled Task 的公开 API、存储、owner transfer 协议、通知与配额细节。
 - 运行失败后的自动重试策略、通知渠道和历史保留期。
 - 操作系统后台服务、开机自启、机器休眠唤醒及显式 catch-up。
@@ -135,6 +141,7 @@ Scheduled Task 记录创建者及执行授权引用，但不复制长期密钥�
 occurrence 重放只接纳一次；Desktop 关闭期间 local 不执行且重启记录 missed；manual run 不冒充计划触发；运行中到期
 产生 `skipped_busy`；任务编辑冻结旧运行；两种 owner 切换在每个崩溃点都不会形成双 owner；Cloud 能力不足时不能激活；
 授权失效明确失败且不自动回退；禁用/删除保留历史。
+还需覆盖：未配置无人值守批准策略时不接纳运行；策略撤销后后续 occurrence 失败且既有运行事实不被改写。
 
 ## 落地顺序
 
