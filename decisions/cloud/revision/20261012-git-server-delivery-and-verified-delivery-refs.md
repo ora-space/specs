@@ -114,8 +114,16 @@ Node 报告 `RevisionDelivered{final_commit, base_commit, revision_ref, history}
 
 1. **比对**（`validateDeliveryDeclaration`）：`baseCommit`、`revisionRef` 与 `history.key` 必须等于固定输入，
    `finalCommit` 格式合法；`unchanged` 要求最终提交等于基础提交或等于输入中前序的最终提交，`delivered` 要求二者
-   都不等。结果中不再有 bundle，带 bundle 的结果无法解码（D6）。不一致仍在接管前拒绝（`result_conflict` /
-   `invalid_result`），不访问 Git Server 与对象存储，不写任何记录。
+   都不等。结果中不再有 bundle，带 bundle 的结果无法解码（D6）。不一致在接管前拒绝，不访问 Git Server 与对象
+   存储，不写任何记录。拒绝按问题的性质分类，不按字段分类：
+   - **与固定输入矛盾**：报告的 Node 不是执行登记的 Node，`baseCommit`、`revisionRef` 或 `history.key` 不等于输入，
+     `unchanged` / `delivered` 与最终提交的关系不成立：`ABORTED` / `CONFLICT`（`result_conflict`）。
+   - **形状不合法**：`finalCommit` 不是合法提交 ID，`history` 的大小或 SHA-256 形状不合法：`INVALID_ARGUMENT` /
+     `INVALID_INPUT`（`invalid_result`）。
+
+   结果不携带交付 ref（Node 推送到输入给出的 `deliveryRef`），所以交付 ref 与输入的一致性不在这一步比对，而由
+   第 2 步的 ref 查询确认；查询的否定结论按第 4 步记核验失败。bundle 路线现在按字段分类（`history` 的键与形状
+   返回 `invalid_result`，bundle 的键与形状返回 `result_conflict`），本 ADR 落地时统一为上述规则。
 2. **事务外核验**（`prepareRevision`）：
    - 调用 ref 查询 `GET /internal/v1/refs?tenantId=…&projectId=…&ref=<deliveryRef>`：`200 {commit}` 且 `commit`
      等于声明的最终提交才算一致；`404 ref_not_found` 或提交不同是否定结论。

@@ -149,8 +149,10 @@ JSONL 的 `HEAD` 一致或不一致；外部核验之后租约、运行或当前
 ### 必须成立
 
 - 先比对：`baseCommit`、`revisionRef`、`history.key` 等于固定输入，`unchanged` 的最终提交等于基础提交或输入中前序的
-  最终提交，`delivered` 二者都不等；矛盾在接管前以 `result_conflict`/`invalid_result` 拒绝，不访问 Git Server 与对象
-  存储，不写任何记录。
+  最终提交，`delivered` 二者都不等；不一致在接管前拒绝，不访问 Git Server 与对象存储，不写任何记录。
+- 拒绝按性质分类：与固定输入矛盾（Node、`baseCommit`、`revisionRef`、`history.key`、`unchanged`/`delivered` 与最终
+  提交的关系）返回 `ABORTED`/`CONFLICT`（`result_conflict`）；形状不合法（`finalCommit` 格式、`history` 的大小与
+  SHA-256 形状）返回 `INVALID_ARGUMENT`/`INVALID_INPUT`（`invalid_result`）。
 - 事务外：ref 查询确认交付 ref 指向声明的最终提交，JSONL 经 `HEAD` 核对大小与 SHA-256；两者都一致才进入登记。
 - 事务内：重新检查执行身份、运行与当前 Node，写入核验结论、Revision（含 `delivery_ref`）与收据，并在同一事务结算
   交付。`unchanged` 同样经 ref 查询核验并登记交付 ref。
@@ -161,13 +163,14 @@ JSONL 的 `HEAD` 一致或不一致；外部核验之后租约、运行或当前
 ### 禁止结果
 
 未经 ref 查询即登记 Revision；登记的 Revision 指向未经确认的提交；Git Server 不可用被判为核验失败；矛盾结果触发
-外部访问。
+外部访问；与输入矛盾的结果以 `invalid_result` 拒绝，或形状不合法的结果以 `result_conflict` 拒绝。
 
 ### 验证义务与证据
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
 | 比对先于外部访问 | `integration/agent_run_delivery_test.go::TestRevisionResultContradictingItsInputNeverReachesTheObjectStore`：矛盾结果在接管前拒绝，且不访问对象存储。缺口：不访问 Git Server 尚无断言 | Partial |
+| 拒绝按性质分类 | `internal/core/revision.go::validateDeliveryDeclaration` 现在按字段分类：`history.key` 与输入不一致返回 `invalid_result`，与本规则不符。`history.key` 不一致返回 `result_conflict`、`finalCommit` 与 `history` 形状不合法返回 `invalid_result` 的直接测试尚无 | Missing |
 | ref 查询确认后才登记（Git Server 不变量 12） | Cloud 尚无 ref 查询客户端，登记前没有 ref 核验。`internal/gitserver/service_test.go::TestDeliveryPushCreatesOnlyItsRefAndReplayIsUpToDate` 与 `integration/git_server_test.go::TestGitServerAuthorizesDeliveryPushFromCloudState` 只证明 ref 查询在推送后返回该提交、未知 ref 返回 `404`，不证明 Cloud 的登记顺序 | Missing |
 | JSONL 核对 | `integration/revision_test.go::TestRevisionS3VerificationAndAtomicTakeover`：真实 RustFS 上对象缺失、大小或摘要不符都不登记，钩子与提交一起回滚，原始证据保留，重放幂等 | Covered |
 | ref 不存在或不符记核验失败 | `integration/agent_run_delivery_test.go::TestRevisionVerificationFailureIsCloudsOwnVerdict`、`::TestNodeMayNotReportCloudsOwnVerificationVerdict`：对象不符时由 Cloud 判定 `verification_failed`、不登记，Node 不能自报该结论。缺口：ref 返回 `404` 与指向其他提交尚无测试 | Partial |
