@@ -30,14 +30,18 @@ Credential Service 已经落地，证据集中在 `integration.git_credentials_t
 `proposed`）。
 
 仍然 `Missing` 的是**按凭据直连的执行侧**与**迁移一侧**：`OperationClone` 的 `Issue` 只在
-`CLOUD_CLONE_DISPATCH_ENABLED=true` 时安装，该开关默认关闭，Node 侧的凭据执行身份 C 与 clone 后清理
-未实现，因此**按凭据直连的**私有仓库 clone 在安装该通道之前的所有部署上继续保持
-`repository_credential_executor_unavailable` 拒绝。**2026-10-13 更正**：本段原先把签发侧整体写成
+`CLOUD_CLONE_DISPATCH_ENABLED=true` 时安装，该开关默认关闭，而**按凭据直连的**私有仓库 clone 在安装该
+通道之前的所有部署上继续保持 `repository_credential_executor_unavailable` 拒绝。**2026-10-13 更正**：本段原先把签发侧整体写成
 "Cloud 的 `Issue` 还没有生产调用方"并说"部署尚未签发 `broker-resolver` 证书"，两句都不再成立——镜像
 绑定（`OperationMirrorPrepare`）的签发方 `core.MirrorDispatcher.Prepare` 由 `cmd/server` 的
 `PrepareMirrorsOnce` 循环真实驱动，`broker-resolver` 证书由 `compose/clone-executor-setup.sh` 真实签发，
-启用镜像通道的隔离栈上已有一轮真实 Cloud 进程签发 → 真实 Store 兑换 → 私有上游抓取的端到端证据
-（代码仓库 `docs/internal-git-server-mirror-acceptance.md`）。镜像通道是**另一套部署状态**：凭据只在执行器
+启用镜像通道的隔离栈上已有一轮真实 Cloud 进程签发 → 真实 Store 兑换 → 私有上游抓取的端到端运行
+（运行记录留档在 ora-space/circus#29，怎么跑与检查什么见代码仓库
+`docs/internal-git-server-mirror-acceptance.md` §7）。**2026-10-15 再更正一处**：本段原先还写"Node 侧的
+凭据执行身份 C 与 clone 后清理未实现"，这不再成立——**Node 内没有 C**，C 已实现为当前正式产品的独立
+部署单元，凭据物化的销毁与崩溃后清扫都有直接证据（见
+[Node 侧的身份隔离用例](../../node/repository/git-credential-execution-isolation.md)）；仍然 `Missing` 的
+是"同一容器内 M／W／C 三身份分离"与 `Interrupted` 这一条结局。镜像通道是**另一套部署状态**：凭据只在执行器
 手里用一次，Node 拿到的是内部地址，从未接触上游凭据，所以它不改变本文件其余各项的判断。能力词汇表已于 2026-10-12 经项目负责人裁决：
 **当时**词汇表保持 `["clone"]`，那次不引入 `read`、不开放 `push`，候选验证复用受限 `clone`；旧式
 `capabilities=[]` 引用走**逐条核验 + 逐条显式迁移**（不得批量授权，无法证明授权依据者保持冻结），

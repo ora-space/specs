@@ -15,7 +15,7 @@ Agent 的既有合法功能保持可用而**能力**不可提升、匿名公开�
 "同一容器内三个 UID"的断言，今天落在容器边界与卷集合上；同一容器内的 M／W／C 三身份分离仍然**不存在**。
 
 证据因此分两类：**已有直接证据**的是执行器一侧的边界（身份、物化根、helper 不可写性、单次授权、
-销毁与清扫），以及真实私有仓库 Clone 全链路；**仍然 `Missing`** 的是"以 W 身份对 C 发起能力尝试"
+销毁与清扫），以及在验收自建的、拒绝匿名访问的远端上跑通的私有仓库 Clone 全链路；**仍然 `Missing`** 的是"以 W 身份对 C 发起能力尝试"
 这类需要同一文件系统内两个身份共存的断言。Cloud 侧的元数据与授权见
 [凭据元数据](../../cloud/identity-access/repository-credential-metadata.md)，秘密承载见
 [凭据 Secret Store](../../cloud/identity-access/repository-credential-secret-store.md)。

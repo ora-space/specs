@@ -353,7 +353,7 @@ Issue #16 验收第 2 项（推送一侧）的取证。
 | 5 | 执行结束（成功、失败、超时、中断）后物化被销毁，残留被如实记录 | 成功 `write/the-staged-secret-did-not-outlive-the-write`；失败与超时 `cloneexec.TestAPushThatCannotReachTheUpstreamIsReapedAndLeavesNoSecretBehind`。**中断不成立**：`interruption/a-killed-executor-leaves-the-staged-secret-behind` 实测残留 11 个路径、其中 1 个是明文 token，由下一次启动的清扫销毁（`sweptEntries: 1, sweptPushes: 1` → 0） | Partial |
 | 6 | 撤销在写入前生效即阻止写入，撤销后对账不重放 | `core.TestAPushIsNotDispatchedWhenItsAuthorityIsGoneByTheTimeTheWriteWouldRun`：在"批准已提交、尚未派发"的窗口里逐项改一处活状态（凭据被撤销／被轮换／Project 被重绑／凭据被摘除／Project 被删），每例断言**确切的稳定码**且**执行器一次都没被调用**；`core.TestAPushIsStillDispatchedWhenNothingAboutItsAuthorityChanged` 是对照，防止"一律拒绝"也能过。写没发生，因此不存在"撤销后对账重放"；重放本身见第 2 条 | Covered |
 | 7 | 不确定终态被记为不确定，并能按远端当前值对账出三种结果 | 三格里的两格有实测：`refusal/a-target-reached-by-someone-else-is-not-attributed`（远端 = new → `uncertain`／`push_attribution_unknown`）、`refusal/a-refused-update-settles-not-applied`（远端 = old → `failed`／`push_not_applied`，对账读只读不写）。`refusal/a-lost-answer-settles-unknown` 与 `refusal/a-lost-answer-is-not-followed-by-a-read` 证明"答案丢失 → `uncertain`／`push_result_unknown` 且**不做**第二次读"。**中断这一格：先被实测违反，修复后重测成立**。修复前（cloud `2bd610d`）`interruption/an-interrupted-write-is-not-a-concluded-failure` 失败——写入被远端接受之后 C 被杀，Cloud 记的是 `failed`／`credential_executor_unavailable`。该缺陷在 cloud `d49edea` 修掉（无原因码的错误**原样**透传，不再被替换成 `ReasonCodeUnavailable`），并在**重建后**的镜像上重测：`interruption/an-interrupted-write-is-not-a-concluded-failure` 成立，报文 "Cloud recorded state=uncertain code=push_result_unknown for a write the remote accepted"，读数 `interruption/state = uncertain`、`interruption/result-code = push_result_unknown`、`interruption/observed = null`（未把只读对账错记成观察值），同一次运行 20/20 项成立、退出码 0，证据 `cluster/.acceptance/push-acceptance-fixed/push-acceptance.json`（镜像 `ora-cloud:d49edea`／`ora-clone-executor:d49edea`）。同日又在**同一批镜像**上重跑了**完整的 58 项**（八阶段全跑、无 `--only`）：**58/58 成立、退出码 0**，这一格在其中同样是 `uncertain`／`push_result_unknown`、`observed` 为空、远端 `refs/heads/main` 为新提交、Store 恰好一次 `delivered`，证据 `cluster/.acceptance/push-acceptance-full-fixed/push-acceptance.json`。同一提交还留下这一格最小的进程内复现：`core.TestAnInterruptedWriteIsNotSettledAsAConcludedFailure` 经真实受理路由、真实 `dispatchPush` 与真实结算驱动三个子用例；**它在没有 `TEST_DATABASE_URL` 时是 `Skip` 而不是通过**，因此 2026-10-14 特意在真库上跑过一次确认三个子用例都执行且通过。修复前的 57/58 与退出码 1 **原样保留**在 `cluster/.acceptance/push-acceptance/{push-acceptance,run6,run7}.json`，未被覆盖。**边界**：三格里被"按远端当前值对账出三种结果"覆盖的仍是前两格（远端 = new、远端 = old）；第三格（远端不可读）由 `a-lost-answer-settles-unknown` 与上面这次中断实测承担 | Covered（2026-10-14 由 `Partial`（含一处实测违反）转 `Covered`） |
-| 8 | 秘密不进入 Node、Agent、浏览器、Cloud 业务库、日志、存储卷或 Revision | 容器级：`isolation/the-token-is-in-no-container-environment`（19 个容器的环境，命中 0）、`...-the-token-is-in-no-container-log`（同 19 个容器的完整日志，命中 0）、`isolation/the-store-holds-no-plaintext-token`；Cloud 侧 `refusal/the-token-is-not-in-clouds-credential-metadata`。部署级日志扫描见 `cluster/docs/issue-16-acceptance-matrix.md` §B 末行 | Covered |
+| 8 | 秘密不进入 Node、Agent、浏览器、Cloud 业务库、日志、存储卷或 Revision | 容器级：`isolation/the-token-is-in-no-container-environment`（19 个容器的环境，命中 0）、`...-the-token-is-in-no-container-log`（同 19 个容器的完整日志，命中 0）、`isolation/the-store-holds-no-plaintext-token`；Cloud 侧 `refusal/the-token-is-not-in-clouds-credential-metadata`。部署级日志扫描见验收台账 `docs/issue-16-acceptance-matrix.md` 的 §B 末行——该台账按协议已移出产品仓库，留档在 [ora-space/circus#29 的评论](https://github.com/ora-space/circus/issues/29#issuecomment-6187677200) | Covered |
 | 9 | 只读证据与一次推送成功都不得被复用为写许可（T7） | `refusal/a-clone-only-reference-cannot-be-pushed-with` 与 `refusal/a-clone-only-reference-is-refused-by-capability`（同一份可写 token，只有 `clone` 能力 → 推送被拒且**没签出授权**）；成功之后要再写必须**再批一次**：`write/a-second-approval-moves-only-its-own-ref`；结算过的批准不会被重新派发：`core.TestASettledPushIsNeverDispatchedAgain` | Covered |
 
 ### 实测到的一处产品缺陷：发现、修复与重测（2026-10-14 已修，重测通过）
@@ -374,7 +374,7 @@ cloneexec.ReasonCodeUnavailable}`——那是一个**带码**的故障，于是 
 
 **发现时的处置是"如实登记、不修"**：改它要动 cloud 的生产代码并再走一次提交审批，所以 2026-10-13 那一次
 运行把它原样留在记录里（57/58、退出码 1），本文件与
-`cluster/docs/issue-16-acceptance-matrix.md` 的 §C／§E 以同一口径登记。
+`docs/issue-16-acceptance-matrix.md` 的 §C／§E 以同一口径登记（该台账的留档位置见上表第 8 行）。
 
 **2026-10-14 已修并重测**。修复提交是 cloud `d49edea`（`fix(push): settle an interrupted dispatch as
 uncertain rather than failed`，6 个文件），改动落在上面定位到的同一处：
@@ -433,4 +433,4 @@ D8 与不变量 12；[推送交付 ref 与取回前序版本](../../../decisions
 进本文，它是**照流程走完并经裁决同意**的：`push` 已成为词汇表的第二个成员，本文与那篇 ADR 的其余证据项也据此
 逐行重估（见上表）。本节更正的对象从头到尾只是**现状描述与证据引用**，不涉及任何决策内容；E 的裁决、
 两处修订的落地与本文的状态改写，都不改变"未补齐前不得启用推送"这条边界——它今天的形态是
-**生产配置里两处开关都不存在**，见文首那张表与 `cluster/docs/issue-16-acceptance-matrix.md` §H。
+**生产配置里两处开关都不存在**，见文首那张表与 `docs/issue-16-acceptance-matrix.md` 的 §H（留档位置见上表第 8 行）。
