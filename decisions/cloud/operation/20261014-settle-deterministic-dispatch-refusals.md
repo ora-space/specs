@@ -8,9 +8,9 @@ Cloud 对尚未登记新执行的 Workspace 操作重新核验派发条件：确
 清空重试时间；暂时不可用保留原操作并延后。拒绝一次 RPC 不等于结算操作，Controller 也不能从一个
 通用 `ABORTED` 推断业务失败。领取排序同时记住已经给予的机会，避免一个一直失败的旧操作挡住其他项目。
 
-本文为 `proposed`，只提出待评审契约，尚不承诺实现完成。范围是 Cloud 的 Operation 领取、派发前拒绝及
-Controller 的对应行为；Agent 工作项的延后与生命周期接缝见
-[工作调度契约](../controller-integration/20261014-durable-work-disposition-and-dispatch-fencing.md)。
+本文为 `proposed`。owner 已按原文采纳下面的 D1–D4，但现有实现尚未与 D2、D3 对齐，因此状态先停在
+`proposed`，核心用例等对齐后再补。范围只含 Cloud 的 Operation 领取、派发前拒绝及 Controller 的对应行为。
+Agent 工作项的持久延后、退役和调度版本围栏不在本文内，尚未批准，也不是本文的落地前置。
 PostgreSQL 操作、执行、effect、资源与提交身份必须保留；本次不改变 Node 真实结果或自动放弃未知外部执行。
 
 ## 背景
@@ -123,8 +123,9 @@ Cloud 在领取候选、准备交回其 clone 步骤前核验 D1；`RecordDispat
 不伪造过去的领取时间。旧 running 操作不批量标失败；下一次在 Cloud 当前状态下逐项核验。失败结算后
 回滚程序版本不能重开终态，也不能删除留存的外部身份。
 
-落地顺序：先评审本 ADR 与配套工作调度契约；批准后补核心用例；再实现 Cloud 结算/排序和 Controller
-恢复路径，验证直接 PostgreSQL 与 gRPC 行为；最后固定 Cloud/Controller/Node 版本完成实际联合验收。
+落地顺序：D1–D4 的条文已按原文获批，状态仍为 `proposed`，因为领取事务内结算和 `last_claimed_at`
+轮转还没有与本文一致的实现。对齐之后把状态改为 `approved` 并补核心用例，再验证直接 PostgreSQL 与
+gRPC 行为；最后固定 Cloud/Controller/Node 版本完成实际联合验收。
 需要覆盖凭据守卫拒绝后其他项目推进、失败钩子回滚、旧版本/旧 epoch、领取后授权变化、未知执行保护、
 重启与 clone 次数保持。实际 Rust Controller 的证据不能由 Go 模拟 Controller 的成功替代。
 
