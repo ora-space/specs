@@ -68,8 +68,9 @@ Agent `IssueRun` / `Thread` application use case，在目标 Project / Workspace
 manual occurrence，不冒充原计划时间。未来若增加 catch-up，必须另行决定上限、合并、过期和并发策略。
 
 每次本地定时运行在独立 worktree 中执行目标项目，不直接改动用户正在编辑的目录；worktree 创建复用 Desktop 已有的
-初始化端口，其复用与清理策略在实现阶段细化。保存为 active 的 local 任务必须通过目标目录是 Git 仓库的校验；不满足时
-不得降级为直接在原目录执行。
+初始化端口。运行结束后，无改动的 worktree 直接删除；有改动的 worktree 保留，运行历史显示其路径并提供“打开”和“丢弃”。
+保留数量设上限，超过后删除最旧项，具体上限在实现阶段确定。保存为 active 的 local 任务必须通过目标目录是 Git 仓库的
+校验；不满足时不得降级为直接在原目录执行。
 
 ### D5：cloud 交由服务端拥有的语义冻结，细节另行决策
 
@@ -119,11 +120,12 @@ local 不记录账号身份或 Cloud 授权引用。保存 local 任务时检查
 Workspace、模型凭据、费用与无头会话权限细节由独立 Cloud ADR 定义；第二阶段 Workflow 执行再继承 #67 的最终契约。
 
 首版唯一的无人值守工具批准策略是 `full_auto_in_worktree`：只在独立 worktree 中运行，运行时工具调用全自动批准。
-创建或编辑任务时必须以清晰风险说明取得用户显式同意，并将策略名与同意时间随 task revision 持久化；说明至少覆盖 worktree
-不是沙箱、agent 仍可执行任意命令并读写 worktree 外文件、可使用本机凭据（例如 `git push`），且会消耗模型额度。每次
-接纳均校验该策略仍受 runtime 支持且 worktree 可创建；不满足则以 `approval_policy_invalid` 或 `worktree_failed` 失败。
-每次运行使用固定、不可配置的超时上限；超时后取消并记录 `timeout`。以后新增细粒度策略时，既有
-`full_auto_in_worktree` 任务不自动扩大或缩小权限。
+创建任务时必须以清晰风险说明取得用户显式同意，并将策略名与同意时间随任务持久化；说明至少覆盖 worktree 不是沙箱、
+agent 仍可执行任意命令并读写 worktree 外文件、可使用本机凭据（例如 `git push`），且会消耗模型额度。仅当目标项目或
+策略变更时才必须重新同意；只改提示词或计划时间不要求重新同意。每次接纳均校验该策略仍受 runtime 支持且 worktree 可
+创建；不满足则以 `approval_policy_invalid` 或 `worktree_failed` 失败。每次运行固定 60 分钟，不可配置；超时后取消并记录
+`timeout`。用户撤销同意后，任务自动停用，已有运行事实不改写。以后新增细粒度策略时，既有 `full_auto_in_worktree` 任务
+不自动扩大或缩小权限。
 
 ## 不变量
 
@@ -136,7 +138,8 @@ Workspace、模型凭据、费用与无头会话权限细节由独立 Cloud ADR 
 6. 已接纳运行冻结原 task revision 与执行目标，不因后续编辑漂移。
 7. 调度器只调用已定义的 application use case，不自行解释或模拟执行目标。
 8. 任务禁用或删除不改写既有运行事实。
-9. local 真实执行只能使用已显式同意、仍有效的 `full_auto_in_worktree` 策略；没有有效策略时不接纳运行。
+9. local 真实执行只能使用已显式同意、仍有效的 `full_auto_in_worktree` 策略；目标项目或策略变更必须重新同意，撤销同意
+   后任务自动停用；没有有效策略时不接纳运行。
 10. 本地定时运行不直接改动用户正在编辑的目录，默认在独立 worktree 中执行。
 11. 本地任务及其运行历史只保存在本机：不上传 Cloud、不跨设备同步，也不要求登录。
 12. 保存为 active 的 local 任务必须以 Git 仓库为目标；不允许回退为直接修改原目录。
@@ -158,8 +161,7 @@ Workspace、模型凭据、费用与无头会话权限细节由独立 Cloud ADR 
 - 首版表单采用受限周期枚举还是公开 cron，以及精确的输入 schema。
 - 本地提示词运行的 application use case 如何与 Agent Session 关联（新建会话还是复用会话）；本地 Workflow revision
   目标属于后续扩展。
-- 更细的无人值守工具批准策略取值、撤销方式、固定超时上限的具体数值，以及与现有 Session approval 行为的迁移关系。
-- 本地运行 worktree 的复用、清理与数量上限。
+- 更细的无人值守工具批准策略取值、worktree 的数量上限，以及与现有 Session approval 行为的迁移关系。
 - Cloud 首期无头单会话的公开 API、存储、调度、发起者与费用归属、Project/模型/无人值守授权复查、通知与配额，作为
   `decisions/cloud/` 下的独立 ADR 提出，不以 #67 为前置条件。
 - Cloud 触发已发布 Workflow 的目标冻结、Start 参数校验及执行器槽位映射，作为第二阶段能力，等待 #67 及 Workflow
@@ -179,9 +181,10 @@ Workspace、模型凭据、费用与无头会话权限细节由独立 Cloud ADR 
 `skipped_busy`；达到全局并发上限时产生 `skipped_capacity`；本地运行在独立 worktree 中进行且不改动用户当前工作区，
 非 Git 目标不能保存为 active；任务编辑冻结旧运行；Cloud 能力不足时不能激活；授权失效明确失败且不自动回退；禁用/删除保留历史；本地任务及其运行
 历史不上传、不跨设备同步且不要求登录。
-还需覆盖：没有 `full_auto_in_worktree` 显式同意时不接纳运行；策略撤销后后续 occurrence 失败且既有运行事实不被改写；
-固定超时取消运行并记录 `timeout`；Cloud 首期 Prompt 复用 IssueRun / Thread 并校验 Project、模型和无人值守授权，
-不解析 Workflow 或执行器槽位。第二阶段 Workflow 的槽位缺失时，该次运行失败并通知任务所有者。
+还需覆盖：没有 `full_auto_in_worktree` 显式同意时不接纳运行；仅改提示词或计划时间不要求重新同意、目标项目或策略变更
+要求重新同意；策略撤销后任务自动停用且既有运行事实不被改写；固定 60 分钟超时取消运行并记录 `timeout`；无改动 worktree
+在运行后删除、有改动 worktree 保留且可从历史打开或丢弃；Cloud 首期 Prompt 复用 IssueRun / Thread 并校验 Project、模型和
+无人值守授权，不解析 Workflow 或执行器槽位。第二阶段 Workflow 的槽位缺失时，该次运行失败并通知任务所有者。
 
 ## 落地顺序
 
