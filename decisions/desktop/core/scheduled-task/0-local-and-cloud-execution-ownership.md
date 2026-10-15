@@ -30,8 +30,8 @@ status: proposed
 等内容不离开本机。Cloud 任务及其运行历史的存储位置、可见范围与账号归属随 Cloud 决策定义，本地实现不得预埋上传、
 同步或登录依赖。
 
-schedule 首版只承诺可由产品表单完整表达的周期规则；若暴露 cron，存储与校验必须使用同一语法，不能把未经校验的
-字符串直接交给执行端解释。local 任务不提供时区选择，schedule 按系统当前时区求值；时区作为持久化字段留给 Cloud
+schedule 首版只提供结构化的受限周期：每 N 小时、每天某个时刻、每周某几天某个时刻；每 N 小时的最短间隔为 1 小时。
+不得存储或解释 cron 字符串。local 任务不提供时区选择，schedule 按系统当前时区求值；时区作为持久化字段留给 Cloud
 任务随 Cloud 决策定义。任务列表中的 `nextRunAt` 是可重算投影，不是触发事实。
 
 ### D2：每个到期点产生稳定的 occurrence，接纳运行是幂等操作
@@ -55,8 +55,9 @@ Scheduled Run 都新建会话，不复用已有会话。
 
 Cloud 首期的执行目标同样只接受随 task revision 冻结的提示词，不绑定 Workflow snapshot。到期时 Cloud 调度器复用既有
 Agent `IssueRun` / `Thread` application use case，在目标 Project / Workspace 下拉起一次会话，并沿用既有结果记录与收尾。
-首期不涉及 `executorSlot`；无头单会话的 API 和权限校验在独立 Cloud ADR 定义，调度器不另建 Agent 运行入口。Cloud 触发
-已发布 Workflow 是后续扩展，届时再定义目标校验与凭据边界。
+每个 Cloud Scheduled Task 绑定一个 issue；每次触发在该 issue 下新建一个 agent IssueRun，保持既有
+`issue_runs.issue_id` 与 Thread 路由契约不变。首期不涉及 `executorSlot`；无头单会话的 API 和权限校验在独立 Cloud ADR
+定义，调度器不另建 Agent 运行入口。Cloud 触发已发布 Workflow 是后续扩展，届时再定义目标校验与凭据边界。
 
 ### D4：local 由 Desktop 进程内 scheduler 拥有，错过与迟到的到期点一律记 missed
 
@@ -81,6 +82,8 @@ Cloud 首期的未来 occurrence 由 Cloud 持久调度器产生，并以本 ADR
 接纳。首期只调用 D3 所述的无头 Prompt 单会话链：保存及每次触发均校验目标 Project、模型配置和无人值守授权；不接入
 #60/#67 的 Server Workflow 执行链，也不解析 `executorSlot`。Cloud 的任务登记、存储、取消、状态读取、授权、通知、发起者
 归属与费用，以及无头会话 API 细节由独立 `decisions/cloud/` ADR 定义，本决策不预置协议。
+
+Cloud 定时运行的默认超时为 60 分钟；超时取消依赖 Cloud 侧的取消写入者。该写入者就绪前，`cloud` 不得成为可选执行归属。
 
 Cloud 触发已发布 Workflow 是第二阶段能力，等待 #67 的结论及 Workflow server 执行链落地后再提出。该阶段每次触发按
 任务所有者的个人执行器槽位映射解析执行器；不得复用其他用户的映射。所需槽位缺失时，该次触发明确失败并通知任务所有者。
@@ -109,10 +112,11 @@ Scheduled Run 至少关联 task、revision、occurrence、目标运行/session I
 失败至少区分 `target_unavailable`、`model_unavailable`、`worktree_failed`、`approval_policy_invalid`、`timeout` 与
 `execution_error`。UI 的 last run、失败提示和历史列表来自这些持久事实，不从当前时间反推。
 
-每次定时运行开始时发出桌面通知，点击进入对应会话；通知是交互辅助，不是运行事实源。
+每次定时运行开始时发出桌面通知，点击进入对应会话；失败、超时和 `missed` 也分别发出一条桌面通知并进入运行历史。
+通知是交互辅助，不是运行事实源。首版不自动重试失败或超时的 occurrence。
 
-禁用任务只阻止未来接纳，不取消已经运行的工作。删除任务采用软删除或等价墓碑，保留既有运行关联；数据保留期由对应
-产品决策定义。
+禁用任务只阻止未来接纳，不取消已经运行的工作。删除任务采用软删除或等价墓碑，保留既有运行关联。每个任务只保留
+最近 100 条运行记录，超出时删除最旧的；删除任务后的墓碑和既有记录语义不变。
 
 ### D8：local 与 Cloud 分别在保存和每次运行时检查资格
 
@@ -160,33 +164,34 @@ agent 仍可执行任意命令并读写 worktree 外文件、可使用本机凭�
 
 ## 本决策未解决的问题
 
-- 首版表单采用受限周期枚举还是公开 cron，以及精确的输入 schema。
+- 三种受限周期规则的精确结构化字段与表单交互。
 - 本地 Workflow revision 目标属于后续扩展。
 - 更细的无人值守工具批准策略取值、worktree 的数量上限，以及与现有 Session approval 行为的迁移关系。
-- Cloud 首期无头单会话的公开 API、存储、调度、发起者与费用归属、Project/模型/无人值守授权复查、通知与配额，作为
-  `decisions/cloud/` 下的独立 ADR 提出，不以 #67 为前置条件。
+- Cloud 首期无头单会话的公开 API、存储、调度、通知与配额，作为 `decisions/cloud/` 下的独立 ADR 提出，不以 #67
+  为前置条件；该 ADR 细化 issue 绑定方式、任务所有者个人模型在创建运行时的锁定、仅匿名公开 Git 与任务所有者费用归属。
 - Cloud 触发已发布 Workflow 的目标冻结、Start 参数校验及执行器槽位映射，作为第二阶段能力，等待 #67 及 Workflow
   server 执行链落地后另立 ADR。
 - 本地与 Cloud 任务数据的互通边界：Desktop 任务列表是否合并展示 Cloud 任务、Cloud 网页端对两类任务与运行历史的
-  可见与管理范围、运行历史的跨端展示位置、Cloud 任务的账号与归属（创建者个人还是 Space），以及跨执行位置复制任务
-  携带的数据范围。本地侧默认（只存本机、不上传、不要求登录）已冻结为决策，其余随 Cloud 决策一并定案，避免本地数据
-  模型做出相反假设。
-- 运行失败后的自动重试策略、失败通知与历史保留期。
+  可见与管理范围、运行历史的跨端展示位置，以及跨执行位置复制任务携带的数据范围。本地侧默认（只存本机、不上传、
+  不要求登录）已冻结为决策，其余随 Cloud 决策一并定案，避免本地数据模型做出相反假设。
 - 操作系统后台服务、开机自启及显式 catch-up。
 
 ## 核心测试用例
 
 按仓库规则，本 ADR 状态变为 `approved` 后在 `test-cases/desktop/core/scheduled-task/` 补充核心用例。至少覆盖：
-同一 occurrence 重放只接纳一次；Desktop 关闭期间 local 不执行且重启记录 missed；实际触发晚于 `scheduledAt`
+受限周期的三种结构化规则可完整校验，且每 N 小时拒绝小于 1 小时的间隔；同一 occurrence 重放只接纳一次；Desktop
+关闭期间 local 不执行且重启记录 missed；实际触发晚于 `scheduledAt`
 超过 10 分钟记 `missed` 且不执行、10 分钟内迟到照常执行；manual run 不冒充计划触发；运行中到期产生
 `skipped_busy`；达到固定 4 项的全局并发上限时产生 `skipped_capacity`；每次 Scheduled Run 新建会话而不复用已有会话；
 本地运行在独立 worktree 中进行且不改动用户当前工作区，
 非 Git 目标不能保存为 active；任务编辑冻结旧运行；Cloud 能力不足时不能激活；授权失效明确失败且不自动回退；禁用/删除保留历史；本地任务及其运行
-历史不上传、不跨设备同步且不要求登录。
+历史不上传、不跨设备同步且不要求登录；失败、超时与 `missed` 分别通知；失败与超时均不自动重试；每个任务只保留最近
+100 条运行记录并删除更旧记录。
 还需覆盖：没有 `full_auto_in_worktree` 显式同意时不接纳运行；仅改提示词或计划时间不要求重新同意、目标项目或策略变更
 要求重新同意；策略撤销后任务自动停用且既有运行事实不被改写；固定 60 分钟超时取消运行并记录 `timeout`；无改动 worktree
-在运行后删除、有改动 worktree 保留且可从历史打开或丢弃；Cloud 首期 Prompt 复用 IssueRun / Thread 并校验 Project、模型和
-无人值守授权，不解析 Workflow 或执行器槽位。第二阶段 Workflow 的槽位缺失时，该次运行失败并通知任务所有者。
+在运行后删除、有改动 worktree 保留且可从历史打开或丢弃；Cloud 首期 Prompt 复用绑定 issue 下的 IssueRun / Thread 并校验
+Project、模型和无人值守授权，不解析 Workflow 或执行器槽位；Cloud 取消写入者未就绪时不可激活。第二阶段 Workflow 的
+槽位缺失时，该次运行失败并通知任务所有者。
 
 ## 落地顺序
 
