@@ -24,6 +24,7 @@ Cloud 的领域与协议边界划分，不预先决定 Go package、数据库表
 | `thread` | Agent 运行的对话记录：Thread 条目、用户追加消息、结束条件与实时刷新 |
 | `revision` | 对象存储配置、上传授权、Revision 校验与登记 |
 | `git-server` | 沙盒访问的 Git Server：协议、git-access 身份、按 Cloud 当前状态的逐请求授权与 ref 规则 |
+| `workflow` | 工作流图 schema、执行器槽位、发布与运行的门禁和执行契约 |
 
 Controller 的调度与恢复策略放在 `specs/decisions/controller/`，Node 的 Git、文件、进程、Agent、
 Plugin 和本地执行职责放在 `specs/decisions/node/`。跨层决策放在拥有业务不变量的一侧，并从其他
