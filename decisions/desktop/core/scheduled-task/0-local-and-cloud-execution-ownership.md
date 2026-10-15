@@ -10,9 +10,9 @@ status: proposed
 共享任务定义、occurrence 和运行状态的语义，各自持久化，不把浏览器计时器、内存状态或示例模板当作执行事实。
 
 本 ADR 处于 `proposed`。它定义 Scheduled Task 新领域的执行归属、持久状态与分阶段交付边界，只冻结共用语义与本地
-模式，不宣称 Cloud 调度、远程凭据、计费或任意 Workflow 已经交付。Cloud 的存储、调度、执行与凭据费用细节在
-#67 及 Workflow server 执行链路定案后，作为 `decisions/cloud/` 下的独立 ADR 另行提出。首个落地阶段只允许实现本地
-管理与调度；只有 Cloud 契约和真实执行适配器就绪后，`cloud` 才能成为可选值。
+模式，不宣称 Cloud 调度、远程凭据、计费或任意 Workflow 已经交付。Cloud 首期的无头单会话 API 与权限校验作为
+`decisions/cloud/` 下的独立 ADR 推进，不依赖 #60/#67 的 Server Workflow 执行链；只有该 Cloud 契约和真实执行适配器
+就绪后，`cloud` 才能成为可选值。Cloud 触发已发布 Workflow 则是依赖 #67 的后续阶段。
 
 > 本版依据 issue #84 的成员评审意见修订：删除执行归属切换握手，幂等键改为 `taskId + scheduledAt`，补触发迟到与
 > 睡眠唤醒的 missed 规则，Cloud 部分收缩为另行决策，并按补充评审冻结本地数据驻留默认（不上传、不要求登录）。
@@ -52,8 +52,10 @@ Scheduled Task 保存带版本的 `ExecutionTargetRef`，到期后把 occurrence
 与 session 如何关联、取消及结果如何投影。调度器不得直接调用模型、拼装未版本化 Prompt，或把内存 Workflow runtime
 的模拟成功写成真实运行。本地首版的执行目标是随 task revision 冻结的提示词，由新增的 application use case 承载。
 
-Cloud 首版只接受已发布 Workflow 版本作为执行目标，不接受“直接运行提示词”；若未来增加，另立决策。Cloud 的目标
-校验与凭据边界随 Cloud 决策定义，不在本领域另建旁路。
+Cloud 首期的执行目标同样只接受随 task revision 冻结的提示词，不绑定 Workflow snapshot。到期时 Cloud 调度器复用既有
+Agent `IssueRun` / `Thread` application use case，在目标 Project / Workspace 下拉起一次会话，并沿用既有结果记录与收尾。
+首期不涉及 `executorSlot`；无头单会话的 API 和权限校验在独立 Cloud ADR 定义，调度器不另建 Agent 运行入口。Cloud 触发
+已发布 Workflow 是后续扩展，届时再定义目标校验与凭据边界。
 
 ### D4：local 由 Desktop 进程内 scheduler 拥有，错过与迟到的到期点一律记 missed
 
@@ -72,16 +74,16 @@ manual occurrence，不冒充原计划时间。未来若增加 catch-up，必须
 ### D5：cloud 交由服务端拥有的语义冻结，细节另行决策
 
 `cloud` 任务的未来 occurrence 只由 Cloud 持久调度器产生，Desktop 关闭不影响它；这是需要提前冻结的共用语义。
-Cloud 的任务登记、存储、调度、幂等接纳、取消、状态读取、授权检查，以及发起者归属与费用（含“无人在场”的补充规则，
-如创建者付费、每次触发复查权限、最小运行间隔、Workflow 版本冻结与 Start 参数校验）在 #67 及 Workflow server
-执行链路定案后，作为 `decisions/cloud/` 下的独立 ADR 提出，本决策不预置协议。
+Cloud 首期的未来 occurrence 由 Cloud 持久调度器产生，并以本 ADR 的 `(taskId + scheduledAt)` 规则在 Cloud 侧幂等
+接纳。首期只调用 D3 所述的无头 Prompt 单会话链：保存及每次触发均校验目标 Project、模型配置和无人值守授权；不接入
+#60/#67 的 Server Workflow 执行链，也不解析 `executorSlot`。Cloud 的任务登记、存储、取消、状态读取、授权、通知、发起者
+归属与费用，以及无头会话 API 细节由独立 `decisions/cloud/` ADR 定义，本决策不预置协议。
 
-Cloud Scheduled Task 触发已发布 Workflow 时，每次触发均按任务所有者的个人执行器槽位映射解析执行器；不得复用其他
-用户的映射。所需槽位缺失时，该次触发明确失败并通知任务所有者。该规则继承 #118 的执行器槽位语义；映射存储、校验和
-具体通知通道仍属于后续 Cloud ADR。
+Cloud 触发已发布 Workflow 是第二阶段能力，等待 #67 的结论及 Workflow server 执行链落地后再提出。该阶段每次触发按
+任务所有者的个人执行器槽位映射解析执行器；不得复用其他用户的映射。所需槽位缺失时，该次触发明确失败并通知任务所有者。
 
-在上述 Cloud 决策获批且真实执行链路就绪之前，Desktop 可以展示 `cloud` 模式及其说明，但必须标为不可用，不能保存为
-执行归属、不能用本地 timer 代跑，也不能展示模拟成功。
+在 Cloud 首期 ADR 获批且真实无头单会话链路就绪之前，Desktop 可以展示 `cloud` 模式及其说明，但必须标为不可用，不能
+保存为执行归属、不能用本地 timer 代跑，也不能展示模拟成功。
 
 两端只对齐展示用的字段名与状态名，不共享 ID、存储或同步协议；Desktop 任务列表是否合并展示 Cloud 任务、运行历史
 能否跨端可见、Cloud 任务的账号与归属，均随 Cloud 决策一并定案。
@@ -112,9 +114,9 @@ Scheduled Run 至少关联 task、revision、occurrence、目标运行/session I
 ### D8：local 与 Cloud 分别在保存和每次运行时检查资格
 
 local 不记录账号身份或 Cloud 授权引用。保存 local 任务时检查目标项目目录存在、是 Git 仓库且模型配置可用；每次接纳
-时再次检查，失败则该 occurrence 以明确失败结束，不换用其他模型。Cloud 的创建者、执行授权引用、Workspace、模型凭据
-与费用继承 #67 的最终契约，并在后续 Cloud ADR 中补充“无人在场”的检查规则；Cloud 授权失效时同样明确失败，不回退
-到 local 执行。
+时再次检查，失败则该 occurrence 以明确失败结束，不换用其他模型。Cloud 首期保存及每次接纳均检查该 Prompt 运行需要的
+目标 Project、模型配置与无人值守授权；失败时明确结束，不回退到 local，也不涉及 Workflow 的执行器槽位。Cloud 的创建者、
+Workspace、模型凭据、费用与无头会话权限细节由独立 Cloud ADR 定义；第二阶段 Workflow 执行再继承 #67 的最终契约。
 
 首版唯一的无人值守工具批准策略是 `full_auto_in_worktree`：只在独立 worktree 中运行，运行时工具调用全自动批准。
 创建或编辑任务时必须以清晰风险说明取得用户显式同意，并将策略名与同意时间随 task revision 持久化；说明至少覆盖 worktree
@@ -130,7 +132,7 @@ local 不记录账号身份或 Cloud 授权引用。保存 local 任务时检查
 3. WebView timer、模板和 `nextRunAt` 投影都不是触发事实源。
 4. local 不承诺 Desktop 关闭或睡眠期间运行；实际触发晚于 `scheduledAt` 超过 10 分钟的到期点记 `missed`，不执行
    也不补跑。
-5. cloud 未通过真实调度与执行链路前不能成为可选执行模式。
+5. cloud 首期只能通过真实调度和无头 Prompt 单会话链成为可选模式；不得以本地 timer 或 Workflow 模拟成功代替。
 6. 已接纳运行冻结原 task revision 与执行目标，不因后续编辑漂移。
 7. 调度器只调用已定义的 application use case，不自行解释或模拟执行目标。
 8. 任务禁用或删除不改写既有运行事实。
@@ -158,9 +160,10 @@ local 不记录账号身份或 Cloud 授权引用。保存 local 任务时检查
   目标属于后续扩展。
 - 更细的无人值守工具批准策略取值、撤销方式、固定超时上限的具体数值，以及与现有 Session approval 行为的迁移关系。
 - 本地运行 worktree 的复用、清理与数量上限。
-- Cloud Scheduled Task 的全部细节：公开 API、存储、调度、发起者与费用归属、“无人在场”检查（创建者付费、触发时
-  权限复查、最小运行间隔、Workflow 版本冻结、Start 参数校验）、通知与配额，在 #67 及 Workflow server 执行链路
-  定案后以 `decisions/cloud/` 下的独立 ADR 提出。
+- Cloud 首期无头单会话的公开 API、存储、调度、发起者与费用归属、Project/模型/无人值守授权复查、通知与配额，作为
+  `decisions/cloud/` 下的独立 ADR 提出，不以 #67 为前置条件。
+- Cloud 触发已发布 Workflow 的目标冻结、Start 参数校验及执行器槽位映射，作为第二阶段能力，等待 #67 及 Workflow
+  server 执行链落地后另立 ADR。
 - 本地与 Cloud 任务数据的互通边界：Desktop 任务列表是否合并展示 Cloud 任务、Cloud 网页端对两类任务与运行历史的
   可见与管理范围、运行历史的跨端展示位置、Cloud 任务的账号与归属（创建者个人还是 Space），以及跨执行位置复制任务
   携带的数据范围。本地侧默认（只存本机、不上传、不要求登录）已冻结为决策，其余随 Cloud 决策一并定案，避免本地数据
@@ -177,7 +180,8 @@ local 不记录账号身份或 Cloud 授权引用。保存 local 任务时检查
 非 Git 目标不能保存为 active；任务编辑冻结旧运行；Cloud 能力不足时不能激活；授权失效明确失败且不自动回退；禁用/删除保留历史；本地任务及其运行
 历史不上传、不跨设备同步且不要求登录。
 还需覆盖：没有 `full_auto_in_worktree` 显式同意时不接纳运行；策略撤销后后续 occurrence 失败且既有运行事实不被改写；
-固定超时取消运行并记录 `timeout`；Cloud 执行器槽位缺失时该次运行失败并通知任务所有者。
+固定超时取消运行并记录 `timeout`；Cloud 首期 Prompt 复用 IssueRun / Thread 并校验 Project、模型和无人值守授权，
+不解析 Workflow 或执行器槽位。第二阶段 Workflow 的槽位缺失时，该次运行失败并通知任务所有者。
 
 ## 落地顺序
 
@@ -187,5 +191,7 @@ local 不记录账号身份或 Cloud 授权引用。保存 local 任务时检查
 3. **desktop / local scheduler**：用后端 scheduler 重建 active local jobs，落实 occurrence 幂等、迟到/离线
    missed、独立 worktree 执行、全局并发上限、`skip_if_running` 和真实 ExecutionTarget adapter；没有真实
    adapter 时不得把模拟运行作为 MVP 完成。
-4. **cloud**：Cloud 的存储、调度、执行与凭据费用在 #67 及 Workflow server 执行链路定案后，以 `decisions/cloud/`
-   下的独立 ADR 另行提出；届时再开放 `cloud` 选择，本决策不预置其协议。
+4. **cloud / first phase**：以 `decisions/cloud/` 下的独立 ADR 定义无头 Prompt 单会话的 API、权限与持久化；复用
+   IssueRun / Thread 真实执行链并验证后，开放 `cloud` 选择，不以 #60/#67 为前置条件。
+5. **cloud / second phase**：#67 及 Workflow server 执行链落地后，另立 ADR 支持 Cloud 触发已发布 Workflow，并按
+   任务所有者的个人执行器槽位映射解析执行器。
