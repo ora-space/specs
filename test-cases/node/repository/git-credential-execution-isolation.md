@@ -1,16 +1,16 @@
 # 受控 Node 的仓库凭据执行身份隔离
 
 依据[受控 Node 的仓库凭据执行使用独立 OS 身份](../../../decisions/node/repository/20261010-controlled-node-git-authentication-isolation.md)
-（`approved`）与其下游契约修订
+（`proposed`）与其下游契约修订
 [最小 clone 执行契约 D2 的凭据来源修订](../../../decisions/node/repository/20261010-minimal-clone-execution-contract-credential-source-amendment.md)
-（`approved`）。本文件登记 Node 侧需要长期守住的承诺：M／W／C 三个身份互不相同且不可互相冒用、
+（`proposed`）。本文件登记 Node 侧需要长期守住的承诺：M／W／C 三个身份互不相同且不可互相冒用、
 Agent 的既有合法功能保持可用而**能力**不可提升、匿名公开仓库 Clone 的可观察行为逐位不变、
 凭据材料在执行结束后必被销毁，以及"缺少凭据配置只禁止凭据执行"这一启动语义。
 
 **当前实现状态**：受控 Node 今天仍有 M（root 管理进程）与 W（`workload_uid`，沙箱内为 1000），
 **Node 内没有** C。C 已按
 [凭据执行器归属当前正式产品](../../../decisions/node/repository/20261012-credential-executor-belongs-to-the-current-product.md)
-（`approved`）实现为**当前正式产品的独立部署单元**：独立镜像目标、独立非 root 进程身份（uid 10002）、
+（`proposed`）实现为**当前正式产品的独立部署单元**：独立镜像目标、独立非 root 进程身份（uid 10002）、
 独立卷集与独立信任根，不是 Node 内的第三个进程。因此本文件各项义务的**形态**发生了变化：原来针对
 "同一容器内三个 UID"的断言，今天落在容器边界与卷集合上；同一容器内的 M／W／C 三身份分离仍然**不存在**。
 

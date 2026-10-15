@@ -1,7 +1,7 @@
 # 仓库凭据归属连续性
 
 依据[仓库凭据归属连续性](../../../decisions/cloud/identity-access/20261010-repository-credential-ownership-continuity.md)
-（`approved`，`0023` 的历史契约补录）。本文件登记 `0023` 已经交付、并且今后不得被反向改写的持久语义：
+（`proposed`，`0023` 的历史契约补录）。本文件登记 `0023` 已经交付、并且今后不得被反向改写的持久语义：
 凭据的归属列、离开与停用时的冻结、以及"补录不改写迁移"。这些语义今天由已应用的迁移与触发器承担，
 后续凭据决策（Secret Store、Broker 授权、Node 隔离）只能在其之上叠加，不得改写。
 

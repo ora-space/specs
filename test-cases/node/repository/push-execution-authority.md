@@ -1,7 +1,6 @@
 # 推送执行权限
 
-依据[推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`approved`，2026-10-12；
-A–D、F 批准，E 不批准）。本文件登记写方向的长期承诺：推送只能由部署固定的执行器按 Cloud 的单次授权执行、
+依据[推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`proposed`，2026-10-12；A–D、F 同意，E 不同意，那次裁决未走 specs 的 PR 评审）。本文件登记写方向的长期承诺：推送只能由部署固定的执行器按 Cloud 的单次授权执行、
 写入范围逐次限定且默认拒绝、秘密只经既有兑换路径到场并在执行结束时销毁、Agent 既请求不到也拿不到秘密，
 以及"词汇表只能由它自己那篇独立决策扩展"（末一条的"未扩展前"那一半已于 2026-10-13 按其自身条款办完，
 见下节）。
@@ -12,7 +11,7 @@ A–D、F 批准，E 不批准）。本文件登记写方向的长期承诺：�
 
 | 日期 | 发生了什么 | 落点 |
 |---|---|---|
-| 2026-10-13 | 词汇表由**它自己那篇**独立决策扩展为 `["clone","push"]`，同一次批准还修订了本 ADR 的两处绑定项与结果语义 | [`20261013-push-capability-vocabulary-extension.md`](../../../decisions/cloud/identity-access/20261013-push-capability-vocabulary-extension.md)（`approved`，A–G 全部按建议批准；`specs` `aebe21d` 新建、`682cd78` 补正，`approved` 落款与批准记录随该次裁决写入） |
+| 2026-10-13 | 词汇表由**它自己那篇**独立决策扩展为 `["clone","push"]`，同一次裁决还修订了本 ADR 的两处绑定项与结果语义 | [`20261013-push-capability-vocabulary-extension.md`](../../../decisions/cloud/identity-access/20261013-push-capability-vocabulary-extension.md)（`proposed`，A–G 全部按建议同意；`specs` `aebe21d` 新建、`682cd78` 补正；那次裁决**未走 specs 的 PR 评审**，因此正文里的裁决结论待评审、`approved` 落款未写） |
 | 2026-10-13 | 公开契约枚举、准入、签发、执行四处强制点在同一次变更里就位 | cloud `16e0c40` |
 | 2026-10-13 | 写向实现：单次授权的签发、受控执行与三终态结算、对账 | cloud `2bd610d` |
 | 2026-10-14 | 容器级验收实测到的一处缺陷被修复：执行器失联时的派发错误不再被映射成带原因码的 `Fault`，结算落到 `uncertain`／`push_result_unknown` | cloud `d49edea` |
@@ -47,15 +46,15 @@ clone 读向的证据与[推送交付 ref](../../../decisions/node/revision/2026
 通道的证据仍不得互相充当。D9 的九条中仍有未取得直接证据的部分，逐条列在文末。
 
 **2026-10-13 更正一处**：本文件原先写「除"不可被请求"这一条外，其余义务全部为 `Missing`」。这对
-**helper 的 host＋path 作用域校验**不成立——该 ADR 的落地顺序第 2 步（「已获批，可以开始；仅限读向
-收紧」）已经落地，该义务现在有直接且可证伪的证据，已改为 `Covered`（见下表与下节）。本条更正**不改变**
+**helper 的 host＋path 作用域校验**不成立——该 ADR 的落地顺序第 2 步（「仅限读向收紧；不依赖前方
+任何决策」）已经落地，该义务现在有直接且可证伪的证据，已改为 `Covered`（见下表与下节）。本条更正**不改变**
 任何写方向的结论：推送仍不可被请求，其余义务仍为 `Missing`。同时更正：本文件与 D4 都把该缺口描述成
-「helper 今天只比对 `host`」，这在当前代码上已不成立；D4 那段现状描述属于**已批准 ADR 的正文**，
-不在此处单方面改写，见文末[已批准 ADR 里一段过期现状描述的更正](#已批准-adr-里一段过期现状描述的更正2026-10-13-已裁决并落地)
+「helper 今天只比对 `host`」，这在当前代码上已不成立；D4 那段现状描述属于**决策文本的正文**，
+不在此处单方面改写，见文末[决策文本里一段过期现状描述的更正](#决策文本里一段过期现状描述的更正2026-10-13-已裁决并落地)
 （该处已按"只追加前向注记"更正，原文逐字保留）。
 
 **2026-10-13 再更正一处（本轮）**：上一段末尾那句「推送仍不可被请求，其余义务仍为 `Missing`」写在
-词汇表扩展决策获批之前，**当天即被那篇决策自己的批准所取代**——`push` 已成为词汇表的第二个成员，写向
+词汇表扩展决策走完评审之前，**当天即被那篇决策自己的裁决所取代**（那篇同样保持 `proposed`）——`push` 已成为词汇表的第二个成员，写向
 实现也已落地。本文件据此逐行重估证据状态：**新取得直接证据的行按实测改写，没有证据的行继续如实保留
 `Missing`／`Partial`，容器级未通过的项一条都没有写成 `Covered`**。上一段的更正理由（helper 的
 host＋path 收紧与写向启用互相独立）不受影响，仍然成立。**2026-10-14 补一句**：当时唯一未通过的那一项
@@ -118,11 +117,11 @@ Cloud 具备签发能力（`internal/cloneauth` 的 `Issue`／`Verify`）；推�
 ### 必须成立
 
 > **2026-10-13 修订（只在此处登记，标题与 ADR 原文逐字保留）**：本节标题里的 "Execution Generation"
-> 与本节的"执行／运行代次"两项**已被那篇词汇表扩展决策在获批时一并修订**——推送**不**绑定 clone 的
+> 与本节的"执行／运行代次"两项**已被那篇词汇表扩展决策的裁决一并修订**（那篇同样 `proposed`）——推送**不**绑定 clone 的
 > `ExecutionID`，**不**绑定 Node 运行代次与 Node 实例，也**不**绑定 `PreparationGeneration`。代之以由
 > Store 从**已校验的客户端证书**解析的 `ExecutorIdentity`（不接受请求体自述），加 `OperationID`、单次
-> 消费与短有效期。已批准 ADR 的正文已按它自己的前向注记约定同步（见
-> [推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md) 批准记录前向注记 1）。
+> 消费与短有效期。决策文本的正文已按它自己的前向注记约定同步（见
+> [推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md) 裁决结论前向注记 1）。
 > **拒绝形状不变**：租户、Project、Workspace、仓库身份、凭据 id 与版本、ref 与提交、有效期继续必填，
 > 缺一项继续拒绝。下一节的三条"必须成立"与"禁止结果"中，只有"运行代次"一项按此修订读。
 
@@ -271,7 +270,7 @@ D7 与不变量 3、11。
 
 ### 风险
 
-把本 ADR 的获批读成"推送已可用"，从而在词汇表之外偷偷放开一个写能力。
+把本 ADR 的裁决读成"推送已可用"，从而在词汇表之外偷偷放开一个写能力。
 
 ### 前置状态
 
@@ -291,18 +290,18 @@ D7 与不变量 3、11。
 
 - `push` 加入枚举需要另一篇 `approved` 决策，并同时变更公开契约枚举与准入、签发、执行三处强制点。
 - 一次推送需要写能力成员，不得把 `clone` 读成写许可。
-- 本 ADR 的获批不解除任何 fail-closed：带凭据的 clone 继续以 `repository_credential_executor_unavailable`
+- 本 ADR 的裁决不解除任何 fail-closed：带凭据的 clone 继续以 `repository_credential_executor_unavailable`
   逐位拒绝。
 
 ### 禁止结果
 
-以"权限模型已批准"为由启用推送、把只读授权复用为写许可、在词汇表之外放行任何写路径。
+以"权限模型已裁决"为由启用推送、把只读授权复用为写许可、在词汇表之外放行任何写路径。
 
 ### 验证义务与证据
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 词汇表只能由它自己那篇独立决策扩展，且扩展必须同时落在四处强制点 | **已按规则办完（保持 `Covered`，引用全部改写）**。扩展决策是 [`20261013-push-capability-vocabulary-extension.md`](../../../decisions/cloud/identity-access/20261013-push-capability-vocabulary-extension.md)（`approved` 2026-10-13，A–G 全部按建议批准）。四处强制点在**同一次变更**里就位（cloud `16e0c40`：公开契约枚举、准入、签发、执行），并由今天真实存在的测试钉住："`push` 是词汇表的第二个成员且顺序为 `clone` 在前"由 `cloneauth.TestCapabilityVocabularyIsClosedToWhatTheDecisionFixes` 断言（它同时断言 `read`／`write`／`fetch`／`pull`／`admin` **仍然**在词汇表之外——把它们写成测试常量而不是"看起来完整"的枚举，正是为了让下次扩展又得先改决策）；`cloneauth.TestCanonicalCapabilitiesRefusesEverySetItCannotHaveIssued` 断言 `["push"]` 与 `["clone","push"]` 可被签发，而空集、重复、非规范顺序、大小写变体与词汇表外的成员一律被拒；`cloneauth.TestIssueRejectsIncompleteBindings` 新增 "a set the clone operation does not permit"（`["clone","push"]` 作为 clone 的授权被拒）；`cloneauth.TestHasCapabilityComparesTheCanonicalSpelling` 断言 `["clone"]` 对 `push` 判 false、`["push"]` 对 `clone` 判 false | Covered |
+| 词汇表只能由它自己那篇独立决策扩展，且扩展必须同时落在四处强制点 | **已按规则办完（保持 `Covered`，引用全部改写）**。扩展决策是 [`20261013-push-capability-vocabulary-extension.md`](../../../decisions/cloud/identity-access/20261013-push-capability-vocabulary-extension.md)（`proposed` 2026-10-13，A–G 全部按建议同意）。四处强制点在**同一次变更**里就位（cloud `16e0c40`：公开契约枚举、准入、签发、执行），并由今天真实存在的测试钉住："`push` 是词汇表的第二个成员且顺序为 `clone` 在前"由 `cloneauth.TestCapabilityVocabularyIsClosedToWhatTheDecisionFixes` 断言（它同时断言 `read`／`write`／`fetch`／`pull`／`admin` **仍然**在词汇表之外——把它们写成测试常量而不是"看起来完整"的枚举，正是为了让下次扩展又得先改决策）；`cloneauth.TestCanonicalCapabilitiesRefusesEverySetItCannotHaveIssued` 断言 `["push"]` 与 `["clone","push"]` 可被签发，而空集、重复、非规范顺序、大小写变体与词汇表外的成员一律被拒；`cloneauth.TestIssueRejectsIncompleteBindings` 新增 "a set the clone operation does not permit"（`["clone","push"]` 作为 clone 的授权被拒）；`cloneauth.TestHasCapabilityComparesTheCanonicalSpelling` 断言 `["clone"]` 对 `push` 判 false、`["push"]` 对 `clone` 判 false | Covered |
 | 一次 clone 授权不得被当成写许可 | **已取得（保持 `Covered`，引用全部改写为写向真实存在的测试）**。签发与验签侧：`cloneauth.TestPushRefusesTheOtherOperationsFields`（clone 的执行 id、Node 实例与运行代次在 push 载荷里是禁止字段，反向亦然）、`cloneauth.TestPushBindingRoundTrip`（一份 push 授权携带的恰好是 `["push"]`）、`cloneauth.TestAPushAuthorizationIsNotReadableAsEitherReadOperation`、`cloneauth.TestAnUnknownOperationIsNotReadAsAPush`、`cloneauth.TestTheTwoPurposesRefuseEachOthersFields`。兑换侧：`cloneexec.TestARedemptionCannotBeSpentOnAnotherPurpose`、`credentialstore/push_authorization_test.go`（用途在签名载荷内，由 Store 验签后比对）。容器级：`refusal/a-clone-only-reference-cannot-be-pushed-with`（那份引用声明的能力恰为 `["clone"]`）、`refusal/a-clone-only-reference-is-refused-by-capability`（同一份 token 在远端正可写，推送仍被 `repository_credential_capability_unsupported` 拒绝，且**没有签出任何授权**）。能力词汇表不变量 5 登记在[凭据能力词汇表](../../cloud/identity-access/repository-credential-capability-vocabulary.md) | Covered |
 
 ### 决策依据
@@ -413,10 +412,10 @@ uncertain rather than failed`，6 个文件），改动落在上面定位到的�
 
 D8 与不变量 12；[推送交付 ref 与取回前序版本](../../../decisions/node/revision/20261012-push-delivery-ref-and-fetch-prior-revision.md)。
 
-## 已批准 ADR 里一段过期现状描述的更正（2026-10-13 已裁决并落地）
+## 决策文本里一段过期现状描述的更正（2026-10-13 已裁决并落地）
 
 上文把 helper 的 host＋path 校验记为 `Covered`，依据是当前代码与可证伪的测试；而
-[推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`approved`）
+[推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`proposed`）
 里关于该缺口的**现状描述**已与代码不符。这一处已按"只追加前向注记"的方式更正，原文逐字保留：
 
 | ADR 位置 | ADR 原文的说法 | 今天的实际 |
@@ -424,14 +423,14 @@ D8 与不变量 12；[推送交付 ref 与取回前序版本](../../../decisions
 | D4「必须同时收紧的一点（现状缺口）」 | 「helper 今天只比对 Git 报出的 `host`」「物化的 scope 文件只存 host」 | 物化写的是 `host=`／`path=` 两行记录（`cloud/internal/credentialmaterial/material.go:48-56` 记录了格式变更与旧格式的拒绝口径），helper 比对 host **与** path（`cmd/git-credential-ora/main.go:84-92`） |
 | 同上，引用的行号 | `internal/credentialmaterial/material.go:157` 是 scope 只存 host 的证据 | 该行落在 `ValidExecutionID` 的函数体内，与 scope 无关；scope 的写入点是同文件的 `Stage`（`:211`）与 `formatScope`（`:241`），读取点是 `ReadScope`（`:310`） |
 | 同上，引用的行号 | `internal/cloneexec/git.go:126-129` 把 `useHttpPath` 描述成 path 绑定 | 该注释现在在 `internal/cloneexec/git.go:201-207`，且**已经**如实写成「比对 path 与 host」，与代码一致 |
-| 批准边界第 2 条、D4 前置说明 | 「未补齐前不得启用推送」 | 前置条件已满足，但该边界**仍不是唯一的门**：启用推送还受 E 那篇独立的词汇表决策约束 |
+| 裁决边界第 2 条、D4 前置说明 | 「未补齐前不得启用推送」 | 前置条件已满足，但该边界**仍不是唯一的门**：启用推送还受 E 那篇独立的词汇表决策约束 |
 
 **更正方式**：在 D4 与该边界处各追加一段前向注记（日期 2026-10-13），只更正**现状描述与证据引用**。
-被批准的原文、批准记录、D4 的决策、不变量 8 与"未补齐前不得启用推送"这一安全边界**逐字未变**。
+原文、裁决结论、D4 的决策、不变量 8 与"未补齐前不得启用推送"这一安全边界**逐字未变**。
 
 **末句的更正（同日稍后）**：这一节原先收尾于「E 未被追认，`push` 仍在词汇表之外，本文与那篇 ADR 的其余
-`Missing` 项一条都没有转状态」。前两句当时为真，**当天晚些时候即被 E 自己的批准所取代**——E 没有被"追认"
-进本文，它是**照流程走完并获批**的：`push` 已成为词汇表的第二个成员，本文与那篇 ADR 的其余证据项也据此
-逐行重估（见上表）。本节更正的对象从头到尾只是**现状描述与证据引用**，不涉及任何决策内容；E 的批准、
-两处修订的生效与本文的状态改写，都不改变"未补齐前不得启用推送"这条边界——它今天的形态是
+`Missing` 项一条都没有转状态」。前两句当时为真，**当天晚些时候即被 E 自己的裁决所取代**——E 没有被"追认"
+进本文，它是**照流程走完并经裁决同意**的：`push` 已成为词汇表的第二个成员，本文与那篇 ADR 的其余证据项也据此
+逐行重估（见上表）。本节更正的对象从头到尾只是**现状描述与证据引用**，不涉及任何决策内容；E 的裁决、
+两处修订的落地与本文的状态改写，都不改变"未补齐前不得启用推送"这条边界——它今天的形态是
 **生产配置里两处开关都不存在**，见文首那张表与 `cluster/docs/issue-16-acceptance-matrix.md` §H。

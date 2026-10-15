@@ -1,7 +1,7 @@
 # 用户托管仓库凭据的元数据与逐次授权
 
 依据[用户自助 HTTPS Git 凭据](../../../decisions/cloud/identity-access/20261010-user-managed-git-credentials.md)
-（`approved`）与其继承的
+（`proposed`）与其继承的
 [仓库凭据归属连续性](../../../decisions/cloud/identity-access/20261010-repository-credential-ownership-continuity.md)。
 本文件登记 Cloud 侧的凭据**元数据权威、逐次授权与 fail-closed**：谁是凭据归属的权威、`secret_ref`
 为什么不是 bearer token、凭据引用如何绑定到一次 clone execution、以及
@@ -111,7 +111,7 @@ Project 的持久引用，以及对外错误形状。
 - 部署级拒绝**优先于**能力拒绝：两者同时成立时报部署级错误码，因为它是用户无法通过换凭据绕开的那个。
 - **不回退**匿名 clone，**不回退**部署静态凭据；受控 Node 上静态 PAT 不是用户凭据路径的回退。
 - 拒绝**不改写**持久状态：`projects` 的归属与两列引用保持原样，不产生 `clone_executions` 行。
-- 拒绝与规则侧获批相互独立：ADR 存在、Ingress 例外生效或测试文件存在都不解除该拒绝。
+- 拒绝与规则侧的裁决相互独立：ADR 存在、Ingress 例外生效或测试文件存在都不解除该拒绝。
 - 只有 [凭据 ADR D11-B](../../../decisions/cloud/identity-access/20261010-user-managed-git-credentials.md)
   与 Node 隔离 ADR D14-B 的**全部**条件有直接证据时，才允许移除该拒绝；移除必须由单独变更承载。
 
@@ -132,17 +132,18 @@ Project 的持久引用，以及对外错误形状。
 | 撤销终结 Operation，冻结只关闭新绑定而不终结 | `internal/core` 的 `TestARevokedReferenceSettlesTheOperationToo`（2026-10-14 补）用真实的 `WriteGitCredential` DELETE 路径撤销绑定中的引用后派发：断言拒绝码 `repository_credential_revoked` 逐字返回、执行器零调用、Operation 为 `failed` + 该码、`retry_at` 为空、无 `clone_executions` 行、绑定与 lifecycle 未被触碰；`TestRevokingACredentialClosesNewCloneBindings` 从撤销那一侧给出同一结论（真实撤销之后**新**的 clone 绑定以 `repository_credential_revoked` 在准入处被拒，本行原先写作 `repository_credential_frozen`）。冻结一侧的反向义务由 `TestSettlementIgnoresEveryRefusalButThePermanentOnes` 钉住：它逐条断言冻结与 scope 不匹配**不**写 `failed`——把 `repository_credential_frozen` 加进终态清单这一变异会让该用例失败，因此"暂时冻结被误当永久失效"是可证伪的 | Covered（**未裁决**：结算与撤销分报的语义由 [把带凭据的拒绝结算为终态](../../../decisions/cloud/operation/20261012-credentialed-clone-refusal-is-terminal.md)（`proposed`）承载，批准前只作为"实现先行"证据，不计入验收结果。真实栈上的撤销终态结算尚无证据，只有真实 PostgreSQL 支持的 core／DB 测试） |
 | 无作用域的旧式 clone 准入被拒绝 | `integration.repository_credentials_test.go` 的 `TestProductionStoreRefusesUnscopedCloneAdmission` 断言 `runtime_scope_required` 且拒绝的请求未被持久化 | Covered |
 | 解禁只能在 D11-B／D14-B 全部有证据之后 | 尚缺"解禁前后的门禁断言"测试；今天正确的行为正是继续拒绝，因此没有可指向的解禁证据。执行器与授权链路本轮已经落地，但 D11-B／D14-B 的**全部**义务仍不满足：checkout 尚未交付到 Workspace（D12 与验收义务 14 未实现），同一容器内的 W／C 分离不存在，"以 W 身份对 C 发起能力尝试"一类断言没有证据，超时与 `Interrupted` 两种结局的销毁也无直接证据。`repository_credential_executor_unavailable` 因此**在未安装任何通道的部署上**继续是带凭据 clone 的答案，且两个开关（`CLOUD_CLONE_DISPATCH_ENABLED` 与 `CLOUD_CLONE_DISPATCH_MIRROR_ENABLED`）都默认关闭。**2026-10-13 更正**：本行原先写作"继续保持无条件拒绝"，这对**启用镜像通道的部署**不成立——准入守卫的收尾判据是"两个通道都没有才拒绝"（`internal/core/repository_credentials.go`），因此被镜像通道服务的那一次 clone **会被准入**，并真的写下 `clone_executions` 行：`scripts/agent-read-acceptance.py` 在镜像栈上按 `workspace_id` 读回这次 clone 的 `result->>'path'`（`outcome='clone_ready'`）与 `input->>'repositoryUrl'`（内部 Git Server 的镜像地址）。这**不是**本项义务的例外：解禁所指的是"按凭据直连"的那条路径，镜像通道不把上游凭据交给 Node，因此 D11-B／D14-B 中任何以"执行器按凭据执行 clone 并把 checkout 交给 Workspace"为前提的义务它一条都不满足 | Missing |
-| 能力词汇表本身是否扩展 | 词汇表今天只有 `clone`；Issue 验收要求的"读取与推送能力分别验证"与 P2 的候选验证能力都超出它，且被 approved 的凭据 ADR D2 明确排除。[仓库凭据能力词汇表](../../../decisions/cloud/identity-access/20261012-repository-credential-capability-vocabulary.md)已于 2026-10-12 **批准**（A–D 按推荐批准，E 有条件批准）：词汇表保持 `["clone"]`、不引入 `read`、不开放 `push`、候选验证复用受限 `clone`，旧式空集合引用走逐条核验后的显式迁移。词汇表自身的承诺登记在[凭据能力词汇表](repository-credential-capability-vocabulary.md)，本文件不重复；Issue 验收第 2 项的**推送一侧**因此继续为 `Missing`（由 [推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`approved` 2026-10-12，E 不批准）承载，词汇表扩展仍待独立决策，实现前不计入验收） | Missing |
+| 能力词汇表本身是否扩展 | 词汇表今天只有 `clone`；Issue 验收要求的"读取与推送能力分别验证"与 P2 的候选验证能力都超出它，且凭据 ADR 的 D2 明确排除。[仓库凭据能力词汇表](../../../decisions/cloud/identity-access/20261012-repository-credential-capability-vocabulary.md)已于 2026-10-12 经项目负责人**裁决**（A–D 按推荐同意，E 有条件同意；那次裁决未走 specs 的 PR 评审）：词汇表保持 `["clone"]`、不引入 `read`、不开放 `push`、候选验证复用受限 `clone`，旧式空集合引用走逐条核验后的显式迁移。词汇表自身的承诺登记在[凭据能力词汇表](repository-credential-capability-vocabulary.md)，本文件不重复；Issue 验收第 2 项的**推送一侧**因此继续为 `Missing`（由 [推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`proposed` 2026-10-12，E 不同意）承载，词汇表扩展仍待独立决策，实现前不计入验收） | Missing |
 | 部署托管引用（`capabilities` 为空）在执行器安装后的准入 | `internal/core` 的 `TestADeploymentManagedReferenceIsRefusedForItsEmptyCapabilityOnceAnExecutorExists`（2026-10-13 补上）在**已安装执行器**的栈上走真实 `clone_dispatch`：引用由 `core.Store.ConfigureCredential` **真的创建**（不是手工 UPDATE 出来的形状），因此读到的是部署路径实际写下的三列——`attribution='unknown'`、`capabilities` 取列默认的 `[]`、`repository_scope` 为 NULL，测试逐项读回而不假设。断言该引用以 `repository_credential_capability_unsupported` 被拒（**不是**部署级码，这正是本行原先缺的区分）、执行器零调用、`clone_executions` 零行；并先断言 owner 在场且活跃、执行器已安装，否则"被拒"可能出自冻结或部署级条款。对照是同一写入路径上加授 `["clone"]` 的引用，它被准入且执行器恰好一次调用——两处各自独立场景（受控租约与被结算为 `failed` 的 Operation 都不能复用）。**边界照实写明**：本行钉的是"引用侧拒绝在部署级拒绝不再命中时仍然成立"，它**不**表示解禁可以开始——解禁义务仍在下一行，且能力列的历史迁移义务（既有 `'[]'` 引用逐条核验）仍待解禁那次变更显式处理 | Covered |
 
 ### 决策依据
 
 凭据 ADR D11-A、D11-B 与不变量 13；Node 隔离 ADR D14-A、D14-B；仓库凭据连续性 D4（"执行计划固定引用
-身份、版本、仓库与所需能力……能力不支持时明确拒绝"）——"引用未声明能力即拒绝"这一条由**已批准**的连续
-性 D4 承载，因此它的准入证据是正式验收结果。**"该拒绝终结 Operation"这一条不同**：它由
+身份、版本、仓库与所需能力……能力不支持时明确拒绝"）——"引用未声明能力即拒绝"这一条由连续
+性 D4 承载；但那篇与其余九篇凭据 ADR 现在都是 `proposed`（见本目录 README 的「凭据 ADR 的评审
+状态」），它的准入证据因此同样只算"实现先行"，不是正式验收结果。**"该拒绝终结 Operation"这一条不同**：它由
 [把带凭据的拒绝结算为终态](../../../decisions/cloud/operation/20261012-credentialed-clone-refusal-is-terminal.md)
 （`proposed`）承载，实现已先行，因此本文件只在证据表里如实登记并加 `未裁决` 标注，不把它记为正式验收
-结果。能力词汇表已于 2026-10-12 批准并进入 `approved`（见
+结果。能力词汇表已于 2026-10-12 经项目负责人裁决，但评审未走完、现为 `proposed`（见
 [仓库凭据能力词汇表](../../../decisions/cloud/identity-access/20261012-repository-credential-capability-vocabulary.md)）；
 词汇表自身的承诺与其迁移义务登记在
 [凭据能力词汇表](repository-credential-capability-vocabulary.md)，本条只登记今天的判定与证据。

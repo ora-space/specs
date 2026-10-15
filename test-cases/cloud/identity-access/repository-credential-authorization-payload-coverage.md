@@ -1,8 +1,8 @@
 # 授权载荷的覆盖范围：决定"克隆什么"的值必须被签名或被权威行复核
 
 依据[仓库凭据的能力词汇表](../../../decisions/cloud/identity-access/20261012-repository-credential-capability-vocabulary.md)
-（`approved`）与[用户托管的 Git 凭据](../../../decisions/cloud/identity-access/20261010-user-managed-git-credentials.md)
-D4（`approved`）。本文件登记**签名载荷覆盖到哪些输入**这一条承诺，以及一个已登记但尚未闭合的缺口：
+（`proposed`）与[用户托管的 Git 凭据](../../../decisions/cloud/identity-access/20261010-user-managed-git-credentials.md)
+D4（`proposed`）。本文件登记**签名载荷覆盖到哪些输入**这一条承诺，以及一个已登记但尚未闭合的缺口：
 带凭据 clone 的分支经 `cloneexec.Job.Branch` 传输而**不在签名内**。
 
 能力词汇表本身登记在[凭据能力词汇表](repository-credential-capability-vocabulary.md)；秘密的承载、兑换与

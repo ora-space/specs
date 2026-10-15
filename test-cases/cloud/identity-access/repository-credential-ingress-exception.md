@@ -1,7 +1,7 @@
 # 个人 HTTPS Git Token 的受限 Ingress 例外
 
 依据[凭据规则受限例外](../../../decisions/cloud/identity-access/20261010-user-managed-git-token-ingress-rule-exception.md)
-（`approved`，2026-10-10 落地到 `cloud/AGENTS.md`）与
+（`proposed`，2026-10-10 落地到 `cloud/AGENTS.md`）与
 [`cloud/AGENTS.md`](../../../../cloud/AGENTS.md) 中的原条目。本文件登记**规则侧的窄例外**及其边界：
 Token 只能从一个位置、以一个身份被接收，必须在同请求内转交，请求体不得进入任何诊断面，且原规则的
 其余部分逐字继续有效。
@@ -179,7 +179,7 @@ SSH 私钥与团队共享凭据失去了默认禁止来源；或者例外被静�
 | 修订为纯追加、原句逐字保留 | `git -C cloud diff --numstat AGENTS.md` 仍为 24 行新增、0 行删除（2026-10-10 复核）。该证据是差异评审，不是测试，因此这里不记为测试证据 | Partial |
 | 例外范围未被扩张 | 尚无把 `cloud/AGENTS.md` 的例外边界与 D2 表逐行比对的自动化检查。相关事实证据：`internal/core/git_credentials.go` 的凭据写入路径把 `purpose` 固定为 `'git'`，`TestGitCredentialCreateHandsTheTokenOverAndKeepsOnlyMetadata` 断言该值，因此该接收面无法承载其他凭据类型 | Partial |
 | 不放宽相邻规则 | 本轮补上的否决测试：`integration.git_credential_ingress_test.go` 的 `TestGitCredentialIngressReachesOnlyPersonalCredentials` 在**调用者自己拥有、且与自己同租户**的两条记录上断言两条承载 Token 的改写路由（`PUT` 轮换、`DELETE` 撤销）都返回 `404 not_found`——一条是 `ConfigureCredential` 写出的 `unknown` 归属（部署托管／服务账号令牌的形态），一条是同形记录把归属改成 `team`（共享凭据的形态）。这正是条件 5"不适用于服务账号令牌、团队共享凭据"的机械形态：归属是 PostgreSQL 状态而不是调用者的自述，因此"服务与终端用户凭据相互独立"与"授权只来自已验证 claim 与当前 PostgreSQL 状态"两条相邻规则在**同一组请求**上被同时钉住。测试同时断言拒绝不扰动被命名的行（`availability`／`version`／`secret_ref` 逐项不变）、不写 `idempotency_records`、**不触达凭据服务**（转交计数在拒绝前后为零），因此"先交接再报 404"这一最坏形态被排除；`TestGitCredentialIngressIsolatesOwnersAndTenants` 是同一断言的所有权一侧。第三条相邻规则（严格解码）的直接证据在本文第一个用例的两行（字段名拒绝与畸形 JSON 拒绝）。**边界照实写明**：这是一组针对具体相邻规则的行为证据，不是把例外边界与 D2 表逐行比对的自动化检查——后者的缺口记在上一行 | Covered |
-| 规则侧获批不解锁运行时 | 规则侧落地、Cloud 侧 ingress 与独立 Store 都已实现之后，`integration.git_credential_binding_test.go` 的 `TestCredentialedCloneStaysRefusedOnEveryPath` 仍断言每个执行路径返回 `repository_credential_executor_unavailable`，且受控 Project 不产生 `clone_executions` 行；`integration.repository_credentials_test.go` 的 `TestCredentialedCloneRefusesMissingExecutorAndAnonymousFallback` 给出同一结论。两个测试都不区分规则落地前后，因此不算完整证据 | Partial |
+| 规则侧的裁决不解锁运行时 | 规则侧落地、Cloud 侧 ingress 与独立 Store 都已实现之后，`integration.git_credential_binding_test.go` 的 `TestCredentialedCloneStaysRefusedOnEveryPath` 仍断言每个执行路径返回 `repository_credential_executor_unavailable`，且受控 Project 不产生 `clone_executions` 行；`integration.repository_credentials_test.go` 的 `TestCredentialedCloneRefusesMissingExecutorAndAnonymousFallback` 给出同一结论。两个测试都不区分规则落地前后，因此不算完整证据 | Partial |
 
 ### 决策依据
 

@@ -7,11 +7,11 @@
 架构边界和不变量来自
 [外部身份由 Gateway 归一，Cloud 保持授权权威](../../../decisions/cloud/identity-access/0-gateway-mediated-external-identity.md)。
 
-用户托管的仓库凭据（HTTPS Git Token）于 2026-10-10 随四份 ADR 进入 `approved`，其核心用例登记在
+用户托管的仓库凭据（HTTPS Git Token）由 2026-10-10 的四份 ADR 承载，其核心用例登记在
 [凭据元数据](repository-credential-metadata.md)、[凭据 Ingress 受限例外](repository-credential-ingress-exception.md)、
 [凭据 Secret Store](repository-credential-secret-store.md) 与
 [仓库凭据归属连续性](repository-credential-ownership-continuity.md)。能力词汇表（`clone` 的语义、空集合
-的拒绝与迁移规则）于 2026-10-12 获批，登记在
+的拒绝与迁移规则）于 2026-10-12 经项目负责人裁决，登记在
 [凭据能力词汇表](repository-credential-capability-vocabulary.md)。签名载荷**覆盖到哪些输入**、以及
 "决定克隆什么的值必须被签名或被权威行复核"这一条，连同带凭据 clone 的分支未进签名这一已登记缺口，
 见[授权载荷的覆盖范围](repository-credential-authorization-payload-coverage.md)。执行侧的身份隔离见
@@ -38,24 +38,24 @@ Credential Service 已经落地，证据集中在 `integration.git_credentials_t
 `PrepareMirrorsOnce` 循环真实驱动，`broker-resolver` 证书由 `compose/clone-executor-setup.sh` 真实签发，
 启用镜像通道的隔离栈上已有一轮真实 Cloud 进程签发 → 真实 Store 兑换 → 私有上游抓取的端到端证据
 （代码仓库 `docs/internal-git-server-mirror-acceptance.md`）。镜像通道是**另一套部署状态**：凭据只在执行器
-手里用一次，Node 拿到的是内部地址，从未接触上游凭据，所以它不改变本文件其余各项的判断。能力词汇表已于 2026-10-12 裁决并进入 `approved`：
+手里用一次，Node 拿到的是内部地址，从未接触上游凭据，所以它不改变本文件其余各项的判断。能力词汇表已于 2026-10-12 经项目负责人裁决：
 **当时**词汇表保持 `["clone"]`，那次不引入 `read`、不开放 `push`，候选验证复用受限 `clone`；旧式
 `capabilities=[]` 引用走**逐条核验 + 逐条显式迁移**（不得批量授权，无法证明授权依据者保持冻结），
 实现与既有行的迁移落在解禁那次变更里。**「不开放 `push`」这一半已于 2026-10-13 被下一段那篇决策取代**
 （`read` 仍未引入，迁移一侧仍 `Missing`）。推送一侧由独立的
-[推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`approved` 2026-10-12，
-E 不批准）承载，其核心用例登记在
+[推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md)（`proposed` 2026-10-12，
+E 不同意；待评审）承载，其核心用例登记在
 [推送执行权限核心用例](../../node/repository/push-execution-authority.md)：**2026-10-13 已按实测逐行重估**——
 原先写在那里的「除'推送不可被请求'与'helper 精确到 host＋path 的作用域校验'两条外，其余全部为 `Missing`」
 不再成立；今天的状态是读向的 helper 作用域、写向的准入／签发／执行／兑换各在容器级或进程内取得直接证据，
-未取得的部分逐条列在该文件文末的 D9 表里。规则侧获批、Cloud 侧落地与新能力码都不解除任何拒绝。
+未取得的部分逐条列在该文件文末的 D9 表里。规则侧的裁决、Cloud 侧落地与新能力码都不解除任何拒绝。
 
-**2026-10-13 新增并已获批、且当天已实现的一篇决策**：
+**2026-10-13 新增、当天即已实现、但评审未走完的一篇决策**：
 [`push` 进入能力词汇表](../../../decisions/cloud/identity-access/20261013-push-capability-vocabulary-extension.md)
-（`approved` 2026-10-13，A–G 全部按建议批准）把 `push` 加入枚举的规则写定，并写定端到端写入协议（一个
-upstream、一个 ref、一对提交、一次人工授权、只由身份 C 执行）；同一次批准还修订了
+（`proposed` 2026-10-13，A–G 全部按建议同意）把 `push` 加入枚举的规则写定，并写定端到端写入协议（一个
+upstream、一个 ref、一对提交、一次人工授权、只由身份 C 执行）；同一次裁决还修订了
 [推送执行权限](../../../decisions/node/repository/20261012-push-execution-authority.md) 的两处绑定项与结果
-语义（该 ADR 正文已按它自己的前向注记约定同步）。**它已不再是"规则获批但行为不变"**：同日两个提交
+语义（该 ADR 正文已按它自己的前向注记约定同步）。**它已不再是"规则待定但行为不变"**：同日两个提交
 把它落成实现——`16e0c40` 把词汇表扩成 `["clone","push"]` 并同步公开契约枚举、在准入／签发／执行／兑换
 四处强制点上就位，`2bd610d` 落成单次授权的签发、受控执行与五态结算。因此本文件上面两段里
 「词汇表保持 `["clone"]`」「`push` 仍不在词汇表中」「推送一侧其余全部为 `Missing`」这三句
@@ -64,10 +64,24 @@ upstream、一个 ref、一对提交、一次人工授权、只由身份 C 执�
 [推送执行权限核心用例](../../node/repository/push-execution-authority.md) 已按实测逐行重估。
 **生产行为仍未改变**：`CLOUD_CLONE_DISPATCH_PUSH_ENABLED` 与执行器的 push root 都只出现在验收专用的
 隔离 overlay 里，生产 `compose.yaml` 未动，四处强制点在生产配置下逐位不变，D9 九条里也仍有
-三条只到 `Partial`（其中一条是实测到的产品缺陷）。该 ADR 的核心测试用例按 `specs/AGENTS.md` 在获批后
-补充——本目录尚未新建独立文件，其写向义务目前登记在
+三条只到 `Partial`（其中一条是实测到的产品缺陷）。该 ADR 的核心测试用例是在它当时被标为 `approved`
+的阶段补充的（现在随它一并待评审）——本目录尚未新建独立文件，其写向义务目前登记在
 [推送执行权限核心用例](../../node/repository/push-execution-authority.md) 与
 [凭据能力词汇表](repository-credential-capability-vocabulary.md) 两处。
+
+## 凭据 ADR 的评审状态（2026-10-15）
+
+本目录涉及凭据的十篇 ADR 原先标着 `approved`，那些状态来自运行 issue `ora-space/circus#29` 里的授权
+记录，**不是 specs 的 PR 评审结论**。2026-10-15 的审查指出这一点后，它们已一并回到 `proposed`，正文
+里的批准叙述也同步改述（按 `specs/AGENTS.md`，不能仅通过修改状态字段代替纠偏）；两条路径是否等效由
+`ora-space/circus#135` 请 owner 裁量。
+
+按本目录下面那条规则，**这十篇支撑的证据在评审通过前只算"实现先行"证据**，不得当作正式验收结果引用，
+也不得计入 Issue 验收。十篇是 `decisions/cloud/identity-access/` 的六篇（仓库凭据归属连续性、用户托管
+Git 凭据、用户托管 Git Secret Store、token 入口规则例外、能力词汇表、`push` 进入能力词汇表）与
+`decisions/node/repository/` 的四篇（受控 Node 的仓库凭据执行身份隔离、最小 clone 执行契约的凭据来源
+修订、凭据执行器的正式归属、推送执行权限）。**证据行本身不改写**：它们如实登记了今天代码里存在的直接
+证据，改的只是"这些证据能算什么"。
 
 ## 阅读与维护规则
 

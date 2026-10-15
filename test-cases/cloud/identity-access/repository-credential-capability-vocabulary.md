@@ -1,7 +1,8 @@
 # 仓库凭据的能力词汇表：只承认 `clone`、空集合继续被拒、迁移逐条授权
 
 依据[仓库凭据能力词汇表](../../../decisions/cloud/identity-access/20261012-repository-credential-capability-vocabulary.md)
-（`approved`，2026-10-12 批准：A–D 按推荐批准，E 有条件批准）。本文件登记**能力词汇表本身**的承诺：
+（`proposed`，2026-10-12 经项目负责人裁决同意：A–D 按推荐同意，E 有条件同意；那次裁决未走 specs 的
+PR 评审，本文待评审）。本文件登记**能力词汇表本身**的承诺：
 词汇表只有 `clone` 且不隐含读或推、能力是引用（而不是请求方）的属性、允许不了 clone 的引用在准入处
 被拒且不降级、以及既有 `'[]'` 引用凭什么、按什么规则才能获得一次显式授权。
 
@@ -11,19 +12,20 @@
 [Node 凭据执行身份隔离](../../node/repository/git-credential-execution-isolation.md)。本文件**不重复**
 登记这些义务，只登记词汇表一侧的判断依据。
 
-**当前实现状态（2026-10-12 批准后）**：`clone` 的词汇表、规范化与三处强制（准入、签发、执行）都已
+**当前实现状态（2026-10-12 裁决后）**：`clone` 的词汇表、规范化与三处强制（准入、签发、执行）都已
 实现，证据在 `internal/cloneauth`（`capability.go` 的 `Capabilities`／`CanonicalCapabilities`）、
 `internal/core/repository_credentials.go`、`internal/cloneexec/executor.go` 与各自的测试。仍然
 `Missing` 的是**迁移一侧**：`ConfigureCredential` 的 `INSERT` 还不含 `capabilities` 列（列默认 `'[]'`
 生效），因此"部署托管创建路径显式声明 `clone`"与"既有 `'[]'` 引用逐条核验后迁移"都还没有实现，
-按 ADR 落地顺序第 3 步与解禁那次变更同批落地。批准本身**不解除任何 fail-closed**：带凭据的 clone 在
-每个执行路径上继续被拒绝。
+按 ADR 落地顺序第 3 步与解禁那次变更同批落地。那次裁决本身**不解除任何 fail-closed**：带凭据的
+clone 在每个执行路径上继续被拒绝。
 
 ## The Capability Vocabulary Admits Only Clone And Never Implies Read Or Push
 
 > **2026-10-13 的状态说明（只在此处登记，标题与索引链接逐字保留）**：标题里的 "Admits Only Clone"
 > 描述的是 `2026-10-12` 那次决策定下的词汇表。当天晚些时候，[能力词汇表扩展](../../../decisions/cloud/identity-access/20261013-push-capability-vocabulary-extension.md)
-> 按本文件自己的规则（"加宽词汇表是一次决策而不是一次编辑"）被独立裁决为 `approved`，词汇表因此
+> 按本文件自己的规则（"加宽词汇表是一次决策而不是一次编辑"）被独立裁决（那篇同样保持 `proposed`，
+> 评审未走完），词汇表因此在代码上
 > 变成 `["clone","push"]`，`push` 已不是词汇表外的成员。**标题因此命名的是一个已经结束的状态**，
 > 但它要守的承诺没有结束，只是**从"只有一个成员"变成"恰好是决策所固定的那组成员"**——`read`／
 > `write`／`fetch`／`pull`／`admin` 与一切拼写变体仍然在任何时候都不被接受，加宽仍然必须先有一篇决策。
@@ -75,7 +77,7 @@
 
 ### 决策依据
 
-能力词汇表 ADR 的 A、B 两项（批准记录），D1 与 D2；不变量 1、2、6。
+能力词汇表 ADR 的 A、B 两项（裁决结论），D1 与 D2；不变量 1、2、6。
 
 ## A Reference That Permits No Clone Is Refused Before The Executor Is Asked
 
