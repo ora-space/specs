@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: approved
 ---
 
 # 定时任务以持久定义产生幂等触发，执行归属在创建时确定且不支持切换
@@ -9,14 +9,11 @@ status: proposed
 旧任务。`local` 只在 Desktop 进程运行时触发；`cloud` 由服务端拥有未来触发，因此 Desktop 关闭后仍可运行。两种模式
 共享任务定义、occurrence 和运行状态的语义，各自持久化，不把浏览器计时器、内存状态或示例模板当作执行事实。
 
-本 ADR 处于 `proposed`。它定义 Scheduled Task 新领域的执行归属、持久状态与分阶段交付边界，只冻结共用语义与本地
+本 ADR 处于 `approved`。它定义 Scheduled Task 新领域的执行归属、持久状态与分阶段交付边界，冻结共用语义与本地
 模式，不宣称 Cloud 调度、远程凭据、计费或任意 Workflow 已经交付。Cloud 首期的无头单会话 API 与权限校验作为
-`decisions/cloud/` 下的独立 ADR 推进，不依赖 #60/#67 的 Server Workflow 执行链；只有该 Cloud 契约和真实执行适配器
-就绪后，`cloud` 才能成为可选值。Cloud 触发已发布 Workflow 则是依赖 #67 的后续阶段。
-
-> 本版依据 issue #84 的成员评审意见修订：删除执行归属切换握手，幂等键改为 `taskId + scheduledAt`，补触发迟到与
-> 睡眠唤醒的 missed 规则，Cloud 部分收缩为另行决策，并按补充评审冻结本地数据驻留默认（不上传、不要求登录）。
-> 最终以 owner 拍板结论为准。
+`decisions/cloud/` 下的独立 ADR 推进，不依赖 ora-space/circus#60 / ora-space/circus#67 的 Server Workflow 执行链；只有
+该 Cloud 契约和真实执行适配器就绪后，`cloud` 才能成为可选值。Cloud 触发已发布 Workflow 则是依赖
+ora-space/circus#67 的后续阶段。
 
 ## 决策
 
@@ -80,12 +77,12 @@ manual occurrence，不冒充原计划时间。未来若增加 catch-up，必须
 支持迁移为 `local`；需要更换执行位置时，复制成新任务并停用旧任务。
 Cloud 首期的未来 occurrence 由 Cloud 持久调度器产生，并以本 ADR 的 `(taskId + scheduledAt)` 规则在 Cloud 侧幂等
 接纳。首期只调用 D3 所述的无头 Prompt 单会话链：保存及每次触发均校验目标 Project、模型配置和无人值守授权；不接入
-#60/#67 的 Server Workflow 执行链，也不解析 `executorSlot`。Cloud 的任务登记、存储、取消、状态读取、授权、通知、发起者
+ora-space/circus#60 / ora-space/circus#67 的 Server Workflow 执行链，也不解析 `executorSlot`。Cloud 的任务登记、存储、取消、状态读取、授权、通知、发起者
 归属与费用，以及无头会话 API 细节由独立 `decisions/cloud/` ADR 定义，本决策不预置协议。
 
 Cloud 定时运行的默认超时为 60 分钟；超时取消依赖 Cloud 侧的取消写入者。该写入者就绪前，`cloud` 不得成为可选执行归属。
 
-Cloud 触发已发布 Workflow 是第二阶段能力，等待 #67 的结论及 Workflow server 执行链落地后再提出。该阶段每次触发按
+Cloud 触发已发布 Workflow 是第二阶段能力，等待 ora-space/circus#67 的结论及 Workflow server 执行链落地后再提出。该阶段每次触发按
 任务所有者的个人执行器槽位映射解析执行器；不得复用其他用户的映射。所需槽位缺失时，该次触发明确失败并通知任务所有者。
 
 在 Cloud 首期 ADR 获批且真实无头单会话链路就绪之前，Desktop 可以展示 `cloud` 模式及其说明，但必须标为不可用，不能
@@ -123,7 +120,8 @@ Scheduled Run 至少关联 task、revision、occurrence、目标运行/session I
 local 不记录账号身份或 Cloud 授权引用。保存 local 任务时检查目标项目目录存在、是 Git 仓库且模型配置可用；每次接纳
 时再次检查，失败则该 occurrence 以明确失败结束，不换用其他模型。Cloud 首期保存及每次接纳均检查该 Prompt 运行需要的
 目标 Project、模型配置与无人值守授权；失败时明确结束，不回退到 local，也不涉及 Workflow 的执行器槽位。Cloud 的创建者、
-Workspace、模型凭据、费用与无头会话权限细节由独立 Cloud ADR 定义；第二阶段 Workflow 执行再继承 #67 的最终契约。
+Workspace、模型凭据、费用与无头会话权限细节由独立 Cloud ADR 定义；第二阶段 Workflow 执行再继承
+ora-space/circus#67 的最终契约。
 
 首版唯一的无人值守工具批准策略是 `full_auto_in_worktree`：只在独立 worktree 中运行，运行时工具调用全自动批准。
 创建任务时必须以清晰风险说明取得用户显式同意，并将策略名与同意时间随任务持久化；说明至少覆盖 worktree 不是沙箱、
@@ -167,9 +165,11 @@ agent 仍可执行任意命令并读写 worktree 外文件、可使用本机凭�
 - 三种受限周期规则的精确结构化字段与表单交互。
 - 本地 Workflow revision 目标属于后续扩展。
 - 更细的无人值守工具批准策略取值、worktree 的数量上限，以及与现有 Session approval 行为的迁移关系。
-- Cloud 首期无头单会话的公开 API、存储、调度、通知与配额，作为 `decisions/cloud/` 下的独立 ADR 提出，不以 #67
+- Cloud 首期无头单会话的公开 API、存储、调度、通知与配额，作为 `decisions/cloud/` 下的独立 ADR 提出，不以
+  ora-space/circus#67
   为前置条件；该 ADR 细化 issue 绑定方式、任务所有者个人模型在创建运行时的锁定、仅匿名公开 Git 与任务所有者费用归属。
-- Cloud 触发已发布 Workflow 的目标冻结、Start 参数校验及执行器槽位映射，作为第二阶段能力，等待 #67 及 Workflow
+- Cloud 触发已发布 Workflow 的目标冻结、Start 参数校验及执行器槽位映射，作为第二阶段能力，等待
+  ora-space/circus#67 及 Workflow
   server 执行链落地后另立 ADR。
 - 本地与 Cloud 任务数据的互通边界：Desktop 任务列表是否合并展示 Cloud 任务、Cloud 网页端对两类任务与运行历史的
   可见与管理范围、运行历史的跨端展示位置，以及跨执行位置复制任务携带的数据范围。本地侧默认（只存本机、不上传、
@@ -178,7 +178,7 @@ agent 仍可执行任意命令并读写 worktree 外文件、可使用本机凭�
 
 ## 核心测试用例
 
-按仓库规则，本 ADR 状态变为 `approved` 后在 `test-cases/desktop/core/scheduled-task/` 补充核心用例。至少覆盖：
+本 ADR 的核心用例维护在 `test-cases/desktop/core/scheduled-task/`。至少覆盖：
 受限周期的三种结构化规则可完整校验，且每 N 小时拒绝小于 1 小时的间隔；同一 occurrence 重放只接纳一次；Desktop
 关闭期间 local 不执行且重启记录 missed；实际触发晚于 `scheduledAt`
 超过 10 分钟记 `missed` 且不执行、10 分钟内迟到照常执行；manual run 不冒充计划触发；运行中到期产生
@@ -202,6 +202,6 @@ Project、模型和无人值守授权，不解析 Workflow 或执行器槽位；
    missed、独立 worktree 执行、全局并发上限、`skip_if_running` 和真实 ExecutionTarget adapter；没有真实
    adapter 时不得把模拟运行作为 MVP 完成。
 4. **cloud / first phase**：以 `decisions/cloud/` 下的独立 ADR 定义无头 Prompt 单会话的 API、权限与持久化；复用
-   IssueRun / Thread 真实执行链并验证后，开放 `cloud` 选择，不以 #60/#67 为前置条件。
-5. **cloud / second phase**：#67 及 Workflow server 执行链落地后，另立 ADR 支持 Cloud 触发已发布 Workflow，并按
+   IssueRun / Thread 真实执行链并验证后，开放 `cloud` 选择，不以 ora-space/circus#60 / ora-space/circus#67 为前置条件。
+5. **cloud / second phase**：ora-space/circus#67 及 Workflow server 执行链落地后，另立 ADR 支持 Cloud 触发已发布 Workflow，并按
    任务所有者的个人执行器槽位映射解析执行器。
