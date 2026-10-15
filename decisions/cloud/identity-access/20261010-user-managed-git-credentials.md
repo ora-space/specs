@@ -1,5 +1,5 @@
 ---
-status: approved
+status: proposed
 ---
 
 # 用户自助 HTTPS Git 凭据用于私有仓库 Clone：Cloud 只保管引用与授权，秘密由独立 Secret Store 承担，Node 认证通道获批前保持 fail-closed
@@ -14,12 +14,14 @@ version／Workspace／execution 逐次签发，持有 credential ID 本身不取
 `cloud/AGENTS.md` 正式修订建议；(2) `secret_ref` 到 Controller 的投影裁决；(3) 解除
 `repository_credential_executor_unavailable` 的**全部**前置条件。秘密的存储载体、服务间认证与跨存储
 一致性由 [用户 Git Token 由独立 Credential Service 承载](20261010-user-managed-git-secret-store.md)
-（`approved`）定义；Node 侧的身份边界、秘密数据流与验收义务由
+（`proposed`）定义；Node 侧的身份边界、秘密数据流与验收义务由
 [受控 Node 的仓库凭据执行使用独立 OS 身份](../../node/repository/20261010-controlled-node-git-authentication-isolation.md)
-（`approved`）定义。本文不重复它们的结论。
+（`proposed`）定义。本文不重复它们的结论。
 
-本文于 2026-10-10 经项目负责人批准，状态为 `approved`；**批准确认的是决策内容，既不表示已经实现，
-也不解除任何 fail-closed 门禁**。Node 认证通道的进程隔离方案已同时获批，但
+本文的内容已由项目负责人在运行 issue `ora-space/circus#29` 的授权中确认方向，但**尚未经过 specs
+的 PR 评审**，按 `specs/AGENTS.md` 保持 `proposed`，评审通过后再据此标记 `approved`。**该授权确认的是
+决策内容，既不表示已经实现，也不解除任何 fail-closed 门禁**。Node 认证通道的进程隔离方案方向已同时
+确认，但
 `requireRepositoryAccess` 的 `repository_credential_executor_unavailable` 拒绝路径继续有效，直到
 D11-B 的全部条件满足为止。本文不授权实现变更，不改写任何已应用的 migration，不修改任何 approved ADR
 的决策。
@@ -34,7 +36,7 @@ GitHub App、fetch/pull/push、团队共享凭据与 ownership transfer 的迁�
 
 | 前序约定 | 出处 | 本文处理 |
 |---|---|---|
-| `credential_refs` 的归属、可用性与冻结语义已由 `0023` 交付；`attribution`／`availability`／`repository_scope`／`capabilities` 六列、两个冻结触发器、恢复扫描与两处引用列的历史来源与既有行为 | [仓库凭据归属连续性](20261010-repository-credential-ownership-continuity.md)（approved，本叶子前序决策）D1–D6 | 继承，不变：本文不改变冻结、归属与可用性语义，只在其上追加"秘密的持久化载体、逐次授权通道与 Node 侧隔离"。本文 D2 对 `attribution='personal'` 的收窄与 D5 的撤销语义都必须与补录的既有判定相容 |
+| `credential_refs` 的归属、可用性与冻结语义已由 `0023` 交付；`attribution`／`availability`／`repository_scope`／`capabilities` 六列、两个冻结触发器、恢复扫描与两处引用列的历史来源与既有行为 | [仓库凭据归属连续性](20261010-repository-credential-ownership-continuity.md)（proposed，本叶子前序决策）D1–D6 | 继承，不变：本文不改变冻结、归属与可用性语义，只在其上追加"秘密的持久化载体、逐次授权通道与 Node 侧隔离"。本文 D2 对 `attribution='personal'` 的收窄与 D5 的撤销语义都必须与补录的既有判定相容 |
 | 用户 Git 提交身份由用户自助维护（`GET/PUT/DELETE /api/v1/me/git-identity`），且用户级 Git 材料不得随 `users` 整行流向无关读者 | [20260928 用户 Git 提交身份](20260928-user-git-commit-identity.md)（proposed） | 继承，不变：本文的凭据同样是"用户自助的 Git 材料"，同样只经专用端点写入、不进入公开响应与普通读取路径。该 ADR 的存储形态与快照时点与当前实现存在偏差，已在 P0 报告中另行提出修订建议，本文不据此改变任何结论 |
 | Cloud 只提供 credential reference，由基础设施注入，Cloud 不保存密钥值 | [cloud/operation 根决策](../operation/0-workspace-runtime-follows-desktop-node.md)（implemented）D2 | 继承，不变；本文细化"基础设施"的形态、授权粒度与失败语义 |
 | Cloud 只持有凭据引用、不持有密钥 | [cloud/operation 20260926](../operation/20260926-require-concrete-default-branch.md)（implemented） | 继承，不变 |
@@ -45,7 +47,7 @@ GitHub App、fetch/pull/push、团队共享凭据与 ownership transfer 的迁�
 | 凭据只保存引用、类型、范围、能力、版本及可用性；成员离开原子冻结 `personal`／`unknown`；`team` 不因旧 owner 离开冻结；重新加入不自动解冻 | `cloud/docs/runtime-control.md`、`0023` 迁移 | 继承，不变；本文不改变冻结与归属连续性语义 |
 | Credentials remain infrastructure references. Never accept, persist, log, return, or commit raw … repository credentials | `cloud/AGENTS.md`（仓库级硬约束，119-123 行） | **修改**：接受用户 PAT 直接改变该规则，必须走正式修订；**权威修订正文由 [凭据规则受限例外](20261010-user-managed-git-token-ingress-rule-exception.md) 承载**（本文 D3 只陈述需求与理由，并链接该文）。原规则其余部分全部保留 |
 | 仓库凭据引用属于 Project 聚合 | `decisions/cloud/README.md`（`project` 领域范围） | **已裁决（人工）：本叶子三份凭据决策保留在 `identity-access`。** 该裁决优先于 README 对 `project` 领域的措辞；是否同步调整 README 的领域描述另见"本决策未解决的问题" |
-| `secret_ref` 是不透明定位标识，不是 bearer token；解析需同时具备 Cloud 逐次授权与 Store 服务身份；写入／撤销与解析分权 | [用户 Git Token 由独立 Credential Service 承载](20261010-user-managed-git-secret-store.md)（approved）D3、D9 | 继承，不变；本文只决定 Cloud 侧是否把该引用投影给 Controller（D9） |
+| `secret_ref` 是不透明定位标识，不是 bearer token；解析需同时具备 Cloud 逐次授权与 Store 服务身份；写入／撤销与解析分权 | [用户 Git Token 由独立 Credential Service 承载](20261010-user-managed-git-secret-store.md)（proposed）D3、D9 | 继承，不变；本文只决定 Cloud 侧是否把该引用投影给 Controller（D9） |
 | Broker 授权短时、单次、绑定执行与 Node 实例，且自身是秘密，不落持久介质；授权在签发时**未使用**，由 Store 在兑换时**原子消费**，消费记录持久在 Store 侧，重放一律拒绝 | 同上 D5、D10 | 继承，不变；消费侧的校验与强制由 node/repository 20261010 定义，`broker-resolver` 服务身份由凭据执行身份 C 持有（Node ADR D15）。Cloud 侧只负责签发，并在每次签发前重新校验归属、冻结、版本与执行状态 |
 
 ## 背景与现状
@@ -156,14 +158,14 @@ log, return, or commit raw … repository credentials."* 与本功能的产品�
 不能靠实现绕过。
 
 **权威修订正文不在此处**：[凭据规则受限例外](20261010-user-managed-git-token-ingress-rule-exception.md)
-（approved）承载这次修订的正文——一段只覆盖"已认证且已授权的用户提交的、**属于自己**的个人 HTTPS
+（proposed）承载这次修订的正文——一段只覆盖"已认证且已授权的用户提交的、**属于自己**的个人 HTTPS
 Git Token"的窄例外，附五个缺一不可的条件（用户与归属边界、端点与位置唯一、同请求转交且 Cloud 不持久化、
 请求体不进日志与错误上下文、不得扩张到其他秘密对象），并逐条列出例外**不**覆盖的对象（部署私钥、
 对象存储凭据、服务账号令牌、SSH 私钥、生成的测试密钥、团队共享凭据）。本文不复制该正文，以免同一段
 规则出现两个权威副本。
 
-本文只固定这条约束与本功能的关系：**在修订被批准并落地之前，该例外不构成任何实现前提**，本功能的
-fail-closed 门禁保持有效；修订获批也**不**解锁运行时——凭据 clone 的解禁仍需满足 D11-B 的全部条件。
+本文只固定这条约束与本功能的关系：**在修订通过评审并落地之前，该例外不构成任何实现前提**，本功能的
+fail-closed 门禁保持有效；规则侧落地也**不**解锁运行时——凭据 clone 的解禁仍需满足 D11-B 的全部条件。
 
 ### D4：Clone 许可逐次签发，持有 credential ID 不等于取得秘密
 
@@ -200,12 +202,12 @@ GitHub／GitLab 侧仍然有效，泄露后的可用期由该 PAT 自身的有�
 - 结论：**任何 git 能读到的凭据，Agent 代码也能读到**。今天不存在"给 git 一个秘密而 Agent 读不到"
   的机制——这不是配置疏漏，而是当前身份模型的结构性结果。
 
-因此本 ADR 明确要求：在 Node 侧隔离被批准并验证之前，不得解除
+因此本 ADR 明确要求：在 Node 侧隔离方案获评审通过并验证之前，不得解除
 `repository_credential_executor_unavailable`。Node 侧的身份边界、秘密数据流与失败语义由
 [受控 Node 的仓库凭据执行使用独立 OS 身份](../../node/repository/20261010-controlled-node-git-authentication-isolation.md)
-（`approved`）定义；本 ADR 只负责 Cloud 侧的凭据元数据、逐次授权与冻结语义，不重复其结论。
-该 Node 侧决策已获批，但本节的门禁**不因获批而解除**——D11-B 要求的是可直接指向的证据，而证据尚未
-产生。
+（`proposed`）定义；本 ADR 只负责 Cloud 侧的凭据元数据、逐次授权与冻结语义，不重复其结论。
+该 Node 侧决策的方向已由 `ora-space/circus#29` 确认，但本节的门禁**不因方向确认而解除**——D11-B
+要求的是可直接指向的证据，而证据尚未产生。
 
 无论最终采用哪种隔离形态，都必须额外验证 Git 的 HTTP 重定向、`http.proxy`、子进程环境继承、
 `GIT_CONFIG_GLOBAL`／`core.askPass` 继承与 `credential.helper` 匹配等边界，并证明普通
@@ -343,17 +345,17 @@ owner 与 Project owner 不同的凭据**。这与 V1 的 `personal` 单仓库�
 
 #### A. 开发准入（进入实际开发所需）
 
-全部是规范与契约条件，**不依赖任何尚未实现的测试结果**。**六项均已于 2026-10-10 满足**；满足准入
-不代表任何一项功能启用条件（B 段）已经成立：
+全部是规范与契约条件，**不依赖任何尚未实现的测试结果**。**六项的规范工作已经做完，但结论要随相关
+ADR 通过 specs 评审一并生效**；满足准入不代表任何一项功能启用条件（B 段）已经成立：
 
 | # | 条件 | 判定方式 | 状态 |
 |---|---|---|---|
-| A1 | 相关 ADR 正式批准 | 本叶子四份（本文、Secret Store、`0023` 补录、凭据规则例外）与 Node 隔离 ADR 均为 `approved` | **已满足（2026-10-10）** |
-| A2 | Cloud Token Ingress 的仓库级规范例外生效 | [凭据规则受限例外](20261010-user-managed-git-token-ingress-rule-exception.md) 已按批准文本落地到 `cloud/AGENTS.md`（英文例外段落作为原条目续段追加，原句逐字保留） | **已满足（2026-10-10）** |
-| A3 | Node D2 amendment 生效 | [最小 clone 执行契约 D2 的凭据来源修订](../../node/repository/20261010-minimal-clone-execution-contract-credential-source-amendment.md) 已批准，且该链的阅读入口已同步 | **已满足（2026-10-10）** |
-| A4 | Secret Store 后端与密钥责任确定 | Secret Store ADR D1／D2／D8 的后端选型、独立持久卷布局与 KEK 交付介质已裁决 | **已满足（2026-10-10）**（具体选型仍是实现期决定） |
-| A5 | M／W／C 信任边界确定 | Node 隔离 ADR D1、D15 与本文 D6 已获批准：三者互不相同、`broker-resolver` 由 C 持有而非 M、M 不解析秘密 | **已满足（2026-10-10）** |
-| A6 | API、数据兼容与 Broker 授权契约确定 | 凭据元数据 API 形状、权威绑定列与两列冲突拒绝（D7／D10）、`secret_ref` 投影收口（D9）、授权的绑定项与**兑换时原子消费**语义（Secret Store D5／D10）已冻结 | **已满足（2026-10-10）** |
+| A1 | 相关 ADR 完成 specs 评审并标记 `approved` | 本叶子四份（本文、Secret Store、`0023` 补录、凭据规则例外）与 Node 隔离 ADR 的**方向**已由 `ora-space/circus#29` 确认，但都没有走完 specs 的 PR 评审，现全部保持 `proposed` | **未满足：待评审** |
+| A2 | Cloud Token Ingress 的仓库级规范例外生效 | [凭据规则受限例外](20261010-user-managed-git-token-ingress-rule-exception.md) 的例外文本已随 cloud#64 落进 `cloud/AGENTS.md`（英文例外段落作为原条目续段追加，原句逐字保留），但承载它的 ADR 仍是 `proposed`，这段例外的去留取决于 `ora-space/circus#135` 的裁决 | **部分满足：文本已落地，规则尚未定案** |
+| A3 | Node D2 amendment 生效 | [最小 clone 执行契约 D2 的凭据来源修订](../../node/repository/20261010-minimal-clone-execution-contract-credential-source-amendment.md) 方向已确认，但仍是 `proposed`；该链阅读入口的注记按评审意见撤回，改由 `20260918` 标题下的 `> 历史决策：` 指向本文 | **未满足：待评审** |
+| A4 | Secret Store 后端与密钥责任确定 | Secret Store ADR D1／D2／D8 的后端选型、独立持久卷布局与 KEK 交付介质已裁决 | **已裁决，随该 ADR 的评审一并生效**（具体选型仍是实现期决定） |
+| A5 | M／W／C 信任边界确定 | Node 隔离 ADR D1、D15 与本文 D6 已按 `ora-space/circus#29` 的授权确认方向：三者互不相同、`broker-resolver` 由 C 持有而非 M、M 不解析秘密 | **已裁决，随相关 ADR 的评审一并生效** |
+| A6 | API、数据兼容与 Broker 授权契约确定 | 凭据元数据 API 形状、权威绑定列与两列冲突拒绝（D7／D10）、`secret_ref` 投影收口（D9）、授权的绑定项与**兑换时原子消费**语义（Secret Store D5／D10）已按上述授权写定 | **已裁决，随相关 ADR 的评审一并生效** |
 
 #### B. 功能启用（解除 fail-closed）
 
@@ -403,7 +405,7 @@ owner 与 Project owner 不同的凭据**。这与 V1 的 `personal` 单仓库�
 8. `secret_ref` 只在 Cloud 与 Credential Service 之间流动：不进入公开响应、不由客户端提交、不投影给
    Controller（按 D9 停止填充并置空）、不作为 URL 或 query 的一部分。
 9. 两个绑定列冲突时必须显式拒绝，不得静默选择其一。
-10. 在 Node 侧认证材料对 Agent 进程不可读的隔离被批准并验证之前，
+10. 在 Node 侧认证材料对 Agent 进程不可读的隔离获评审通过并验证之前，
     `repository_credential_executor_unavailable` 保持有效；移除它必须满足 D11-B 的全部条件。
 11. 公开仓库匿名 Clone、既有 Workspace 恢复与清理行为不因本决策回归。
 12. 不修改已应用的 migration；所有 schema 演进是前向、可重试的 SQL。
@@ -448,9 +450,9 @@ owner 与 Project owner 不同的凭据**。这与 V1 的 `personal` 单仓库�
 - **领域归属已裁决，README 措辞是否同步待定**：本叶子的三份凭据决策保留在 `identity-access`（人工裁决，
   见"继承与修改"）。但 `decisions/cloud/README.md` 仍把"凭据引用"划归 `project`，与该裁决的措辞不一致；
   是否调整 README 的领域描述、以及跨叶子引用是否需要标注，留待人工裁决。
-- **`0023` 的持久语义已补录为已批准决策**：`attribution`／`availability`／`repository_scope`／
+- **`0023` 的持久语义已补录为独立决策（待评审）**：`attribution`／`availability`／`repository_scope`／
   `capabilities` 与两个冻结触发器的规则原先只存在于 `cloud/docs/runtime-control.md` 与迁移正文中，现已
-  由 [仓库凭据归属连续性](20261010-repository-credential-ownership-continuity.md)（approved）承载。
+  由 [仓库凭据归属连续性](20261010-repository-credential-ownership-continuity.md)（proposed）承载。
   该补录仍需评审后才能推进状态；本文的 D2／D5 与它的既有判定必须保持相容。
 - **Secret Store 的产品形态**：本地 Compose 与未来生产如何替换后端；密钥由谁持有、如何轮换与备份；
   服务重启与 Store 不可用时的确定失败语义。已由
@@ -462,13 +464,14 @@ owner 与 Project owner 不同的凭据**。这与 V1 的 `personal` 单仓库�
   无法绑定 owner 与 Project owner 不同的凭据。V1 只支持 `personal`（D2），但支持 `attribution='team'`
   共享凭据时必须重新裁决（可能需要切换到 `repository_credential_ref_id` 并补齐等价的 owner 约束）。
 - **团队凭据**：`attribution='team'` 目前没有任何产品写入路径，其授权与成员离开规则另立决策。
-- **`cloud/AGENTS.md` 例外条款的措辞终稿——已裁决（2026-10-10）**：项目负责人批准了 D3 的文本，该文本
-  已作为原条目续段写入 `cloud/AGENTS.md`；仓库文件为英文，只有英文段落进入规则文件。
+- **`cloud/AGENTS.md` 例外条款的措辞终稿——方向已确认，去留待裁决**：项目负责人确认了 D3 的文本方向，
+  该文本已作为原条目续段写入 `cloud/AGENTS.md`；仓库文件为英文，只有英文段落进入规则文件。这段例外
+  是否保留，取决于 `ora-space/circus#135` 的裁决。
 
 ### `0023` 持久语义的最小补录范围（已按此范围起草）
 
 补录一份 Cloud ADR 承载"仓库凭据归属连续性"这一件事即可，**不把 Runtime Control 的历史设计一并纳入**。
-草案见 [仓库凭据归属连续性](20261010-repository-credential-ownership-continuity.md)（approved）。范围仅限：
+草案见 [仓库凭据归属连续性](20261010-repository-credential-ownership-continuity.md)（proposed）。范围仅限：
 
 1. `credential_refs` 的 `attribution`／`attribution_basis`／`availability`／`unavailable_reason`／
    `repository_scope`／`capabilities` 六列的语义与允许取值。
@@ -484,18 +487,20 @@ owner 与 Project owner 不同的凭据**。这与 V1 的 `personal` 单仓库�
 ## 落地顺序
 
 每一步都可独立验收。第 1 步即 **D11-A 开发准入**，它不要求任何实现或测试证据；第 6 步的解除
-fail-closed 属于 **D11-B 功能启用**，两者不可互相替代。**D11-A 已于 2026-10-10 全部满足，第 2 步
-之后可以开始；但没有任何一步已经开始，D11-B 的九项也一项都没有证据。**
+fail-closed 属于 **D11-B 功能启用**，两者不可互相替代。**D11-A 的文本已就绪，但结论尚未生效**——
+相关 ADR 保持 `proposed`，等 specs 评审通过；**没有任何一步已经开始，D11-B 的九项也一项都没有证据。**
 
-1. **规范与补录（= D11-A 开发准入）——已完成（2026-10-10）**：领域归属（保留在 `identity-access`）
+1. **规范与补录（= D11-A 开发准入）——文本已就绪，等 specs 评审**：领域归属（保留在 `identity-access`）
    与权威列（D7）两项裁决不变。六份决策——本文、[Secret Store ADR](20261010-user-managed-git-secret-store.md)、
    [仓库凭据归属连续性](20261010-repository-credential-ownership-continuity.md)（`0023` 补录）、
    [凭据规则受限例外](20261010-user-managed-git-token-ingress-rule-exception.md)（`cloud/AGENTS.md`）、
    [最小 clone 执行契约 D2 的凭据来源修订](../../node/repository/20261010-minimal-clone-execution-contract-credential-source-amendment.md)
    与 [受控 Node 的仓库凭据执行使用独立 OS 身份](../../node/repository/20261010-controlled-node-git-authentication-isolation.md)
-   ——已全部 `approved`；两项 amendment 已落地到目标文件（`cloud/AGENTS.md` 追加例外段落；`20260918`
-   侧阅读入口同步）。本步不产生任何代码或测试证据，**因此它的完成不构成任何实现或解禁的依据**；
-   A4–A6 三项契约（Secret Store 后端与密钥责任、M／W／C 信任边界、API 与授权契约）已随上述决策裁决。
+   ——方向已由 `ora-space/circus#29` 确认，但**都还没有走完 specs 的 PR 评审，现全部保持 `proposed`**；
+   两项 amendment 的文本已落到目标文件（`cloud/AGENTS.md` 追加例外段落；`20260918` 标题下的
+   `> 历史决策：` 指向本文），其去留随评审结论定。本步不产生任何代码或测试证据，**因此它的完成不构成
+   任何实现或解禁的依据**；A4–A6 三项契约（Secret Store 后端与密钥责任、M／W／C 信任边界、API 与授权
+   契约）已按上述授权写定。
 2. **Cloud 侧元数据与授权（不触碰秘密）**：凭据元数据 CRUD（不含 Token 读取）、scope 规范化、
    D8 的审计字段写入、D4 的逐次授权。完成条件：真实 PostgreSQL 覆盖 owner／tenant 隔离、冻结、
    不自动解冻、scope 不匹配、版本绑定、重放与失败回滚。此时 `repository_credential_executor_unavailable`
@@ -508,7 +513,7 @@ fail-closed 属于 **D11-B 功能启用**，两者不可互相替代。**D11-A �
    `credential_ref_id` 为准、删除回退，并加入两列冲突拒绝。完成条件：Cloud→Controller 的 JSON 与 gRPC
    快照中 `secretRef`／`credential_ref` 均为空且有回归证据（旧、新 Controller 各一次）；Controller 只
    看到权威列 `credentialRefId`；两列冲突有直接测试证据。
-5. **Node 认证通道**：按 D6 获批的隔离方案实现，并同步修订 Node D2 与相关 approved 契约。
+5. **Node 认证通道**：按 D6 定下的隔离方案实现，并同步修订 Node D2 与相关既有契约。
    完成条件：受控私有 Git fixture 的真实端到端 Clone，且证明普通 Agent 进程无法读取认证材料。
    注意 Node 侧的第一阶段只建立身份边界与启动闸门（
    [受控 Node 的仓库凭据执行使用独立 OS 身份](../../node/repository/20261010-controlled-node-git-authentication-isolation.md)

@@ -32,9 +32,9 @@ Desktop 严格只读、凭据物化不经 argv／环境（`node/repository/20261
 | 同上 D5：Node 执行 Git 访问，经 `-c http.sslCert/sslKey/sslCAInfo` 与 `-c http.extraHeader` 传入证书 | **修改**：Node 不执行任何带凭据或带身份的 Git 访问；内部只读通道不带凭据、不带证书、不带 header（D4、D7、D9） |
 | 同上 D6：两个监听，仓库监听只面向沙盒网络，ref 查询监听只面向默认网络 | 继承（D2、D10） |
 | 同上 D7：本阶段不改与用户上游仓库的关系 | **修改**：本文正是该文"本决策未解决的问题"里挂起的"镜像上游、Node 改从 Git Server clone"那一篇；上游凭据仍只由 C 持有，用户上游的写方向仍不开放（D1、D8） |
-| [受控 Node 的 Git 认证隔离](../../node/repository/20261010-controlled-node-git-authentication-isolation.md)（approved）D1–D4、D11 与不变量 1–13：W／C／M 三身份、凭据只对 C 开放、物化不经环境与 argv、`repository identity` 决定范围 | 继承，原文不变。本文不新增任何凭据、任何物化位置、任何身份；内部通道不物化秘密（不变量 7） |
-| [凭据执行器归属](../../node/repository/20261012-credential-executor-belongs-to-the-current-product.md)（approved）D1、D2：C 是当前产品内的独立部署单元；Desktop 严格只读、不承载凭据执行 | 继承，不变：镜像上游的带凭据 Git 执行仍然只属于 C，且发生在 C 自己的容器里（D1、D2） |
-| [Secret Store](../identity-access/20261010-user-managed-git-secret-store.md)（approved）D3：只有服务身份可兑换，单次授权、原子消费 | 继承，不变 |
+| [受控 Node 的 Git 认证隔离](../../node/repository/20261010-controlled-node-git-authentication-isolation.md)（proposed）D1–D4、D11 与不变量 1–13：W／C／M 三身份、凭据只对 C 开放、物化不经环境与 argv、`repository identity` 决定范围 | 继承，原文不变。本文不新增任何凭据、任何物化位置、任何身份；内部通道不物化秘密（不变量 7） |
+| [凭据执行器归属](../../node/repository/20261012-credential-executor-belongs-to-the-current-product.md)（proposed）D1、D2：C 是当前产品内的独立部署单元；Desktop 严格只读、不承载凭据执行 | 继承，不变：镜像上游的带凭据 Git 执行仍然只属于 C，且发生在 C 自己的容器里（D1、D2） |
+| [Secret Store](../identity-access/20261010-user-managed-git-secret-store.md)（proposed）D3：只有服务身份可兑换，单次授权、原子消费 | 继承，不变 |
 | [模型客户端身份](../../cluster/sandbox-server/20261010-model-client-identity-replaces-shared-model-key-injection.md)（approved）D1、D2：按租户、Workspace、代次另签 `clientAuth` 身份，材料只作 Docker 私有启动材料、由 entrypoint 存入管理 tmpfs | 该决策本身不变；本文**不使用**同一机制承载 Git 读取，理由见 D4 与"为什么不是这些替代方案"：该材料必须对执行 git 的身份可读，而该身份与工作负载同 uid |
 | [仓库凭据连续性](../project/20260927-repository-credential-continuity.md)（approved）D4：执行端真正按引用选择，不回退全局静态凭据 | 继承：镜像路径同样不接受口令、静态 token 或匿名访问上游（不变量 9） |
 | [Node 的最小 clone 执行契约](../../node/repository/20260918-minimal-clone-execution-contract.md)与 Node Cloud 策略：只允许 HTTPS，禁止 SSH 与静态凭据 helper | 继承，不变；本文不新增任何凭据来源，反而删去了一种（D9） |

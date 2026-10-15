@@ -1,5 +1,5 @@
 ---
-status: approved
+status: proposed
 ---
 
 # 受控 Node 的仓库凭据执行使用独立 OS 身份，Agent 工作负载不得与之同身份
@@ -9,7 +9,7 @@ status: approved
 `git`、读取文件系统与环境变量，也读不到凭据材料，也不能兑换 Broker 授权。
 
 > **阅读入口（后续决策）**：本 ADR 的 D1 把 C 描述为受控 Node 容器内的第三个 OS 身份。
-> [凭据执行器归属当前正式产品](20261012-credential-executor-belongs-to-the-current-product.md)（`approved`）
+> [凭据执行器归属当前正式产品](20261012-credential-executor-belongs-to-the-current-product.md)（`proposed`）
 > 把 C 的实现归属调整为**当前正式产品的独立部署单元**，并逐项说明 D1、D8、D12 与 `20260925` 的继承或
 > 形态差异。D2–D7、D9–D11、D13–D17 的规则本身不变；凡本 ADR 以"容器内第三个 UID"表述的地方，当前
 > 形态以该后续决策为准。
@@ -56,9 +56,11 @@ Node 之外的独立部署单元，Node 内今天仍然没有 C。）
 `crates/process-runtime` 与 `crates/process`（进程身份与 IPC），以及 sandbox-server 的容器创建约束；
 `crates/gitlancer` 的 clone 命令行约束继续沿用。
 
-本文于 2026-10-10 经项目负责人批准，状态为 `approved`；**批准确认的是决策内容与其安全边界，既不表示
-已经实现，也不解除任何 fail-closed**。本文的核心测试用例已按 `specs/AGENTS.md` 同步补齐，证据状态如实
-标注为 `Missing`——隔离、物化与销毁都还没有实现，因此本文的落地顺序第 2 步及之后都还没有证据。
+本文的内容已由项目负责人在运行 issue `ora-space/circus#29` 的授权中确认方向，但**尚未经过 specs
+的 PR 评审**，按 `specs/AGENTS.md` 保持 `proposed`，评审通过后再据此标记 `approved`。**该授权确认的是
+决策内容与其安全边界，既不表示已经实现，也不解除任何 fail-closed**。核心用例已按本文的方向先行登记，
+证据状态如实标注为 `Missing`——隔离、物化与销毁都还没有实现，因此本文的落地顺序第 2 步及之后都还没有
+证据。
 
 兼容性边界：本 ADR 不改变 clone 的对外协议（`CloneExecutionSpec` 仍只有 `node_id`／`repository`／
 `branch`）、不改写 Node 数据库 schema、不改变已实现的 clone 收尾与 `Interrupted` 判定、不解除
@@ -77,7 +79,7 @@ D1 表中的四条，其中并不包含"M 读不到 W 或 C"。
 | 前序决策 | 处理 |
 |---|---|
 | [根决策](0-clone-selected-repository-branch.md)：目标、职责，以及"当前信任本机 Node…不据此认定私有 Git 仓库无需凭据" | 继承，不变 |
-| [最小 clone 执行契约](20260918-minimal-clone-execution-contract.md) D2：「HTTPS 可使用部署已配置的非交互凭据来源」，凭据由 Node 部署提供 | **修改**：凭据来源扩展为按 clone 单次授权的动态来源；部署只提供固定的 helper 程序与配置引用。该修改的**权威正文**由 [最小 clone 执行契约 D2 的凭据来源修订](20261010-minimal-clone-execution-contract-credential-source-amendment.md)（approved）承载，`20260918` 正文不改写 |
+| [最小 clone 执行契约](20260918-minimal-clone-execution-contract.md) D2：「HTTPS 可使用部署已配置的非交互凭据来源」，凭据由 Node 部署提供 | **修改**：凭据来源扩展为按 clone 单次授权的动态来源；部署只提供固定的 helper 程序与配置引用。该修改的**权威正文**由 [最小 clone 执行契约 D2 的凭据来源修订](20261010-minimal-clone-execution-contract-credential-source-amendment.md)（proposed）承载，`20260918` 正文不改写 |
 | 同上不变量 4：凭据不经业务消息、命令文本、日志或结果传播 | 继承，不变；本 ADR 把禁止面扩展到进程环境、文件描述符、磁盘、`.git/config` 与 Broker 授权载体 |
 | 同上 D4：禁用 hooks 不等于沙盒，可信部署需明确允许的辅助程序 | 继承，不变；本 ADR 把它变成落地要求（helper 必须白名单化） |
 | [clone 副作用移出受理 worker](20260925-clone-git-effects-run-outside-the-admission-worker.md)：执行器只做 host 交互 | 继承，不变 |
@@ -86,8 +88,8 @@ D1 表中的四条，其中并不包含"M 读不到 W 或 C"。
 | [显式纳管与清理证据](../process/containment/guarantees/0-explicit-containment-and-cleanup-evidence.md) D3：纳管范围不扩展为所有外部副作用 | 继承，不变；本 ADR 不宣称阻止网络外发 |
 | [Docker 沙盒生命周期经 Substrate 生效](../../cluster/sandbox-server/20260926-docker-sandbox-lifecycle-via-substrate-effects.md) 不变量 7：Sandbox Server 不执行 Git、不注入凭据 | 继承，不变；并因此否决 sidecar 形态 |
 | [minicloud 本机 Web 客户端内嵌 Controller](../../minicloud/runtime/0-local-web-client-embedded-controller.md)：「私有仓库凭据仍由 Node 的既有部署提供，不在浏览器收集」 | **历史契约，不需 amendment**：该条限定在 minicloud 本机开发边界内（同段声明 minicloud 不投产、不建认证体系），而 minicloud 已整体退役（[退役决策](../../minicloud/runtime/20260928-retire-minicloud.md)，`implemented`，不变量 1：仓库中不再有浏览器直连 Controller 的入口）。它不约束当前 Cloud 的凭据功能；适用范围见 [Cloud ADR](../../cloud/identity-access/20261010-user-managed-git-credentials.md) 的继承表 |
-| [用户 Git Token 由独立 Credential Service 承载](../../cloud/identity-access/20261010-user-managed-git-secret-store.md)（approved）D3、D5、D10：解析需要 Store 侧 `broker-resolver` 服务身份**加上** Cloud 签发的单次授权，两者由 Store 自己校验；授权在签发时未使用、由 Store 在**兑换时原子消费**，消费记录持久在 Store 侧，重放一律拒绝 | 继承，不变；本 ADR 定义**消费**侧的校验与强制——凭据执行身份 C 持有解析服务身份并出示授权（D15），Cloud 的业务进程与 M 都不解析秘密；未拿到秘密的失败一律申请新授权（D5） |
-| [仓库凭据归属连续性](../../cloud/identity-access/20261010-repository-credential-ownership-continuity.md)（approved）D3、D4：成员／用户停用原子冻结 `personal`／`unknown`，重新加入不自动解冻 | 继承，不变；本文 D5 只定义消费侧的强制（冻结后拒绝签发新授权、已签发未使用的授权随到期失效），不新增冻结规则 |
+| [用户 Git Token 由独立 Credential Service 承载](../../cloud/identity-access/20261010-user-managed-git-secret-store.md)（proposed）D3、D5、D10：解析需要 Store 侧 `broker-resolver` 服务身份**加上** Cloud 签发的单次授权，两者由 Store 自己校验；授权在签发时未使用、由 Store 在**兑换时原子消费**，消费记录持久在 Store 侧，重放一律拒绝 | 继承，不变；本 ADR 定义**消费**侧的校验与强制——凭据执行身份 C 持有解析服务身份并出示授权（D15），Cloud 的业务进程与 M 都不解析秘密；未拿到秘密的失败一律申请新授权（D5） |
+| [仓库凭据归属连续性](../../cloud/identity-access/20261010-repository-credential-ownership-continuity.md)（proposed）D3、D4：成员／用户停用原子冻结 `personal`／`unknown`，重新加入不自动解冻 | 继承，不变；本文 D5 只定义消费侧的强制（冻结后拒绝签发新授权、已签发未使用的授权随到期失效），不新增冻结规则 |
 
 ## 背景与现状
 
@@ -454,20 +456,24 @@ clone 由 C 执行，但 checkout 最终要交给 W 使用（Agent 的会话工�
 一致，本 ADR 把门禁拆成两套，两者**互不替代**：准入完成不解除任何 fail-closed，验收证据也不能在
 准入之前产生。
 
-**A. 开发准入**——进入实现所需，全部是规范与契约条件，**不依赖任何尚未实现的端到端测试结果**：
+**A. 开发准入**——进入实现所需，全部是规范与契约条件，**不依赖任何尚未实现的端到端测试结果**。
+六项的规范工作已经做完，但结论要随相关 ADR 通过 specs 评审一并生效：
 
-1. 相关 ADR 正式批准：本 ADR、Cloud 侧三份凭据决策与 `0023` 补录。**已完成（2026-10-10）**。
-2. Cloud Token Ingress 的仓库级规范例外生效（`cloud/AGENTS.md`）。**已完成（2026-10-10）**：英文例外
-   段落已作为原条目续段追加，原句与测试密钥、日志脱敏两句逐字保留。
-3. Node D2 amendment 生效（最小 clone 执行契约的凭据来源修订），且该链的阅读入口已同步。
-   **已完成（2026-10-10）**。
+1. 相关 ADR 完成 specs 评审并标记 `approved`：本 ADR、Cloud 侧三份凭据决策与 `0023` 补录。方向已由
+   `ora-space/circus#29` 确认，评审未走完，**六份现均为 `proposed`。待评审**。
+2. Cloud Token Ingress 的仓库级规范例外生效（`cloud/AGENTS.md`）。**文本已随 cloud#64 落地**：英文例外
+   段落已作为原条目续段追加，原句与测试密钥、日志脱敏两句逐字保留；承载它的 ADR 仍是 `proposed`，
+   去留取决于 `ora-space/circus#135`。**规则尚未定案**。
+3. Node D2 amendment 生效（最小 clone 执行契约的凭据来源修订）。方向已确认，但该 amendment 仍是
+   `proposed`；该链阅读入口的注记按评审意见撤回，改由 `20260918` 标题下的 `> 历史决策：` 指向它。
+   **待评审**。
 4. Secret Store 的后端与密钥责任确定
    （[Secret Store ADR](../../cloud/identity-access/20261010-user-managed-git-secret-store.md) D1／D2／D8）。
-   **已完成（2026-10-10）**：该 ADR 已获批；后端可替换是部署属性，具体选型仍是实现期决定，不阻塞准入。
-5. M／W／C 信任边界确定：D1、D15 与 Cloud ADR D6 已获批准——三者互不相同、`broker-resolver` 由 C
-   持有而非 M、M 不解析秘密。**已完成（2026-10-10）**。
+   **已裁决，随该 ADR 的评审一并生效**：后端可替换是部署属性，具体选型仍是实现期决定，不阻塞准入。
+5. M／W／C 信任边界确定：D1、D15 与 Cloud ADR D6 已按 `ora-space/circus#29` 的授权确认方向——三者互不
+   相同、`broker-resolver` 由 C 持有而非 M、M 不解析秘密。**已裁决，随相关 ADR 的评审一并生效**。
 6. API、数据兼容与 Broker 授权契约确定：授权绑定与**兑换时的原子消费**（D3、D5 与 Secret Store D10）、
-   凭据审计列与权威绑定列的裁决（Cloud ADR D7／D8／D10）。**已完成（2026-10-10）**。
+   凭据审计列与权威绑定列的裁决（Cloud ADR D7／D8／D10）。**已裁决，随相关 ADR 的评审一并生效**。
 
 **B. 功能启用**——解除 `repository_credential_executor_unavailable`：下节验收义务**全部**有可直接指向
 的证据，且与 Cloud ADR D11-B 的每一项**同时**满足。**不得仅因为本文档存在、或测试文件存在，就认为
@@ -708,9 +714,10 @@ A 类通道与 Agent 的既有工作流必须照常工作。
 
 ## 落地顺序
 
-**D14-A 开发准入已于 2026-10-10 满足**（六份 ADR 获批、`cloud/AGENTS.md` 例外落地、D2 amendment 生效）；
-下列步骤就此可以开始，但**没有任何一步已经开始**。D14-B 的验收义务只在对应步骤完成后才可能产生证据，
-不得倒过来用"还没跑端到端测试"阻止准入，也不得反过来因为准入满足就认为证据已经存在。
+**D14-A 开发准入的文本已就绪，但结论尚未生效**——六份 ADR 保持 `proposed`，等 specs 评审通过；
+`cloud/AGENTS.md` 的例外文本已落地、D2 amendment 的方向已确认。**没有任何一步已经开始**。D14-B 的
+验收义务只在对应步骤完成后才可能产生证据，不得倒过来用"还没跑端到端测试"阻止准入，也不得反过来因为
+准入就绪就认为证据已经存在。
 
 1. **身份边界与启动闸门（不接凭据，范围由 D17 限定）**：让 Agent 以非特权身份 W 运行，建立并固定
    凭据执行身份 C（非 0、与 W 和 M 都不同），按 D11 准备 C 的目录与权限；加入 D9／D14-B 的启动拒绝；
@@ -729,8 +736,8 @@ A 类通道与 Agent 的既有工作流必须照常工作。
    [Cloud 侧 D11-B](../../cloud/identity-access/20261010-user-managed-git-credentials.md) 与本 ADR D14-B
    的义务全部满足后，按最终实现更新本 ADR 状态、补核心用例。`20260918` D2 的 amendment 已由
    [最小 clone 执行契约 D2 的凭据来源修订](20261010-minimal-clone-execution-contract-credential-source-amendment.md)
-   承载，**已于 2026-10-10 获批并生效**（该链的阅读入口已同步）；本步剩下的是在 D11-B／D14-B 满足后
-   解除 fail-closed。`node/process/control/0-…` D2 的 amendment 仍待起草
+   承载，**方向已由 `ora-space/circus#29` 确认，但仍是 `proposed`**（该链的阅读入口以
+   `> 历史决策：` 指向它）；本步剩下的是在 D11-B／D14-B 满足后解除 fail-closed。`node/process/control/0-…` D2 的 amendment 仍待起草
    （minicloud 相关决策已随其退役成为历史契约，不在此列）。验收：义务 11、15、16。
 
 每一步都保持已实现的行为不变：clone 的对外协议、目录分配、收尾屏障、`Interrupted` 判定、

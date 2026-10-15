@@ -1,5 +1,5 @@
 ---
-status: approved
+status: proposed
 ---
 
 # 用户 Git Token 由独立可替换的 Credential Service 承载：Cloud 只经受限 Ingress 写入并按 clone 单次签发 Broker 授权，`secret_ref` 本身不构成取用秘密的能力
@@ -9,10 +9,11 @@ status: approved
 认证、跨两个存储的创建／轮换／撤销一致性、后端不可用时的失败语义、审计与脱敏、备份与密钥轮换，以及
 `secret_ref` 为什么不是 bearer token。Broker 授权是 Cloud 与 Node 之间的交付载体：**签发**规则在本文，
 **消费**规则在 [受控 Node 的仓库凭据执行使用独立 OS 身份](../../node/repository/20261010-controlled-node-git-authentication-isolation.md)
-（`approved`）。
+（`proposed`）。
 
-本文于 2026-10-10 经项目负责人批准，状态为 `approved`；**批准确认的是决策内容与其安全边界，既不表示
-已经实现，也不解除任何 fail-closed 门禁**。`requireRepositoryAccess` 的
+本文的内容已由项目负责人在运行 issue `ora-space/circus#29` 的授权中确认方向，但**尚未经过 specs
+的 PR 评审**，按 `specs/AGENTS.md` 保持 `proposed`，评审通过后再据此标记 `approved`。**该授权确认的是决策内容
+与其安全边界，既不表示已经实现，也不解除任何 fail-closed 门禁**。`requireRepositoryAccess` 的
 `repository_credential_executor_unavailable` 拒绝路径继续有效；本文不授权实现变更，不改写任何已应用的
 migration，不修改任何 approved ADR 的状态或决策。Store、Ingress 与 Broker 都尚未实现，本文落地顺序的
 第 2 步及之后都还没有证据。
@@ -28,8 +29,8 @@ Controller 与 Node、cluster 部署（Compose）。兼容性边界：`credentia
 
 | 前序约定 | 出处 | 本文处理 |
 |---|---|---|
-| 凭据的归属、可用性与冻结语义已由 `0023` 交付；冻结只影响新的远程 Git 工作，且不因撤销而修改 `secret_ref` | [仓库凭据归属连续性](20261010-repository-credential-ownership-continuity.md)（approved）D1–D6 | 继承，不变；本文据此把"撤销的权威"固定在 Cloud 元数据上，并要求 Store 侧的删除失败不得使凭据重新可用（D4） |
-| Cloud 只持有凭据引用、不持有密钥值；`credential_refs` 是唯一业务主表 | [用户自助 HTTPS Git 凭据](20261010-user-managed-git-credentials.md)（approved）D1 | 继承，不变；本文细化 `secret_ref` 的定位语义与解析权归属 |
+| 凭据的归属、可用性与冻结语义已由 `0023` 交付；冻结只影响新的远程 Git 工作，且不因撤销而修改 `secret_ref` | [仓库凭据归属连续性](20261010-repository-credential-ownership-continuity.md)（proposed）D1–D6 | 继承，不变；本文据此把"撤销的权威"固定在 Cloud 元数据上，并要求 Store 侧的删除失败不得使凭据重新可用（D4） |
+| Cloud 只持有凭据引用、不持有密钥值；`credential_refs` 是唯一业务主表 | [用户自助 HTTPS Git 凭据](20261010-user-managed-git-credentials.md)（proposed）D1 | 继承，不变；本文细化 `secret_ref` 的定位语义与解析权归属 |
 | Token 只经受限 Secret Ingress 进入 Secret Store；Cloud 业务库、公开响应、业务事件、Controller／Node 常规消息、持久日志、审计记录与 Workspace 文件都不得持久化 Token | 同上 D3 | 继承并展开：本文定义 Store 的信任边界、加密、服务认证与跨存储一致性 |
 | Clone 许可逐次签发，绑定 tenant／owner／project／规范化仓库／credential id／version／workspace／execution，持有 credential ID 不等于取得秘密 | 同上 D4 | 继承；本文把"许可"具体化为 Broker 授权的载体、单次使用与 fencing 规则 |
 | 撤销经 `availability` 表达；`credential_refs.deleted_at` 在明确语义前不承担删除职责 | 同上 D5、不变量 7 | 继承，不变；本文据此把"撤销的权威"固定在 Cloud 元数据上，使 Store 备份恢复不能复活凭据 |
@@ -37,7 +38,7 @@ Controller 与 Node、cluster 部署（Compose）。兼容性边界：`credentia
 | Cloud 只提供 credential reference，由基础设施注入，Cloud 不保存密钥值 | [cloud/operation 根决策](../operation/0-workspace-runtime-follows-desktop-node.md)（implemented）D2 | 继承，不变；本文把"基础设施"具体化为可替换的 Credential Service，并规定它的服务边界 |
 | 凭据不经业务消息、命令文本、日志或结果传播；认证不依赖人机交互 | [最小 clone 执行契约](../../node/repository/20260918-minimal-clone-execution-contract.md)（approved）D2、不变量 4 | 继承，不变；本文把禁止面扩展到 Store 的审计、备份与 Broker 授权载体 |
 | bearer 凭据只在内存，不进 ledger、日志或 `Debug`；重启后重新申请 | `apps/ora-node/src/revision/grants.rs:3`（upload grant 的既有形态） | 继承其形态；Broker 授权沿用同一形态，因此授权本身按秘密处理 |
-| Credentials remain infrastructure references. Never accept, persist, log, return, or commit raw … repository credentials | `cloud/AGENTS.md`（仓库级硬约束，119-123 行） | **修改**：范围受限的正式 amendment 由 [凭据规则受限例外](20261010-user-managed-git-token-ingress-rule-exception.md)（approved）承载正文，并已于 2026-10-10 落地到 `cloud/AGENTS.md`；本文只承担"Cloud 不持久化 Token"这一侧的约束，并复用该例外的条件 3、4 作为 Ingress 与日志边界 |
+| Credentials remain infrastructure references. Never accept, persist, log, return, or commit raw … repository credentials | `cloud/AGENTS.md`（仓库级硬约束，119-123 行） | **修改**：范围受限的正式 amendment 由 [凭据规则受限例外](20261010-user-managed-git-token-ingress-rule-exception.md)（proposed）承载正文，并已于 2026-10-10 落地到 `cloud/AGENTS.md`；本文只承担"Cloud 不持久化 Token"这一侧的约束，并复用该例外的条件 3、4 作为 Ingress 与日志边界 |
 
 ## 背景与现状
 
@@ -345,15 +346,15 @@ Store 只接受服务身份（mTLS 加固定服务证书，与 Node 侧 `secured
 
 每一步都可独立验收。第 1 步即**开发准入**（[Cloud ADR](20261010-user-managed-git-credentials.md) D11-A
 的定义适用于本叶子全部凭据决策）；第 6 步的解除 fail-closed 属于**功能启用**（D11-B），两者不可互相
-替代——准入完成不解除任何 fail-closed。**准入已于 2026-10-10 满足，Node 侧隔离方案也已 `approved`，
-因此下列步骤可以开始；但没有任何一步已经开始。**
+替代——准入完成不解除任何 fail-closed。**准入的规范工作已经做完，但结论尚未生效**——相关 ADR 保持
+`proposed`，等 specs 评审通过；**没有任何一步已经开始。**
 
-1. **规范与补录——已完成（2026-10-10）**：领域归属与 `secret_ref` 生成权已裁决（保留 `identity-access`；
+1. **规范与补录——文本已就绪，等 specs 评审**：领域归属与 `secret_ref` 生成权已裁决（保留 `identity-access`；
    生成权归 Store），后端替换边界已定（可替换是部署属性），具体选型仍待裁决；`cloud/AGENTS.md` 的
    范围受限 amendment 正文由
-   [凭据规则受限例外](20261010-user-managed-git-token-ingress-rule-exception.md)（approved）承载并已落地，
+   [凭据规则受限例外](20261010-user-managed-git-token-ingress-rule-exception.md)（proposed）承载并已落地，
    `0023` 的既有语义由
-   [仓库凭据归属连续性](20261010-repository-credential-ownership-continuity.md)（approved）承载。本步
+   [仓库凭据归属连续性](20261010-repository-credential-ownership-continuity.md)（proposed）承载。本步
    不产生任何代码或测试证据，**因此不构成实现或解禁的依据**；第 2 步尚未开始。
 2. **Store 骨架与密钥边界（不接用户 Token）**：服务身份、KEK 交付、加密封装、启动拒绝与审计骨架。
    完成条件：无 KEK 时启动拒绝；单独导出数据库或数据目录都无法解密；日志与错误中无秘密。

@@ -89,9 +89,9 @@ T4 把取得验收的希望放在正式 [Git Server 通道](../../cloud/git-serv
   `-c http.sslCert=… -c http.sslKey=…`、执行 id 以 `-c http.extraHeader=…` 传入。这些是 `desktop/` 侧
   的能力，今天的白名单与固定前缀都不允许（本 ADR 的 E1、E2 即该事实）。
 - 该通道与已批准决策存在两处需要裁决的关系：① [凭据执行器归属](20261012-credential-executor-belongs-to-the-current-product.md)
-  （approved）D2 与不变量 2 写的是"旧 Desktop 严格只读：不修改、不依赖、**不承载凭据执行**"，而按
+  （proposed）D2 与不变量 2 写的是"旧 Desktop 严格只读：不修改、不依赖、**不承载凭据执行**"，而按
   git-server D5 执行带凭据 Git 的正是 Node；② [隔离决策](20261010-controlled-node-git-authentication-isolation.md)
-  （approved）D11 写的是认证材料"**不由环境、argv 或跨 exec 的文件描述符传递**"，而 git-server D5 正是
+  （proposed）D11 写的是认证材料"**不由环境、argv 或跨 exec 的文件描述符传递**"，而 git-server D5 正是
   经 argv 传证书与私钥。两者都需要一篇明确的裁决或修订，不能靠沉默通过。
 - 该通道的 ADR 仍为 `proposed`，且其"未解决的问题"里包含上游镜像与 Node 从 Git Server 取回这两项——
   没有它们，Issue #16 需要的**带凭据 workspace clone 仍然不存在**。
@@ -244,12 +244,12 @@ Cloud 的执行记录；目标通道没有任何这一类秘密，因为它用�
 
 | 前序决策 | 处理 |
 |---|---|
-| [受控 Node 的仓库凭据执行使用独立 OS 身份](20261010-controlled-node-git-authentication-isolation.md)（approved）D12：clone 必须在 C 拥有、W 不可写的目标上进行；交接在 clone 完成**之后**、会话开始**之前**由 M 执行；交接前必须销毁物化；不得让 W 进入仍由 C 拥有的树 | **继承规则，形态由 D2 固定**：C 侧仍按 D12 在 C 拥有、W 不可写的目标上完成 clone，并在交接（= 发布镜像）之前销毁物化（D1）；Workspace 侧的取回是 Node 既有的匿名 clone 路径，不新增持卷者、不收养外来目录。因此 D12 在两侧都按原样成立，D6 只需重申其判据 |
+| [受控 Node 的仓库凭据执行使用独立 OS 身份](20261010-controlled-node-git-authentication-isolation.md)（proposed）D12：clone 必须在 C 拥有、W 不可写的目标上进行；交接在 clone 完成**之后**、会话开始**之前**由 M 执行；交接前必须销毁物化；不得让 W 进入仍由 C 拥有的树 | **继承规则，形态由 D2 固定**：C 侧仍按 D12 在 C 拥有、W 不可写的目标上完成 clone，并在交接（= 发布镜像）之前销毁物化（D1）；Workspace 侧的取回是 Node 既有的匿名 clone 路径，不新增持卷者、不收养外来目录。因此 D12 在两侧都按原样成立，D6 只需重申其判据 |
 | 同上 D8：V1 不引入 sidecar 容器或外部 Git 服务；禁止同一 Workspace 卷上的第二个容器；禁止让 Sandbox Server 执行 Git 或注入凭据；禁止把 Node 的 host 交互所有权让出去 | **逐条继承，其中标题级的一条在 D2 中被限定修改**：交付端点触碰"V1 不引入外部 Git 服务"，因此本文要求一份承载该修改的新决策（A 项），且把新服务限定为 D2 的四条条件（无凭据、逐次授权、无列举、用后即删）。其余三条——同一 Workspace 卷上不出现第二个容器、Sandbox Server 不执行 Git 也不注入凭据、不让出 Node 的 host 交互所有权——**全部保持**；γ 因触碰第三条被否决，β 因需要收养外来目录被否决 |
 | 同上 D10：M 是受信任管理身份（root），负责准备挂载点、`chown` 与降权；M 不读秘密本体 | **继承，不变**：α 不新增持卷者，Workspace 侧的物化就是 Node 既有的 clone 与其后的交接触发点；M 的职责与"不读秘密本体"都逐条不变（C 的物化从不出现在 Node 容器里） |
 | 同上 D11、D13：凭据材料只存在于 C 拥有、W 不可遍历、`noexec`／`nosuid`、**不在 checkout 树内**的叶子；崩溃后由启动清扫兜底 | 继承，并在容器形态下**加强为结构性要求**：物化根不得与任何会被交付通道触及的卷共卷（不变量 6） |
 | 同上 D14-A／D14-B：开发准入与功能启用是两套门禁；D14-B 义务 14 是"交接后 Agent 可正常读写工作目录而物化已不存在" | 继承，不变；义务 14 的直接证据只有在 D2 裁决并实现后才可能取得，本文不产生启用证据 |
-| [凭据执行器归属](20261012-credential-executor-belongs-to-the-current-product.md)（approved）不变量 5、6：C 不引入 sidecar、不挂载任何 Workspace 卷、不让 Sandbox Server 执行 Git | 继承，不变；本文不要求 C 取得卷访问权，交付通道必须在不给 C 挂载 Workspace 卷的前提下成立 |
+| [凭据执行器归属](20261012-credential-executor-belongs-to-the-current-product.md)（proposed）不变量 5、6：C 不引入 sidecar、不挂载任何 Workspace 卷、不让 Sandbox Server 执行 Git | 继承，不变；本文不要求 C 取得卷访问权，交付通道必须在不给 C 挂载 Workspace 卷的前提下成立 |
 | 同上 D5、落地顺序第 4 步：先裁决"checkout 如何交付到 Workspace"，再按最终实现同步本 ADR、D14-B 与 Cloud 侧 D11-B | 继承；本文即那一步的裁决材料 |
 | [最小 clone 执行契约](20260918-minimal-clone-execution-contract.md) D2（经[凭据来源修订](20261010-minimal-clone-execution-contract-credential-source-amendment.md)扩展）与[用户 Git Token 由独立 Credential Service 承载](../../cloud/identity-access/20261010-user-managed-git-secret-store.md) D3、D10：凭据按 Project 逐次授权，只交付给 C，Cloud 从不保存密钥值 | 继承，不变；交付物是**已去凭据的结果**，交付通道上不存在任何秘密 |
 | [Sandbox Server 生命周期经 Substrate 生效](../../cluster/sandbox-server/20260926-docker-sandbox-lifecycle-via-substrate-effects.md) 不变量 7：Sandbox Server 不执行 Git，不注入任何凭据 | 继承，不变：交付端点是 **Cloud 的独立部署单元**，不是 Sandbox Server；α 不让 Substrate 执行 Git，也不给它任何新的卷权限或卷职责 |

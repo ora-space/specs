@@ -1,5 +1,5 @@
 ---
-status: approved
+status: proposed
 ---
 
 # Cloud 仓库级凭据硬规则为用户个人 HTTPS Git Token Ingress 建立受限例外，原规则其余部分全部保留
@@ -11,11 +11,14 @@ credentials。用户自助 HTTPS Git 凭据的产品方向要求 Cloud 在**一�
 写明例外的生效条件。**原规则不删除、不重写、不弱化**，其对象存储凭据、部署私钥、服务账号令牌、
 SSH 私钥、团队共享凭据与测试密钥约束继续完整有效。
 
-本文于 2026-10-10 经项目负责人批准，状态为 `approved`，并已在同一次变更中据本文正文完成对
-`cloud/AGENTS.md` 的修订：D1 的五个条件已作为追加段落落在原规则之后，原规则逐字保留。**规则侧的生效
-不等于运行时解禁**：`requireRepositoryAccess` 的 `repository_credential_executor_unavailable` 无条件
-拒绝继续有效，凭据仍不得进入任何实现路径，直到 Cloud ADR D11-B 与 Node ADR D14-B 的全部条件满足。
-本文不授权任何实现变更，不修改已应用的 migration，不修改任何 approved ADR 的状态或决策。
+本文的方向已由项目负责人在运行 issue `ora-space/circus#29` 的授权中确认，但**尚未经过 specs 的 PR
+评审**，按 `specs/AGENTS.md` 保持 `proposed`，评审通过后再据此标记 `approved`。**规则修订的文本已经
+随 cloud#64 提交**：D1 的五个条件已作为追加段落落在 `cloud/AGENTS.md` 的原规则之后，原规则逐字保留；
+但承载这段正文的**本文仍是 `proposed`**，该例外是否长期保留取决于 `ora-space/circus#135` 的裁决。
+**规则文本的落地不等于运行时解禁**：`requireRepositoryAccess` 的
+`repository_credential_executor_unavailable` 无条件拒绝继续有效，凭据仍不得进入任何实现路径，直到
+Cloud ADR D11-B 与 Node ADR D14-B 的全部条件满足。本文不授权任何实现变更，不修改已应用的 migration，
+不修改其他 ADR 的状态或决策。
 
 本文的**修订对象**是 Cloud 仓库的规则文件，不是 Cloud 的运行时行为；**正文承载者**是本文，而不是
 [用户自助 HTTPS Git 凭据](20261010-user-managed-git-credentials.md) D3——后者只提出需求并链接到本文，
@@ -30,11 +33,11 @@ SSH 私钥、团队共享凭据与测试密钥约束继续完整有效。
 
 | 前序决策 | 处理 |
 |---|---|
-| [用户 Git Token 由独立 Credential Service 承载](20261010-user-managed-git-secret-store.md)（approved，本叶子前序决策）D3：Store 只接受服务身份、写入／撤销与解析分权；D9：`secret_ref` 不构成取用秘密的能力 | 继承，不变；本文规定 Cloud 侧接收 Token 的那一次调用必须走该 ADR 的 `ingress-writer` 服务身份，且接收后 Cloud 只保留元数据与 `secret_ref` |
+| [用户 Git Token 由独立 Credential Service 承载](20261010-user-managed-git-secret-store.md)（proposed，本叶子前序决策）D3：Store 只接受服务身份、写入／撤销与解析分权；D9：`secret_ref` 不构成取用秘密的能力 | 继承，不变；本文规定 Cloud 侧接收 Token 的那一次调用必须走该 ADR 的 `ingress-writer` 服务身份，且接收后 Cloud 只保留元数据与 `secret_ref` |
 | 同上不变量 1：Token 明文只存在于 Store 的加密存储与一次受限写入路径；Cloud 业务库、公开响应、业务事件、Controller／Node 常规消息、持久日志、审计记录与 Workspace 文件都不含 Token | 继承，不变；本文的例外条件 2–3 是这条不变量的规则侧投影 |
 | 同上不变量 9：审计与日志记录操作与结果，不记录秘密、密文、密钥或授权载体 | 继承，不变；例外**不**放宽日志与审计边界 |
-| [用户自助 HTTPS Git 凭据](20261010-user-managed-git-credentials.md)（approved）D3：Token 只经受限 Ingress 进入 Store，并随该文提出范围受限的硬规则修订建议 | **修改**：例外的权威正文由本文承载，该文 D3 改为链接本文；需求与理由仍由该文陈述 |
-| [仓库凭据归属连续性](20261010-repository-credential-ownership-continuity.md)（approved）D1–D6：`credential_refs` 的归属、可用性与冻结语义 | 继承，不变；例外不改变凭据的归属与可用性判定 |
+| [用户自助 HTTPS Git 凭据](20261010-user-managed-git-credentials.md)（proposed）D3：Token 只经受限 Ingress 进入 Store，并随该文提出范围受限的硬规则修订建议 | **修改**：例外的权威正文由本文承载，该文 D3 改为链接本文；需求与理由仍由该文陈述 |
+| [仓库凭据归属连续性](20261010-repository-credential-ownership-continuity.md)（proposed）D1–D6：`credential_refs` 的归属、可用性与冻结语义 | 继承，不变；例外不改变凭据的归属与可用性判定 |
 | `cloud/AGENTS.md:119-123`：Credentials remain infrastructure references. Never accept, persist, log, return, or commit raw … repository credentials | **修改（范围受限）**：追加一段只覆盖用户个人 HTTPS Git Token Ingress 的例外；原句与其后的测试密钥、日志脱敏要求全部保留 |
 
 ## 背景与现状
@@ -152,7 +155,7 @@ Token，用于绑定到自己的 Project。除此之外，Cloud 不得因为本�
   端点与位置，条件 3 对应同请求转交与不持久化，条件 4 对应日志与错误上下文，条件 5 对应对象范围。
 - 修订**不**要求、也**不**授权为实现便利而放宽任何其他仓库规则：请求严格解码、服务与终端用户凭据
   相互独立、授权只来自已验证 claim 与当前 PostgreSQL 状态等相邻规则都继续有效。
-- 修订已于 2026-10-10 生效，但**生效的是规则侧的范围声明，不是运行时的放行**：
+- 修订文本已随 cloud#64 提交进 `cloud/AGENTS.md`，但它**不是运行时的放行**：
   `repository_credential_executor_unavailable` 继续拒绝所有带凭据引用的 Project 的 clone，本文的一切
   条件都不构成实现前提。
 
@@ -160,15 +163,15 @@ Token，用于绑定到自己的 Project。除此之外，Cloud 不得因为本�
 
 - **不得扩张**：任何把例外范围扩到 D2 表中"不适用"行的改动，都必须由新的决策承载，不能以"原例外已经
   允许接收 Token"为理由顺手放宽。同样，**不得**以"已经有一个接收端点"为理由新增第二个接收位置。
-- **不得以已存在之物推导生效**：本文已 `approved`、`cloud/AGENTS.md` 也已修订，但这两件事都不构成
-  例外**已生效**或 fail-closed 已解除的证据。ADR 的状态、规则文本、测试文件的存在、或端点代码的存在，
+- **不得以已存在之物推导生效**：本文正文已写定、`cloud/AGENTS.md` 也已有例外段落，但这两件事都不构成
+  例外**已定案**或 fail-closed 已解除的证据。ADR 的状态、规则文本、测试文件的存在、或端点代码的存在，
   都不等于 D11-B／D14-B 的证据已经产生——这与
   [用户自助 HTTPS Git 凭据](20261010-user-managed-git-credentials.md) D11-B 的
   "不得仅因为 ADR 存在就移除 fail-closed" 是同一条原则。本文的落地是那道门禁的 **A2 开发准入条件**，
   属于"可以开始实现"的前提，不是"可以放行"的依据。
-- **独立性**：即使本文获批且 `cloud/AGENTS.md` 完成修订，凭据 clone 的解禁仍然要满足 Cloud ADR D11-B
+- **独立性**：即使本文通过评审且 `cloud/AGENTS.md` 保留该例外，凭据 clone 的解禁仍然要满足 Cloud ADR D11-B
   与 [受控 Node 的仓库凭据执行使用独立 OS 身份](../../node/repository/20261010-controlled-node-git-authentication-isolation.md)
-  D14-B 的**全部**条件。规则侧获批与运行时解禁是两件事，不能互相替代。
+  D14-B 的**全部**条件。规则侧定案与运行时解禁是两件事，不能互相替代。
 
 ## 不变量
 
@@ -183,7 +186,7 @@ Token，用于绑定到自己的 Project。除此之外，Cloud 不得因为本�
    `secret_ref`。
 7. 请求体不得进入访问日志、追踪 span、错误详情或崩溃报告；错误响应只携带原因码。
 8. 例外的扩张必须由新决策承载；ADR 或代码的存在不构成例外已生效或 fail-closed 已解除的证据。
-9. 规则侧获批不解锁运行时：本文的落地只是 Cloud ADR D11-A 的一个准入条件；凭据 clone 的解禁仍须满足
+9. 规则侧定案不解锁运行时：本文的落地只是 Cloud ADR D11-A 的一个准入条件；凭据 clone 的解禁仍须满足
    Cloud ADR D11-B 与 Node ADR D14-B 的全部条件。
 
 ## 为什么不是这些替代方案
@@ -197,7 +200,7 @@ Token，用于绑定到自己的 Project。除此之外，Cloud 不得因为本�
 | 允许 Cloud 先持久化 Token（哪怕是密文），稍后再交给 Store | 解耦 Cloud 与 Store 的可用性 | 与 "never persist" 直接冲突，并使 Cloud 进程成为解密能力；失败语义也失去可解释性（见 Secret Store ADR D4／D6） |
 | 把例外写成"Cloud 可接收用户凭据"而不附条件 | 正文更短 | 条件就是范围；没有条件的例外在评审中无法判断某次实现是否越界，等于把原规则整条作废 |
 | 让例外同时覆盖团队共享凭据 | 减少将来的修订次数 | 团队凭据的授权与成员离开规则尚未定义（Cloud ADR D2 明确另立决策）；在没有归属规则时放开接收会先制造无人负责的秘密 |
-| 由本文直接修改 `cloud/AGENTS.md` | 一步到位 | 已否决：在人工批准前改动仓库级硬规则，等于用未评审的文本替换已生效的约束。实际采用的是两步路径——本文承载权威正文，批准后同一次变更再据其修订 `cloud/AGENTS.md`（2026-10-10 已完成） |
+| 由本文直接修改 `cloud/AGENTS.md` | 一步到位 | 已否决：在评审通过前改动仓库级硬规则，等于用未评审的文本替换已生效的约束。实际采用的是两步路径——本文承载权威正文，评审通过后再据其修订 `cloud/AGENTS.md`（文本已随 cloud#64 提交，评审尚未完成） |
 
 ## 失败与恢复语义
 
@@ -222,7 +225,7 @@ Token，用于绑定到自己的 Project。除此之外，Cloud 不得因为本�
   当前证据状态见
   [核心用例](../../../test-cases/cloud/identity-access/repository-credential-ingress-exception.md)，
   全部为 `Missing`。
-- **修订后规则的名称——已裁决（2026-10-10）**：例外按原条目的**续段**落地，不单独命名、不新增顶层
+- **修订后规则的名称——已裁决，随本文评审生效**：例外按原条目的**续段**落地，不单独命名、不新增顶层
   条目；后续引用以本文 D1 为准，代码注释引用本文第 D1 节而非 `cloud/AGENTS.md` 的段落编号，以免行号
   漂移。
 - **多个接收端点的未来需求**：若将来需要为其他凭据类型（例如 SSH 私钥）建立接收面，必须走新的决策；
@@ -230,14 +233,16 @@ Token，用于绑定到自己的 Project。除此之外，Cloud 不得因为本�
 
 ## 落地顺序
 
-本文是规范修订，**没有实现步骤**；步骤 1、2 已于 2026-10-10 完成，步骤 3 仍需等待。
+本文是规范修订，**没有实现步骤**；步骤 1、2 的文本都已就绪，但结论要随本文的评审一并生效，步骤 3
+仍需等待。
 
-1. **人工批准例外文本——已完成（2026-10-10）**：项目负责人批准了 D1 的五个条件与 D2 的适用范围表，
-   逐条可判断，且 D2 表中每一行的归属都有明确依据。
-2. **按批准文本修订 `cloud/AGENTS.md`——已完成（2026-10-10）**：在原条目之后追加了英文段落，原句与
-   测试密钥、日志脱敏两句逐字保留；`git -C cloud diff AGENTS.md` 只包含追加，不含删除或改写。
+1. **确认例外文本（方向已确认，结论待评审）**：项目负责人确认了 D1 的五个条件与 D2 的适用范围表，
+   逐条可判断，且 D2 表中每一行的归属都有明确依据；评审通过并标记 `approved` 后才算生效。
+2. **按该文本修订 `cloud/AGENTS.md`（文本已随 cloud#64 提交，去留随评审定）**：在原条目之后追加了
+   英文段落，原句与测试密钥、日志脱敏两句逐字保留；`git -C cloud diff AGENTS.md` 只包含追加，不含
+   删除或改写。承载它的本文仍是 `proposed`，这段例外是否保留取决于 `ora-space/circus#135`。
    本步同样不产生代码或测试证据，因此不解除任何 fail-closed。
-3. **与运行时解禁解耦地推进**：规则侧修订完成**不**解除任何 fail-closed——它是 D11-A 准入条件 A2，
+3. **与运行时解禁解耦地推进**：规则侧定案**不**解除任何 fail-closed——它是 D11-A 准入条件 A2，
    而不是 D11-B 的启用证据。凭据 clone 的解禁仍须满足
    [用户自助 HTTPS Git 凭据](20261010-user-managed-git-credentials.md) D11-B 与
    [受控 Node 的仓库凭据执行使用独立 OS 身份](../../node/repository/20261010-controlled-node-git-authentication-isolation.md)

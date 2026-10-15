@@ -1,5 +1,5 @@
 ---
-status: approved
+status: proposed
 ---
 
 # 凭据执行器的正式归属：当前正式产品内的独立组件，旧 Desktop 保持只读，D8 的禁止面不变而形态不同
@@ -11,17 +11,24 @@ credential helper）、`internal/cloneauth`（授权签发与验签）与 `inter
 原子消费）。旧 Desktop 只作为**只读参考**保留 `ora-node`、`gitlancer` 与 process guardian 的既有安全
 做法，不被修改、不被依赖、也不再承载凭据执行。
 
-本文的 `status` 是 `approved`，批准依据是项目负责人 2026-10-12 的裁决：第 1 项要求"以当前正式 Cloud
-产品及其部署架构为基础，为 Git Clone 执行能力确定一个长期维护的正式代码归属，优先考虑在当前正式项目
-中建立独立执行组件，不得默认继续修改旧 Desktop"，第 2 项允许只读参考 Desktop 的 `ora-node`、
-`gitlancer` 与 process guardian 而不修改它，第 3 项批准在正式执行器中实现凭据执行身份 C、受保护的
-物化目录、部署固定的 helper、Broker Resolver mTLS 客户端与故障清理，第 6 项要求以"最小范围的后续
-ADR"承载实现归属的调整而不是改写历史决策。**本文只记录归属与形态**，不新增秘密处理规则，也不改变
-任何已批准决策的安全边界。
+本文的方向已由项目负责人在运行 issue `ora-space/circus#29` 的授权中确认，但**尚未经过 specs 的 PR
+评审**，按 `specs/AGENTS.md` 保持 `proposed`，评审通过后再据此标记 `approved`。那次授权的裁决内容
+是：第 1 项要求"以当前正式 Cloud 产品及其部署架构为基础，为 Git Clone 执行能力确定一个长期维护的
+正式代码归属，优先考虑在当前正式项目中建立独立执行组件，不得默认继续修改旧 Desktop"，第 2 项允许
+只读参考 Desktop 的 `ora-node`、`gitlancer` 与 process guardian 而不修改它，第 3 项同意在正式执行器
+中实现凭据执行身份 C、受保护的物化目录、部署固定的 helper、Broker Resolver mTLS 客户端与故障清理，
+第 6 项要求以"最小范围的后续 ADR"承载实现归属的调整而不是改写历史决策。**本文只记录归属与形态**，
+不新增秘密处理规则，也不改变任何已批准决策的安全边界。
 
-批准**不解除任何 fail-closed**：`repository_credential_executor_unavailable` 继续拒绝每一个带凭据引用的
+上述裁决**不解除任何 fail-closed**：`repository_credential_executor_unavailable` 继续拒绝每一个带凭据引用的
 Project 的 clone，本文不构成解禁依据（裁决第 8 项）。裁决第 8 项要求 D11-B 与 D14-B 的全部适用验收
 义务取得直接证据之后才可解禁，而本文 D5 列出的缺口正是那些义务中尚未取得证据的部分。
+
+**本文的去留取决于 `ora-space/circus#134`。** 审查指出本文与
+[checkout 交付到 Workspace](20261012-checkout-delivery-into-the-workspace.md)描述的路径在当前默认部署
+下走不通：配置层不允许 `git_server.sandbox_base_url` 与 `clone_dispatch.enabled` 同时启用，执行器也
+不挂载 Workspace 卷。"凭据执行器通道是否属于本期交付"是 owner 的决策——结论若是"不属于本期"，本文
+与实现一并按结论撤出；**在结论出来之前，本文不声称这条通道已经可用**。
 
 涉及的模块：Cloud 仓库的上述六个包、`cmd/clone-executor`、Cloud 的 `cmd/server` 接线
 （`internal/core` 的 `admitCredentialedClone`／`registerCredentialedClone` 与 `CloneDispatcher`）以及
@@ -34,7 +41,7 @@ migration）、旧 Desktop 仓库的内容、以及已实现的匿名 clone 与 
 
 | 前序决策 | 处理 |
 |---|---|
-| [受控 Node 的仓库凭据执行使用独立 OS 身份](20261010-controlled-node-git-authentication-isolation.md)（approved）D1：M／W／C 三者互不相同，W 与 C 非特权，M 是当前以 root 运行的受信任管理身份 | **修改实现归属**：三个身份的**语义与互异性要求不变**，但 C 不再由 Node 容器内的第三个 UID 承载，而是由独立部署单元的进程身份承载（D3）。D1 的隔离承诺表（W 读不到 C 的秘密、W 无法冒用 C 或 M、C 不拥有 M 的管理权限、M 属于可信计算基）四条**逐条继承** |
+| [受控 Node 的仓库凭据执行使用独立 OS 身份](20261010-controlled-node-git-authentication-isolation.md)（proposed）D1：M／W／C 三者互不相同，W 与 C 非特权，M 是当前以 root 运行的受信任管理身份 | **修改实现归属**：三个身份的**语义与互异性要求不变**，但 C 不再由 Node 容器内的第三个 UID 承载，而是由独立部署单元的进程身份承载（D3）。D1 的隔离承诺表（W 读不到 C 的秘密、W 无法冒用 C 或 M、C 不拥有 M 的管理权限、M 属于可信计算基）四条**逐条继承** |
 | 同上 D2：凭据执行器是部署固定的单一组件，业务请求不能指定它；helper 必须白名单化 | 继承，不变；`helper_path`／`git_path` 是执行器自己的配置项，clone 规格与 Controller 消息都不能选择它们 |
 | 同上 D3、D5、D6、D7：单次授权、单次执行绑定与重放防护、仓库范围由授权决定、隔离靠 OS 身份而非 Agent 可读的令牌 | 继承，不变；D7 的"判据是能力而非连通性"在本形态下由容器边界与 mTLS 身份共同满足（D3） |
 | 同上 D4、D9、D11、D13、D15：物化禁止面、能力不足时拒绝而不降级、C 自己解析自己物化、崩溃与超时后的清理、`broker-resolver` 由 C 持有 | 继承，不变；`internal/credentialmaterial` 与 `internal/cloneexec` 是这些规则的实现，规则本身不因归属变化而放松 |
@@ -44,14 +51,14 @@ migration）、旧 Desktop 仓库的内容、以及已实现的匿名 clone 与 
 | 同上 D17：无凭据 Git 继续使用既有身份，只有带凭据的 Git 才迁到 C | 继承，不变；执行器只处理带凭据的 clone，匿名 clone 的路径与身份逐位不变 |
 | [最小 clone 执行契约](20260918-minimal-clone-execution-contract.md) D2（经[凭据来源修订](20261010-minimal-clone-execution-contract-credential-source-amendment.md)扩展）：凭据来源为按 Project 逐次授权的动态来源，只交付给 C | 继承，不变；"只交付给 C"在本形态下由部署单元边界实现（D3） |
 | [clone 副作用移出受理 worker](20260925-clone-git-effects-run-outside-the-admission-worker.md) 与 [终止尝试判为 Interrupted](20260925-terminated-clone-attempt-fails-as-interrupted.md)：clone 的 host 交互与收尾屏障、`Interrupted` 判定 | **形态差异，如实记录**：带凭据的 clone 今天不经过 Node 的 clone 状态机，因此这两份决策的收尾屏障与 `Interrupted` 判定对它不适用；Cloud 以"注册时结果已写入"记账，销毁由执行器自己保证（D4 末段、D5） |
-| [用户 Git Token 由独立 Credential Service 承载](../../cloud/identity-access/20261010-user-managed-git-secret-store.md)（approved）D3、D5、D10：`broker-resolver` 服务身份加上 Cloud 签发的单次授权，兑换时原子消费，消费记录持久在 Store 侧 | 继承，不变；执行器是这两个凭据的第一个正式持有者，本文只确定它属于哪个仓库 |
+| [用户 Git Token 由独立 Credential Service 承载](../../cloud/identity-access/20261010-user-managed-git-secret-store.md)（proposed）D3、D5、D10：`broker-resolver` 服务身份加上 Cloud 签发的单次授权，兑换时原子消费，消费记录持久在 Store 侧 | 继承，不变；执行器是这两个凭据的第一个正式持有者，本文只确定它属于哪个仓库 |
 | [Sandbox Server 生命周期经 Substrate 生效](../../cluster/sandbox-server/20260926-docker-sandbox-lifecycle-via-substrate-effects.md) 不变量 7：Sandbox Server 不执行 Git、不注入凭据 | 继承，不变；执行器不是 Sandbox Server 的一部分，也不经它执行（D4） |
 
 ## 背景与现状
 
 ### 为什么需要这份 ADR
 
-已批准的两份 Node 决策把凭据执行写成"Node 容器内的第三个 OS 身份"：`process.workload_uid` 之外的
+两份 Node 凭据决策把凭据执行写成"Node 容器内的第三个 OS 身份"：`process.workload_uid` 之外的
 一个非 0、与 W 和 M 都不同的 UID，物化目录由入口脚本准备，helper 由部署固定在容器镜像里。那条路线
 的实现落点是 `desktop/apps/ora-node` 与 `crates/*`。但 `desktop/` 已被裁决为**历史版本、严格只读**，
 而当前正式开发项目是 `cloud/`。于是出现一个必须显式裁决的归属问题：**凭据执行器写在哪个仓库、以什么
@@ -105,13 +112,13 @@ migration）、旧 Desktop 仓库的内容、以及已实现的匿名 clone 与 
 
 ### D3：执行身份 C 由独立部署单元的进程身份承载，M／W／C 的映射随之确定
 
-| 身份 | 在正式部署中是什么 | 与已批准决策的对应 |
+| 身份 | 在正式部署中是什么 | 与先前决策的对应 |
 |---|---|---|
 | **C** | 执行器容器内运行执行器的那个非 root 身份；它拥有物化根、helper 的执行权与 `broker-resolver` 客户端证书 | 与 D1 的"凭据执行身份"语义相同：只执行带凭据的 Git 操作，不 `chown`、不 `setpriv`、不持有 `ingress-writer`／`kek-operator` 身份、不调用任何管理面 |
 | **W** | Agent 工作负载，运行在 Workspace 的沙盒容器内 | 与 D1 的 W 语义相同；它与 C **不在同一个容器**，因此不可能与 C 同身份 |
 | **M** | 部署管理：生成并交付 C 的身份材料、创建并固定物化根与 checkout 根的属主、在启动时执行清扫前置条件 | 与 D1 的 M 语义相同（准备位置与身份、不代 C 解析、不读取解析结果） |
 
-**形态差异必须如实表述**：已批准决策选择的是"同一个容器内三个互不相同的 UID"，本形态选择的是
+**形态差异必须如实表述**：先前决策选择的是"同一个容器内三个互不相同的 UID"，本形态选择的是
 "两个容器 + 各自的进程身份"。前者靠内核对端 UID 校验与文件模式强制，后者靠容器边界、卷的挂载面与
 mTLS 服务身份强制。**不能**把后者表述为"更强的隔离"：它没有减少容器内 root 的风险，也没有引入
 namespace／seccomp／只读根；它改变的是边界所在的位置。D1 的隔离承诺表四条在本形态下的对应是：
@@ -177,14 +184,14 @@ execution 时结果已经写好"（`clone_executions.result`），Node 的 clone
 7. 带凭据的 clone 不经过 Node 的 clone 状态机，因此 `20260925` 的收尾屏障与 `Interrupted` 判定对它
    不适用；"物化已销毁"由执行器在应答前保证，崩溃残留由启动清扫兜住。
 8. `repository_credential_executor_unavailable` 保持无条件拒绝；本文不产生任何解禁证据。
-9. 本文不改写任何已批准决策的正文：`20261010` 两份 Node 凭据决策与 Cloud 侧四份凭据决策的状态与
-   正文都不变，阅读它们的人应同时读到本文。
+9. 本文不改写任何其他决策的正文：`20261010` 两份 Node 凭据决策与 Cloud 侧四份凭据决策的正文都
+   保持不变，阅读它们的人应同时读到本文。
 
 ## 为什么不是这些替代方案
 
 | 方案 | 取舍 |
 |---|---|
-| 继续在 `desktop/apps/ora-node` 内实现凭据执行 | 最贴近已批准决策的原始落点；但 `desktop/` 已被裁决为历史版本并严格只读，把当前正式能力建在历史仓库上会让它随 Desktop 一起停止维护，与裁决第 1 项直接冲突 |
+| 继续在 `desktop/apps/ora-node` 内实现凭据执行 | 最贴近先前决策的原始落点；但 `desktop/` 已被裁决为历史版本并严格只读，把当前正式能力建在历史仓库上会让它随 Desktop 一起停止维护，与裁决第 1 项直接冲突 |
 | 把执行器并入 Cloud 服务进程 | 部署最简单，少一个容器；但 Cloud 业务进程会持有 `broker-resolver` 身份，任何 Cloud 侧缺陷同时暴露全部凭据，正是 Secret Store D3 与隔离决策 D15 否决的形态 |
 | 把执行器并入 Sandbox Server | 复用已有的容器管理面；直接违反 `20260926` 不变量 7（Sandbox Server 不执行 Git、不注入凭据），并让 Sandbox Server 成为凭据路径的可信计算基 |
 | 把执行器作为 Workspace 的 sidecar 容器 | 隔离更强、checkout 天然落在 Workspace 卷上；违反 D8 理由 1 与 `20260926` 不变量 7，需要 amendment 两条不变量并新增跨容器交付通道，超出本次范围 |
@@ -221,14 +228,17 @@ execution 时结果已经写好"（`clone_executions.result`），Node 的 clone
 
 ## 落地顺序
 
-1. **归属与形态记录——已完成（2026-10-12）**：本文获批，执行器的组件清单与部署形态确定。本步不产生
-   代码或测试证据，也不解除任何 fail-closed。
-2. **正式执行器实现——已完成（2026-10-12）**：`cmd/clone-executor`、`internal/cloneexec`、
-   `internal/credentialmaterial`、`cmd/git-credential-ora` 与 Cloud 侧的准入接线落地；真实私有仓库
-   clone、重放拒绝、跨 credential／跨 runtime 拒绝、撤销、版本冲突、失败清理与启动清扫都有直接证据
-   （D5 表）。完成条件：`internal/cloneexec` 的验收测试全绿。
-3. **部署集成——已完成（2026-10-12）**：`cluster/` 增加执行器服务、身份与目录的 setup 步骤、Cloud
-   侧签名密钥与验签公钥的交付；默认不启用 `clone_dispatch`，因此部署栈行为逐位不变。
+1. **归属与形态记录——文本已就绪，结论待评审**：执行器的组件清单与部署形态已写定；本文保持
+   `proposed`，评审通过后再据此标记 `approved`。本步不产生代码或测试证据，也不解除任何 fail-closed。
+2. **正式执行器实现——代码已提交，端到端可达性未成立**：`cmd/clone-executor`、`internal/cloneexec`、
+   `internal/credentialmaterial`、`cmd/git-credential-ora` 与 Cloud 侧的准入接线已提交，
+   `internal/cloneexec` 的验收测试全绿；但**默认部署下这条通道走不通**：配置层不允许
+   `git_server.sandbox_base_url` 与 `clone_dispatch.enabled` 同时启用，执行器也不挂载 Workspace 卷，
+   clone 的 checkout 无从交付到 Workspace。因此本文**不声称本步已完成**——它的归属与去留由
+   `ora-space/circus#134` 裁决。
+3. **部署集成——代码已提交，默认未启用**：`cluster/` 增加了执行器服务、身份与目录的 setup 步骤、
+   Cloud 侧签名密钥与验签公钥的交付；默认不启用 `clone_dispatch`，因此部署栈行为逐位不变。这一步
+   同样随 `#134` 的结论处理。
 4. **解禁——未开始，且不属于本文范围**：只有裁决第 8 项的条件满足后才可移除
    `repository_credential_executor_unavailable`；届时先裁决"checkout 如何交付到 Workspace"，再按最终
    实现同步本 ADR、隔离决策的 D14-B 与 Cloud 侧 D11-B。

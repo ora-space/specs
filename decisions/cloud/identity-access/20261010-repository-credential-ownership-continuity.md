@@ -1,5 +1,5 @@
 ---
-status: approved
+status: proposed
 ---
 
 # 仓库凭据归属连续性：把 `0023` 已交付的 attribution／availability／冻结与审计语义补录为 Cloud 的历史契约
@@ -9,8 +9,10 @@ PostgreSQL 上生效，但 `specs/` 内没有任何 Cloud ADR 承载它——规
 `cloud/docs/runtime-control.md` 里。本文是这份**历史契约的补录**：逐条确认 `0023` 引入的六个列、两个
 冻结触发器、恢复扫描与两处凭据引用列的既有语义，把已经生效的行为写成可评审、可逐条核对的决策。
 
-**补录经批准，且批准不改写迁移。** 本文于 2026-10-10 经项目负责人批准，状态为 `approved`；而 `0023`
-早已应用、校验和不可改写，其行为不因本文的状态而变化，批准也不重写迁移正文。本文**只做记录与确认**：
+**补录的方向已由项目负责人在运行 issue `ora-space/circus#29` 的授权中确认，且该确认不改写迁移。**
+本文**尚未经过 specs 的 PR 评审**，按 `specs/AGENTS.md` 保持 `proposed`，评审通过后再据此标记
+`approved`；而 `0023` 早已应用、校验和不可改写，其行为不因本文的状态而变化，评审也不重写迁移正文。
+本文**只做记录与确认**：
 不修改任何已应用的 migration，不为既有语义新增写入者或读路径，不授权实现变更，也不解除任何
 fail-closed 门禁（`repository_credential_executor_unavailable` 继续有效）。若今后认为某条既有语义应当
 改变，那属于前向决策，不在本文范围内。
@@ -291,14 +293,14 @@ owner"的那一列，而另一列今天既无写入者也无 owner 强制。启�
 ## 落地顺序
 
 本文是补录，**没有实现步骤**：它记录的行为已经生效并持续有效。可独立验收的动作只有评审动作本身。
-**三步均已于 2026-10-10 完成**（随本文批准）；本步不产生任何代码或测试证据，因此不构成实现或解禁的
-依据。
+**三步的核对工作已经做过，但结论随本文的评审一并生效**：本文保持 `proposed`，评审通过并标记
+`approved` 后才算完成。这些步骤都不产生代码或测试证据，因此不构成实现或解禁的依据。
 
-1. **评审并确认既有语义——已完成（2026-10-10）**：D1–D6 与真实 `0023`、`requireRepositoryAccess`、
+1. **评审并确认既有语义（核对已完成，结论待评审确认）**：D1–D6 与真实 `0023`、`requireRepositoryAccess`、
    `freezeInactiveRepositoryCredentials` 逐条核对一致，每条都能在迁移正文或现有 Go 源码中直接指出出处。
-2. **确认补录不改变行为——已完成（2026-10-10）**：按 D7 的清单逐项核对，没有列被新增写入者或读路径；
+2. **确认补录不改变行为（核对已完成，结论待评审确认）**：按 D7 的清单逐项核对，没有列被新增写入者或读路径；
    `git -C cloud diff` 对 `internal/core/migrations/` 与 `internal/core/*.go` 为空。
-3. **与本叶子其余凭据决策对齐——已完成（2026-10-10）**：本文与
+3. **与本叶子其余凭据决策对齐（核对已完成，结论待评审确认）**：本文与
    [用户自助 HTTPS Git 凭据](20261010-user-managed-git-credentials.md)、
    [用户 Git Token 由独立 Credential Service 承载](20261010-user-managed-git-secret-store.md)、
    [凭据规则受限例外](20261010-user-managed-git-token-ingress-rule-exception.md) 对
