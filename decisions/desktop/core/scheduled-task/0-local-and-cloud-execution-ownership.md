@@ -50,7 +50,8 @@ occurrence 最多接纳一个 Scheduled Run；进程重启、事件重复投递�
 Scheduled Task 保存带版本的 `ExecutionTargetRef`，到期后把 occurrence 交给相应的 application use case。目标可以
 在后续决策中扩展为 Agent Task、冻结 Workflow revision 等，但每种目标必须先定义：输入如何冻结、由谁取得凭据、运行
 与 session 如何关联、取消及结果如何投影。调度器不得直接调用模型、拼装未版本化 Prompt，或把内存 Workflow runtime
-的模拟成功写成真实运行。本地首版的执行目标是随 task revision 冻结的提示词，由新增的 application use case 承载。
+的模拟成功写成真实运行。本地首版的执行目标是随 task revision 冻结的提示词，由新增的 application use case 承载；每次
+Scheduled Run 都新建会话，不复用已有会话。
 
 Cloud 首期的执行目标同样只接受随 task revision 冻结的提示词，不绑定 Workflow snapshot。到期时 Cloud 调度器复用既有
 Agent `IssueRun` / `Thread` application use case，在目标 Project / Workspace 下拉起一次会话，并沿用既有结果记录与收尾。
@@ -74,7 +75,8 @@ manual occurrence，不冒充原计划时间。未来若增加 catch-up，必须
 
 ### D5：cloud 交由服务端拥有的语义冻结，细节另行决策
 
-`cloud` 任务的未来 occurrence 只由 Cloud 持久调度器产生，Desktop 关闭不影响它；这是需要提前冻结的共用语义。
+`cloud` 任务的未来 occurrence 只由 Cloud 持久调度器产生，Desktop 关闭不影响它；这是需要提前冻结的共用语义。创建后不
+支持迁移为 `local`；需要更换执行位置时，复制成新任务并停用旧任务。
 Cloud 首期的未来 occurrence 由 Cloud 持久调度器产生，并以本 ADR 的 `(taskId + scheduledAt)` 规则在 Cloud 侧幂等
 接纳。首期只调用 D3 所述的无头 Prompt 单会话链：保存及每次触发均校验目标 Project、模型配置和无人值守授权；不接入
 #60/#67 的 Server Workflow 执行链，也不解析 `executorSlot`。Cloud 的任务登记、存储、取消、状态读取、授权、通知、发起者
@@ -96,7 +98,7 @@ schedule 按系统当前时区求值，occurrence 落盘后只以 UTC `scheduled
 未来触发，不改写已落盘的 occurrence；local 任务不接受用户单独指定时区。
 
 同一任务的默认并发策略为 `skip_if_running`：到期时若前一 Scheduled Run 仍未终止，记录 `skipped_busy`，不排队
-补跑。所有本地定时任务共享一个全局并发上限（首版固定 16）；达到上限时该到期点同样跳过并记录可区分的原因，不排队。
+补跑。所有本地定时任务共享一个全局并发上限（首版固定 4，不可配置）；达到上限时该到期点同样跳过并记录可区分的原因，不排队。
 后续若提供 queue 或 parallel，必须显式进入任务定义并由目标执行器声明支持，不能只在 UI 增加选择项。
 
 ### D7：运行记录统一表达计划结果，删除任务不删除审计事实
@@ -159,8 +161,7 @@ agent 仍可执行任意命令并读写 worktree 外文件、可使用本机凭�
 ## 本决策未解决的问题
 
 - 首版表单采用受限周期枚举还是公开 cron，以及精确的输入 schema。
-- 本地提示词运行的 application use case 如何与 Agent Session 关联（新建会话还是复用会话）；本地 Workflow revision
-  目标属于后续扩展。
+- 本地 Workflow revision 目标属于后续扩展。
 - 更细的无人值守工具批准策略取值、worktree 的数量上限，以及与现有 Session approval 行为的迁移关系。
 - Cloud 首期无头单会话的公开 API、存储、调度、发起者与费用归属、Project/模型/无人值守授权复查、通知与配额，作为
   `decisions/cloud/` 下的独立 ADR 提出，不以 #67 为前置条件。
@@ -178,7 +179,8 @@ agent 仍可执行任意命令并读写 worktree 外文件、可使用本机凭�
 按仓库规则，本 ADR 状态变为 `approved` 后在 `test-cases/desktop/core/scheduled-task/` 补充核心用例。至少覆盖：
 同一 occurrence 重放只接纳一次；Desktop 关闭期间 local 不执行且重启记录 missed；实际触发晚于 `scheduledAt`
 超过 10 分钟记 `missed` 且不执行、10 分钟内迟到照常执行；manual run 不冒充计划触发；运行中到期产生
-`skipped_busy`；达到全局并发上限时产生 `skipped_capacity`；本地运行在独立 worktree 中进行且不改动用户当前工作区，
+`skipped_busy`；达到固定 4 项的全局并发上限时产生 `skipped_capacity`；每次 Scheduled Run 新建会话而不复用已有会话；
+本地运行在独立 worktree 中进行且不改动用户当前工作区，
 非 Git 目标不能保存为 active；任务编辑冻结旧运行；Cloud 能力不足时不能激活；授权失效明确失败且不自动回退；禁用/删除保留历史；本地任务及其运行
 历史不上传、不跨设备同步且不要求登录。
 还需覆盖：没有 `full_auto_in_worktree` 显式同意时不接纳运行；仅改提示词或计划时间不要求重新同意、目标项目或策略变更
