@@ -20,7 +20,7 @@ ora-space/circus#124 另行决定；过渡期 desktop 继续写旧的 `executor`
 
 | 前序约定 | 本文处理 |
 |---|---|
-| `cloud/workflow` 根决策 D2：规范图 schema 由 specs 拥有、两端共用，发布按服务端首期可执行子集校验 | 继承，不变；本文在其中增加执行器槽位，槽位的声明与引用属于发布校验 |
+| `cloud/workflow` 根决策 D2：规范图 schema 由 specs 拥有、两端共用，发布按服务端首期可执行子集校验，未完成的草稿仍可保存 | 继承，不变；本文在其中增加执行器槽位，槽位的声明与引用属于发布校验，保存草稿不校验 |
 | [desktop workflow 根决策](../../desktop/core/workflow/0-node-runtime-orchestration.md)：agent 节点用 `agentConfig.executor { agentCli, modelId }` 固定执行器 | 修改，仅限 cloud：agent 节点改为引用槽位，图里不出现 agent CLI 与模型 ID；desktop 保持现状，见 ora-space/circus#124 |
 | agent 节点的 `roleId` 指向 agent definition，提供 system instructions | 继承，不变；槽位与 role 正交，节点同时引用两者 |
 | [model-access 根决策](../model-access/0-personal-model-connections-and-run-scoped-proxy.md) D1：模型 ID 是不透明字符串 | 继承，不变；`hint` 里的模型 ID 同样不透明，也不参与解析 |
@@ -64,7 +64,8 @@ ora-space/circus#124 另行决定；过渡期 desktop 继续写旧的 `executor`
 - agent 节点用 `agentConfig.executorSlot` 引用槽位。
 - **`default` 是隐式保留的槽位**：不用声明，任何图都能引用；节点不写 `executorSlot` 就等于 `default`。
   作者不能声明名为 `default` 的槽位。
-- 引用了未声明的槽位，图非法，保存和发布时都拒绝，错误指出节点和槽位名。
+- 引用了未声明的槽位，图非法，发布时拒绝，错误指出节点和槽位名。保存草稿不拒绝：根决策允许保存未完成的编排，
+  编辑器在编辑时提示，与发布校验一致。
 - 声明了但没有节点引用的槽位只给警告，不拒绝：作者可能正在编辑，也可能刻意保留。
 - iteration、loop 等区域内的节点同样引用顶层声明。槽位不设作用域。
 - `agentConfig.executor` 不再是 cloud 图 schema 的一部分。新字段另起名字而不复用 `executor`，
@@ -136,8 +137,8 @@ cloud 自己已存的图不做数据迁移。读取时按与导入相同的规�
 
 ## 落地顺序
 
-1. **schema 与校验**：图 schema 增加 `executorSlots` 和 `executorSlot`，保存和发布时校验 D1、D2。
-   完成条件：引用未声明槽位的图被拒绝；`default` 可以直接引用。
+1. **schema 与校验**：图 schema 增加 `executorSlots` 和 `executorSlot`，发布时校验 D1、D2，保存草稿不校验。
+   完成条件：引用未声明槽位的图发布被拒绝；`default` 可以直接引用。
 2. **编辑器**：槽位声明、常用名推荐、`hint` 写入和清空；删除演示模型目录（`DEMO_AGENT_MODELS`）。
 3. **导入与读取兼容**：按 D5 处理旧字段，并在导入结果里列出受影响的节点。
 
