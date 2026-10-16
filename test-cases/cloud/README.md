@@ -22,6 +22,15 @@
 
 真实端到端证据采用 cluster Compose 或等价真实部署链路，遵守 minicloud 与 Controller 过渡监听退役。核心用例使用英文二级标题作为稳定代码引用，实施时按义务逐项补充直接测试和对应仓库提交。
 
+## 已批准的执行器槽位决策
+
+[执行器槽位决策](../../decisions/cloud/workflow/20261015-executor-slots-replace-agent-model-ids.md)与[个人槽位映射与按槽位绑定决策](../../decisions/cloud/model-access/20261015-executor-slot-mappings-and-per-slot-run-bindings.md)于 2026-10-16 经 owner 批准，为 `approved`。Cloud main 还没有槽位与个人槽位映射；槽位校验与启动门禁在评审中的未合并 `preflight` [cloud#65](https://github.com/ora-space/cloud/pull/65) 上，按 `Partial` 登记，不当作已经落地。
+
+| 领域 | 核心用例 | 重点风险 |
+| --- | --- | --- |
+| workflow | [执行器槽位](workflow/executor-slots.md) | 槽位名变体、`hint` 被当兜底或被自动写入、旧图拒收或保留执行器 |
+| model-access | [个人槽位映射与按槽位绑定](model-access/executor-slot-mappings.md) | 映射越权、槽位被顶替、在途运行被改映射、会话借用别的槽位授权 |
+
 ## 既有实现证据基线
 
 | 仓库 | 提交 | PR | 交付职责 |
