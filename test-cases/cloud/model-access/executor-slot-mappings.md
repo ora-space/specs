@@ -5,9 +5,10 @@
 单组绑定的冻结、撤销和授权语义仍由[个人模型访问用例](personal-model-access.md)维护；本文件只登记"一次运行多组绑定"带来的新义务。
 图里槽位怎样声明见[执行器槽位用例](../workflow/executor-slots.md)。
 
-证据基线：Cloud main [`7704089`](https://github.com/ora-space/cloud/tree/7704089d453f88d66e06d462aafe554e03a11855) 没有个人槽位映射，
-`run_model_bindings` 是 `run_id uuid NOT NULL UNIQUE REFERENCES issue_runs(id)`（`0033_personal_model_connections.sql`），即一次 IssueRun 一组绑定。
-工作流启动门禁只在评审中的未合并 `preflight` [cloud#65](https://github.com/ora-space/cloud/pull/65)（head `0c064a2d`）上，按 `Partial` 登记。
+证据基线：Cloud main 没有个人槽位映射，`run_model_bindings` 是
+`run_id uuid NOT NULL UNIQUE REFERENCES issue_runs(id)`（`0033_personal_model_connections.sql`），即一次 IssueRun 一组绑定。
+工作流启动门禁已随 [cloud#65](https://github.com/ora-space/cloud/pull/65) 合并进 main（合并提交
+[`df507f0`](https://github.com/ora-space/cloud/commit/df507f0)），下面按逐条核对的证据登记。
 
 ## Personal Slot Mappings Stay Owner Scoped And Default Is The Default Model
 
@@ -27,7 +28,7 @@
 
 - 决策依据：D1，不变量 5；继承根决策 D1。
 - 本次直接证据：**Partial** — 个人默认模型本身的归属和版本由 main 的 `internal/core/model_connections_db_test.go`（`TestPersonalModelOwnershipDefaultsAndVersions`）覆盖；[cloud#65](https://github.com/ora-space/cloud/pull/65) 的 `requireWorkflowExecutorSlots` 让 `default` 槽位直接复用 OpenCode 运行绑定的 `defaultExecutorGap`，`integration/workflow_admission_test.go` 的 `TestWorkflowRunDefaultSlotGate` 断言设置默认模型后 `default` 通过门禁，停用连接、下架模型时原因分别是 `connection_unavailable` / `model_unavailable`。
-- 仍缺：个人槽位映射的存储、接口和设置页都不存在（cloud#65 把所有命名槽位报为 `slot_not_configured`）；写 `default` 映射被拒、映射级联保留没有直接证据；cloud#65 的证据在未合并的 `preflight` 分支上。
+- 仍缺：个人槽位映射的存储、接口和设置页都不存在（cloud#65 把所有命名槽位报为 `slot_not_configured`）；写 `default` 映射被拒、映射级联保留没有直接证据。
 
 ## An Unresolvable Slot Is Reported To The Initiator And Never Substituted
 
@@ -47,7 +48,7 @@
 
 - 决策依据：D2，不变量 3；继承根决策 D3 的回滚语义。
 - 本次直接证据：**Partial** — [cloud#65](https://github.com/ora-space/cloud/pull/65) 的 `admitWorkflowRun` 以调用者身份解析，`requireWorkflowExecutorSlots` 先收集全部缺口再以 `workflow_executor_unconfigured` 拒绝，每个缺口带 `slot`、`nodeIds`、`reason`、`description` 和 `hint`；`integration/workflow_admission_test.go` 的 `TestWorkflowRunDefaultSlotGate` 断言每次拒绝后只存在那一次被放行的运行，`TestWorkflowRunNamedSlotGate` 断言默认模型已配置时命名槽位仍以 `slot_not_configured` 拒绝。
-- 仍缺：没有个人槽位映射，"作者已配置、发起者未配置"无法构造；多缺口同时出现的断言、四种入口逐一的发起者身份没有直接证据；定时任务的工作流触发属[定时任务执行归属](../../../decisions/desktop/core/scheduled-task/0-local-and-cloud-execution-ownership.md)的第二阶段，尚无实现；cloud#65 的证据在未合并的 `preflight` 分支上。
+- 仍缺：没有个人槽位映射，"作者已配置、发起者未配置"无法构造；多缺口同时出现的断言、四种入口逐一的发起者身份没有直接证据；定时任务的工作流触发属[定时任务执行归属](../../../decisions/desktop/core/scheduled-task/0-local-and-cloud-execution-ownership.md)的第二阶段，尚无实现。
 
 ## Each Referenced Slot Freezes One Binding That Retries And Recovery Reuse
 

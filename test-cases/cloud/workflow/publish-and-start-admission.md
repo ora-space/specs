@@ -2,10 +2,12 @@
 
 依据[工作流执行根决策](../../../decisions/cloud/workflow/0-cloud-side-scheduler-owns-workflow-execution.md)（D2、D3）
 与它的[执行器槽位后续决策](../../../decisions/cloud/workflow/20261015-executor-slots-replace-agent-model-ids.md)。
-main 上的发布只冻结活稿、不校验图，三种入口也还没有共用的启动门禁；首期门禁由 D1 落地顺序第 2 步（ora-space/circus#69，运行
-[#132](https://github.com/ora-space/circus/issues/132)）实现，当前是未合并的 `preflight`
-[cloud#65](https://github.com/ora-space/cloud/pull/65)（head `0c064a2d`）。所以本文件的证据按"实现已在评审、尚未落到 main"
-如实标 `Partial`，并把其中还没实现的部分标 `Missing`。
+
+首期门禁由 D1 落地顺序第 2 步（ora-space/circus#69，运行 [#132](https://github.com/ora-space/circus/issues/132)）
+实现，已随 [cloud#65](https://github.com/ora-space/cloud/pull/65) 合并进 main（合并提交
+[`df507f0`](https://github.com/ora-space/cloud/commit/df507f0)）。下面的状态是逐条核对这个提交的实现与测试后登记的：
+有直接证据的记 `Covered`，只覆盖了义务一部分的记 `Partial` 并写清缺哪一部分，本文件已没有 `Missing` 行。本次更新把
+§2 第二行与 §5 第二行的措辞按实现实际能提供证据的地方收紧，理由写在各行下面。
 
 ## Publishing Refuses An Unsupported Node Or Configuration And Names It
 
@@ -19,13 +21,13 @@ main 上的发布只冻结活稿、不校验图，三种入口也还没有共用
 | 义务 | 所需直接证据 | cloud 侧状态 |
 | --- | --- | --- |
 | 发布按首期子集拒绝并点名节点 | 真实 HTTP + PostgreSQL：逐类不支持节点的发布拒绝与错误参数，且不产生快照 | Partial |
-| 首期不使用的 agent 配置字段被明确拒绝并点名字段 | 真实 HTTP：含 `skills` / `mcps` / `retry` 等字段的发布被拒绝并指出字段 | Missing |
+| 首期不使用的 agent 配置字段被明确拒绝并点名字段 | 真实 HTTP：含 `skills` / `mcps` / `retry` 等字段的发布被拒绝并指出字段 | Partial |
 | 边、槽位与 start 节点数量的结构校验 | 真实 HTTP：悬空边、未声明槽位、零个或两个 start 节点的发布拒绝 | Partial |
 
 - 决策依据：D2（节点逐个去向表、发布门禁与服务端可执行子集），不变量 8。
 - desktop 参考实现（`8909f07`）一侧：**Partial** — 拒绝不可执行节点的谓词有直接单元测试（[`crates/application/src/workflow_run/engine/tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/application/src/workflow_run/engine/tests.rs) 的 `first_unsupported_node_reports_tool`、`first_unsupported_node_is_none_for_supported_graphs`，[`crates/application/src/workflow_run/engine/loop_graph/tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/application/src/workflow_run/engine/loop_graph/tests.rs) 的 `qualification_generator_obeys_execution_graph_contract` 对全量生成场景断言 `first_unsupported_node().is_none()`）。仍缺：`WorkflowEngine::start` 调用该谓词并返回 `WorkflowValidationError::UnsupportedNodeType` 的接线没有被测试覆盖（该错误值全仓只出现在 `engine.rs:119`）；而且 desktop 只在**启动**时拒绝，没有发布门禁——"在发布时冻结一份确定可执行的图"是 Cloud 新增的义务（D2）。
-- 本次直接证据：**Partial** — [cloud#65](https://github.com/ora-space/cloud/pull/65) 的 `internal/core/workflow_graph.go` 引入 `workflowExecutableNodeKinds`（只有 `start` / `agent` / `condition` / `output`）、`node_kind_unsupported` / `start_node_count` / `node_id_duplicate` 等问题码与槽位校验，`publishWorkflow` 在冻结前调用它；`internal/core/workflow_graph_test.go` 的 `TestValidateWorkflowGraph` 与 `TestRequireValidWorkflowGraphIsOneStableFault` 是直接证据。main 的 [`internal/core/workflow.go`](https://github.com/ora-space/cloud/blob/7704089d453f88d66e06d462aafe554e03a11855/internal/core/workflow.go) 今天只把活稿写进 `workflow_snapshots`，没有任何校验。
-- 仍缺：**agent 配置字段的拒绝没有实现**（该 PR 没有触及 `skills` / `mcps` / `interactive` / `outputContract` / `retry` / `promptInactivity`），而 D2 要求"静默忽略会让作者以为配置生效"，这一项按 `Missing` 记；上述证据都在未合并的 `preflight` 分支上，合入 main 前不算已落地。
+- 本次直接证据：**Partial** — cloud#65 的 [`internal/core/workflow_graph.go`](https://github.com/ora-space/cloud/blob/df507f0/internal/core/workflow_graph.go) 引入 `workflowExecutableNodeKinds`（只有 `start` / `agent` / `condition` / `output`）、`workflowUnsupportedAgentConfigFields` 与 `node_kind_unsupported` / `node_config_unsupported` / `start_node_count` / `node_id_duplicate` / `edge_endpoint_unknown` / `slot_not_declared` 等问题码，`requireValidWorkflowGraph` 在 `publishWorkflow` 冻结之前调用它，拒绝时一个问题码携带全部问题、一个快照也不写。真实 HTTP 的直接证据是 [`integration/workflow_admission_test.go`](https://github.com/ora-space/cloud/blob/df507f0/integration/workflow_admission_test.go) 的 `TestWorkflowPublishValidatesTheGraphAndSavingDoesNot`（含 `tool` 节点且无 start 的图发布被拒，问题里同时点名节点 id 与 kind，`workflow_snapshots` 计数为 0）与 `TestWorkflowPublishRefusesUnusedAgentConfiguration`（带 `retry` 与 `skills` 的图发布被拒，问题列表逐项比对字段名，改回首期配置后同一份图发布成功）；单元矩阵是 [`internal/core/workflow_graph_test.go`](https://github.com/ora-space/cloud/blob/df507f0/internal/core/workflow_graph_test.go) 的 `TestValidateWorkflowGraph`（33 个用例）与 `TestRequireValidWorkflowGraphIsOneStableFault`（线协议：一个稳定错误码 + 逐节点参数）。
+- 仍缺：**节点种类只逐类验了 `tool` 一种**（HTTP 与单元各一处，触发里列的另外 8 种没有各自的发布拒绝用例），把执行不了的种类加进 `workflowExecutableNodeKinds` 时没有测试会挂，第一条义务因此按 `Partial` 记。**配置字段只有 `skills` 与 `retry` 出现在真实 HTTP 证据里**，`mcps` / `interactive` / `outputContract` / `promptInactivity` 的单元用例由实现自己读的那份字段清单循环生成（`for _, field := range workflowUnsupportedAgentConfigFields`），字段从清单里掉出去时用例跟着一起消失，第二条义务因此按 `Partial` 记。单元里覆盖了悬空边（`edge_endpoint_unknown`）与两个 start 节点，二者都没有真实 HTTP 证据，第三条义务因此按 `Partial` 记。
 
 ## Saving An Incomplete Draft Stays Allowed And Installation Is Not A Publish Gate
 
@@ -38,13 +40,14 @@ main 上的发布只冻结活稿、不校验图，三种入口也还没有共用
 
 | 义务 | 所需直接证据 | cloud 侧状态 |
 | --- | --- | --- |
-| 不完整的草稿可以保存 | 真实 HTTP：含不支持节点与非法结构的文档保存成功，只发布失败 | Partial |
-| 安装状态与个人映射不是发布门禁 | 真实 HTTP：未安装插件、发布者无映射的图发布成功，随后在启动门禁被拒 | Missing |
+| 不完整的草稿可以保存 | 真实 HTTP：含不支持节点与非法结构的文档保存成功，只发布失败 | Covered |
+| 安装状态与个人映射不是发布门禁 | 真实 HTTP：引用任意 `agentCli`（hint 或旧 `executor`）的图、发布者没有映射的图都发布成功，前者在运行里按 `default` 解析、后者在启动门禁被拒 | Covered |
 
 - 决策依据：D2（发布门禁与服务端可执行子集、未完成的草稿仍可保存、安装状态不是发布门禁），不变量 8；继承 [MCP 决策](../../../decisions/desktop/core/agent/session/mcp/20260912-workflow-explicit-selection.md) D4。
 - desktop 参考实现（`8909f07`）一侧：**Partial** — "安装状态不是图校验门禁"有直接证据：[`crates/backend/src/workflow/run/executor.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/executor.rs) 的 `resolve_agent_ref_accepts_any_named_agent` 断言任意具名 agent（包括本 build 从未听说过的）被原样接受、未安装只在运行时报告为不可用。仍缺：desktop 没有 Cloud 的"草稿/发布"分离，所以"不完整的草稿可以保存"在参考实现里没有对应义务与测试。
-- 本次直接证据：**Partial** — [cloud#65](https://github.com/ora-space/cloud/pull/65) 的 `integration/workflow_admission_test.go` 里 `TestWorkflowPublishValidatesTheGraphAndSavingDoesNot` 直接对照了"保存放行、发布拒绝"；main 的保存路径本来就不校验图。
-- 仍缺：安装状态与个人映射不挡发布这一半没有任何直接证据（该 PR 没有触及安装状态）；证据同样停留在未合并的 `preflight` 分支。
+- 本次直接证据：**Covered** — 保存与发布的分离由 [`integration/workflow_admission_test.go`](https://github.com/ora-space/cloud/blob/df507f0/integration/workflow_admission_test.go) 的 `TestWorkflowPublishValidatesTheGraphAndSavingDoesNot` 直接对照：含 `tool` 节点且无 start 的图 `POST /workflows` 200 并原样存下、`PUT` 200，同一份文档发布 400；"安装状态与映射不是发布门禁"的两半也都在真实 HTTP 上：`TestWorkflowRunNamedSlotGate` 发布一份 hint 里写着 `official/ora-space.opencode` / `vendor/model-v1` 的图成功（`hint` 按槽位后续决策 D3 只是展示用，发布不校验任何安装集合），随后同一个图因为发起者没有该槽位的映射在启动门禁被拒（409 `slot_not_configured`）；`TestWorkflowRunDefaultSlotGate` 反复改个人模型连接的可用性，发布过的那份图始终能启动到门禁为止，被拒只发生在启动这一步。
+- 说明（本行措辞收紧）：首期图只通过 `executorSlot` 引用执行器，旧图的 `agentConfig.executor` 被接受并丢弃（槽位后续决策 D5），所以 Cloud 的图里没有可以表达"某个插件已安装/未安装"的位置；这条义务在 Cloud 上的形态因此是"发布不看任何安装或绑定状态，可跑性留给启动门禁判断"，上面的两处 HTTP 证据正是这个形态。
+- 仍缺：无。
 
 ## Every Entry To A Workflow Run Passes One Admission Gate
 
@@ -58,13 +61,13 @@ main 上的发布只冻结活稿、不校验图，三种入口也还没有共用
 | 义务 | 所需直接证据 | cloud 侧状态 |
 | --- | --- | --- |
 | 三种入口共用同一个启动门禁 | 真实 HTTP + PostgreSQL：同一份非法图在三个入口同样被拒，拒绝后无运行行 | Partial |
-| 输入按运行将执行的那一份文档校验 | 真实 HTTP：与所选版本不符的提交被拒且可定位到字段，改选版本后可继续 | Partial |
-| 拒绝不留痕且重复确认幂等 | 真实 PostgreSQL：拒绝后 `issue_runs` 计数不变，同一 interaction 成功确认一次 | Partial |
+| 输入按运行将执行的那一份文档校验 | 真实 HTTP：与所选版本不符的提交被拒且可定位到字段，改选版本后可继续 | Covered |
+| 拒绝不留痕且重复确认幂等 | 真实 PostgreSQL：拒绝后 `issue_runs` 计数不变，同一 interaction 成功确认一次 | Covered |
 
 - 决策依据：D3（三种启动方式表、三种入口走同一个启动函数），不变量 1、2。
 - desktop 参考实现（`8909f07`）一侧：**Missing** — desktop 只有一个本地启动入口，没有"多个入口共用一个门禁"这件事，也没有"手动运行不能靠 UUID 形状绕过校验"的对应义务；这条完全靠 Cloud 自己的测试证明。
-- 本次直接证据：**Partial** — [cloud#65](https://github.com/ora-space/cloud/pull/65) 的 `internal/core/workflow_admission.go` 提供共用的 `admitWorkflowRun`，三个调用点是 `workflow_run.go`、`issue_runs.go`、`issue_interactions.go`；`integration/workflow_admission_test.go` 的 `TestManualWorkflowRunResolvesItsExecutor` / `TestManualWorkflowRunCannotNameAForeignWorkflow` / `TestWorkflowRunValidatesAgainstTheVersionItRuns` 与 `integration/workflow_interaction_test.go` 的 `TestWorkflowConfirmRefusesAVersionTheLiveFormHasLeft` 是直接证据。main 的 [`internal/core/issue_runs.go`](https://github.com/ora-space/cloud/blob/7704089d453f88d66e06d462aafe554e03a11855/internal/core/issue_runs.go) 今天只校验 UUID 形状（注释原文 "Team/workflow keep the opaque UUID shape, resolved by ports later"）。
-- 仍缺：门禁落地后仍需按 D3 在同一事务里冻结发起者与 Project（落地顺序第 4 步），本用例不把"门禁到位"等同于"身份已冻结"；证据在未合并的 `preflight` 分支上。
+- 本次直接证据：**Partial** — [`internal/core/workflow_admission.go`](https://github.com/ora-space/cloud/blob/df507f0/internal/core/workflow_admission.go) 的 `admitWorkflowRun` 是唯一的启动门禁（解析要执行的快照、按它的图收集并解析槽位），三个调用点是 `workflow_run.go`、`issue_runs.go`、`issue_interactions.go`。真实 HTTP 的证据按入口分开：manual 入口 `TestManualWorkflowRunResolvesItsExecutor`（未知 id 404、没有已发布版本 400 `workflow_no_published_snapshot`、归档 404，且被拒的那次不留运行行）与 `TestManualWorkflowRunCannotNameAForeignWorkflow`（别的租户的 workflow 同样 404，`issue_runs` 计数为 0）；直接运行入口 `TestWorkflowRunSnapshotIsScopedToItsWorkflow`（别的 workflow 的 snapshot 与未知 id 都是 404，且不回退到最新版本）与 `TestWorkflowRunValidatesAgainstTheVersionItRuns`（旧版本只按自己的 schema 收，未指名版本时用最新版本，运行行记下执行的 `snapshot_id`）；`@` Confirm 入口 `TestWorkflowConfirmRefusesAVersionTheLiveFormHasLeft`（提交与所选版本不符时 409 并点名字段，不创建运行、不占用 interaction，改发布或改选版本后同一次提交通过）；幂等由 `TestWorkflowConfirmIdempotencyAndDoubleConfirm` 证明（同 key 重放返回同一个运行、同 key 不同体 409、已确认的 interaction 换 key 409，`issue_runs` 只有一个）。
+- 仍缺：没有任何一个用例把**同一份**非法文档依次送进三个入口并断言同样的拒绝；"三种入口同一个门禁"今天由"一个 `admitWorkflowRun` + 三个调用点"与各入口各自的拒绝用例支撑，按 `Partial` 记。另外，门禁落地后仍需按 D3 在同一事务里冻结发起者与 Project（落地顺序第 4 步），本用例不把"门禁到位"等同于"身份已冻结"。
 
 ## A Slot The Initiator Cannot Supply Refuses The Run Instead Of Substituting
 
@@ -85,27 +88,29 @@ main 上的发布只冻结活稿、不校验图，三种入口也还没有共用
 | 义务 | 所需直接证据 | cloud 侧状态 |
 | --- | --- | --- |
 | 槽位解析与运行创建在同一事务，拒绝不留运行行 | 真实 PostgreSQL：槽位不可解析的启动被拒且运行行、绑定行都不存在 | Partial |
-| 槽位从被运行的冻结文档收集 | 真实 HTTP + PostgreSQL：改活稿的槽位声明不影响已发布快照的启动判定 | Missing |
+| 槽位从被运行的冻结文档收集 | 真实 HTTP + PostgreSQL：改活稿的槽位声明不影响已发布快照的启动判定 | Partial |
 
 - 决策依据：D2（首期只用 `executorSlot`）、D3（逐槽位模型绑定），不变量 7；[槽位后续决策](../../../decisions/cloud/workflow/20261015-executor-slots-replace-agent-model-ids.md)与[个人槽位映射后续决策](../../../decisions/cloud/model-access/20261015-executor-slot-mappings-and-per-slot-run-bindings.md)；义务本身记在[个人槽位映射用例](../model-access/executor-slot-mappings.md#an-unresolvable-slot-is-reported-to-the-initiator-and-never-substituted)。
-- 本次直接证据：**Partial** — [cloud#65](https://github.com/ora-space/cloud/pull/65) 把槽位解析放在共用的 `admitWorkflowRun` 里（三个调用点是 `internal/core/workflow_run.go`、`issue_runs.go`、`issue_interactions.go`），`integration/workflow_admission_test.go` 的 `TestWorkflowRunDefaultSlotGate` 在每次拒绝后断言只存在那一次被放行的运行，即拒绝不留下行；五个原因码与"解析发起者映射、一次列出全部缺口"的证据按上面那条链接记在个人槽位映射用例里，本文件不再重复。
-- 仍缺：事务边界只有"拒绝后没有运行行"这一层间接证明，没有直接断言解析与创建同事务；"按冻结文档而不是活稿收集槽位"没有直接证据；desktop 没有对应的启动门禁，参考实现侧在这一条上同样是 `Missing`（它不是"有门禁但接线不同"，而是根本没有这层接线，可比的只有它本地启动时对具名 executor 的解析，那个不涉及发起者个人配置）；证据在未合并的 `preflight` 分支上。
+- 本次直接证据：**Partial** — [`internal/core/workflow_admission.go`](https://github.com/ora-space/cloud/blob/df507f0/internal/core/workflow_admission.go) 的 `admitWorkflowRun` 先取要执行的快照行，再用 `requireWorkflowExecutorSlots(s.O("graph"), uid)` 按**快照里的图**收集并解析槽位，三个调用点都在创建运行的那个事务里；`TestWorkflowRunDefaultSlotGate` 与 `TestWorkflowRunNamedSlotGate` 在每次拒绝后都断言 `workflow_runs` 只存在被放行的那几次（前者 1 次、后者 0 次），`TestWorkflowRunValidatesAgainstTheVersionItRuns` 证明门禁读的确实是冻结文档而不是活稿（活稿加了必填变量后，对旧版本的一次提交照样通过）。五个原因码与"解析发起者映射、一次列出全部缺口"的证据按上面那条链接记在个人槽位映射用例里，本文件不再重复。
+- 仍缺：两条都是"实现到了、直接证据不够"。**事务边界**只有"拒绝后没有运行行"这一层间接证明，没有直接断言解析与创建同事务；**绑定行**这一半今天没有对象可断言——`run_model_bindings` 是 agent 运行路径的绑定，按槽位冻结的 workflow 绑定随个人槽位映射的落地才有，所以第二条证据要求的一半现在还是空的。**"按冻结文档收集槽位"**只有间接证据：冻结文档被读取这件事由启动节点的输入 schema 证到（`TestWorkflowRunValidatesAgainstTheVersionItRuns`），但没有用例改活稿的 `executorSlots` 声明再启动一份已发布快照，槽位这一侧因此按 `Partial` 记。desktop 没有对应的启动门禁，参考实现侧在这一条上同样是 `Missing`（它不是"有门禁但接线不同"，而是根本没有这层接线，可比的只有它本地启动时对具名 executor 的解析，那个不涉及发起者个人配置）。
 
 ## The Start Form Names The Snapshot It Freezes
 
 - 风险：表单字段名与实际含义不符，会被固化进表单描述符与已存 interaction 输入，越晚改代价越大。
-- 前置状态：`@` Confirm 的启动表单里有 key 为 `version` 的字段，其值实际是 snapshot id；历史 interaction 的 `input` 是不可变数据。
-- 触发：渲染启动表单；提交确认；读取历史 interaction 的输入；把该字段与 `workflow_runs.version`（乐观并发计数器）混淆。
-- 必须成立：写入一律用 `snapshotId`，与运行创建接口的请求体字段和 `workflow_runs.snapshot_id` 一致；读取时接受已存的旧 key `version`，历史 interaction 不需要改写；人类可读的版本号继续由标签（`v3 · 发布 3`）携带；`workflow_runs.version` 作为乐观并发计数器保持不变。
-- 禁止结果：继续用 `version` 写入新数据、改写已存 interaction 的输入、把表单字段当成并发计数器、改名后无法读取历史输入。
+- 前置状态：`@` Confirm 的启动表单里有 key 为 `snapshotId` 的字段，其值就是 snapshot id（改名前的 key 是 `version`）；已发布快照的图与历史 interaction 的 `input` 都是不可变数据。
+- 触发：渲染启动表单；提交确认（包括改名前后端渲染、改名后提交的表单，提交里带旧 key）；读取历史 interaction 的输入；把该字段与 `workflow_runs.version`（乐观并发计数器）混淆。
+- 必须成立：写入一律用 `snapshotId`，与运行创建接口的请求体字段和 `workflow_runs.snapshot_id` 一致；读取时接受旧 key `version`——提交里带它就按它解析版本并折叠成 `snapshotId`，作者自己把 `version` 或 `snapshotId` 声明成变量时那个值仍是作者的；历史 interaction 不需要改写（`input` 只在确认时写一次，此后只读）；人类可读的版本号继续由标签（`v3 · 发布 3`）携带；`workflow_runs.version` 作为乐观并发计数器保持不变。
+- 禁止结果：继续用 `version` 写入新数据、改写已存 interaction 的输入、把表单字段当成并发计数器、改名后不认旧 key 的提交（按旧 key 提交会被当成未知字段拒绝，或让用户选的版本被丢掉而悄悄跑最新版本）。
 - 验证义务与证据：
 
 | 义务 | 所需直接证据 | cloud 侧状态 |
 | --- | --- | --- |
-| 写入使用 `snapshotId`，描述符与运行创建接口命名一致 | 真实 HTTP：表单描述符与提交后的 `issue_interactions.input` 都用 `snapshotId` | Missing |
-| 读取仍接受旧的 `version` key | 真实 PostgreSQL + HTTP：用旧 key 存下的历史 interaction 仍能读取并确认 | Missing |
+| 写入使用 `snapshotId`，描述符与运行创建接口命名一致 | 真实 HTTP：表单描述符与提交后的 `issue_interactions.input` 都用 `snapshotId` | Covered |
+| 读取仍接受旧的 `version` key | 真实 HTTP + PostgreSQL：按旧 key 提交的确认被接受、用户选的版本被执行、interaction 行只存 `snapshotId`；改名前发布的快照里存的字段声明也按新名字读出 | Partial |
 
 - 决策依据：D3（"`version` 字段的命名要修掉"段）。
 - desktop 参考实现（`8909f07`）一侧：**Missing** — desktop 没有 `@` Confirm 这套启动表单与 interaction 输入，字段命名与旧 key 兼容都是 Cloud 自己的义务。
-- 本次直接证据：**Missing** — main 与 [cloud#65](https://github.com/ora-space/cloud/pull/65) 都用 `fieldKeyVersion = "version"`（`internal/core/workflow_collaboration.go`），改名与兼容读取都还没有实现；`integration/workflow_interaction_test.go` 的 `TestAuthorDeclaredVersionIsNotTheVersionCursor` 只固定"作者声明的 `version` 不是版本游标"，不覆盖改名。
-- 仍缺：改名、描述符与已存输入的兼容读取，属 D1 落地顺序第 2 步的完成条件。
+- 本次直接证据：**Covered（第一行）、Partial（第二行）** — cloud#65 把启动字段的 key 改成 `snapshotId`（[`internal/core/workflow_collaboration.go`](https://github.com/ora-space/cloud/blob/df507f0/internal/core/workflow_collaboration.go) 的 `fieldKeySnapshotID`，旧名由 `legacyFieldKeyVersion` 承载、`foldLegacyVersionAnswer` 折叠）。第一行：`integration/workflow_snapshot_form_test.go` 的 `TestWorkflowSnapshotFormProjectsTheChosenVersion` 与 `integration/workflow_interaction_test.go` 的 `TestAuthorDeclaredSnapshotIDIsNotTheVersionCursor` 断言表单描述符的版本选择器以 `snapshotId` 出现（作者自己声明了 `snapshotId` 时那个控件是作者的、平台不再插入选择器），`TestWorkflowConfirmCarriesPlatformFields` 与 `TestWorkflowConfirmReadsThePreRenameVersionKey` 断言提交后的 interaction 行按 `snapshotId` 存，运行创建接口的请求体字段同样是 `snapshotId`（`TestWorkflowRunSnapshotIsScopedToItsWorkflow`）。第二行：`TestWorkflowConfirmReadsThePreRenameVersionKey` 断言按旧 key 提交的确认被执行（跑的是用户选的那个版本）、interaction 行读回来只有 `snapshotId`，作者声明了 `snapshotId` 时作者的值不被覆盖；改名前的快照里存着的字段声明由 [`internal/core/workflow_collaboration.go`](https://github.com/ora-space/cloud/blob/df507f0/internal/core/workflow_collaboration.go) 按旧 key 读出并落到新名字（`TestLaunchFieldsDeclarationAcceptsThePreRenameKey` 断言撤回的字段没有复活、要求的必填性没有丢）；折叠规则本身（旧 key 被改写、已有新 key 时以新 key 为准、作者声明的旧 key 不动、没有旧 key 时不动）由 `internal/core/workflow_collaboration_test.go` 的 `TestFoldLegacyVersionAnswer` 逐例覆盖。
+- 行文修正：第二行原写"用旧 key 存下的历史 interaction 仍能读取并确认"。这个形态在 Cloud 里不可达，也没有被断言的对象：`issue_interactions.input` 只在确认那一次写入（`UPDATE ... WHERE run_id IS NULL`），而折叠就发生在同一次确认里，所以带旧 key 的行是已经被确认、已经跑过的行——它不会被再确认，也不会被改写；改名前的构建写下的那种行同样只会被原样读出（读接口按存储原样返回 `input`，没有任何读取路径再去解释它的 `version` 键）。旧 key 真正还能出现的地方是**提交**（渲染早于改名的表单在改名后提交）与**改名前发布的快照里的字段声明**，行文按这两处收紧。
+- 仍缺：assist 是这条义务剩下的缺口——它解析的是**活稿**的描述符并直接 `validateFormValues`，不做折叠（[`internal/core/issue_interactions.go`](https://github.com/ora-space/cloud/blob/df507f0/internal/core/issue_interactions.go) 的 `assistWorkflow`），所以同一个改名前的表单：确认能过（折叠了），点 AI Assist 会被当成未知字段拒（400 `invalid_field_value`）。按 `Partial` 记；是补折叠还是把 assist 限定为"只认活稿描述符的 key"由后续决定。
+- 说明：`workflow_runs.version` 是与 `workflows.version` 一致的乐观并发计数器，不在本用例内，保持不动。

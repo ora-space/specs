@@ -5,10 +5,11 @@
 [个人槽位映射与按槽位绑定用例](../model-access/executor-slot-mappings.md)维护；本文件只管图本身：槽位怎样声明、`hint`
 能做什么、旧图怎样进入 cloud。引用未声明槽位的发布拒绝属于工作流根决策的发布门禁，由该领域的发布门禁用例统一维护。
 
-证据基线：Cloud main [`7704089`](https://github.com/ora-space/cloud/tree/7704089d453f88d66e06d462aafe554e03a11855) 的图 schema 里没有槽位，
-编辑器仍用演示目录 `DEMO_AGENT_MODELS` 写 `agentConfig.executor`。槽位校验只在评审中的未合并 `preflight`
-[cloud#65](https://github.com/ora-space/cloud/pull/65)（head `0c064a2d`）上，按 `Partial` 登记，不当作已经落地。
-desktop 不受本决策约束（ora-space/circus#124），没有可依托的参考实现。
+证据基线：cloud#65 已随合并提交
+[`df507f0`](https://github.com/ora-space/cloud/commit/df507f0) 落到 Cloud main，槽位校验与 `hint` 的形状校验在
+[`internal/core/workflow_graph.go`](https://github.com/ora-space/cloud/blob/df507f0/internal/core/workflow_graph.go) 里；编辑器与导入路径还没有跟上，
+仍靠演示目录 `DEMO_AGENT_MODELS` 往 `agentConfig.executor` 写 agent CLI 与模型 ID，见下面各条。desktop 不受本决策约束
+（ora-space/circus#124），没有可依托的参考实现。
 
 ## Executor Slot Declarations Are Validated Before A Graph Is Published
 
@@ -22,12 +23,12 @@ desktop 不受本决策约束（ora-space/circus#124），没有可依托的参�
 | 义务 | 所需直接证据 | cloud 侧状态 |
 | --- | --- | --- |
 | 槽位名语法、唯一性与 `default` 保留 | 单元测试 + 真实 HTTP：逐条违规的发布拒绝与问题码，且不产生快照 | Partial |
-| `description` 必填，长度按 Unicode 字符计 | 单元测试：空白、恰好 500 个中文字符、501 个字符三种边界 | Partial |
-| 省略或显式引用 `default`、声明但未引用的槽位都不拒绝 | 单元测试：三种合法文档通过校验 | Partial |
+| `description` 必填，长度按 Unicode 字符计 | 单元测试：空白、恰好 500 个中文字符、501 个字符三种边界 | Covered |
+| 省略或显式引用 `default`、声明但未引用的槽位都不拒绝 | 单元测试：三种合法文档通过校验 | Covered |
 
 - 决策依据：D1、D2，不变量 2、3。
-- 本次直接证据：**Partial** — [cloud#65](https://github.com/ora-space/cloud/pull/65) 的 `internal/core/workflow_graph.go` 中 `validateWorkflowSlots` 产生 `slot_name_missing` / `slot_name_invalid` / `slot_name_reserved` / `slot_name_duplicate` / `slot_description_invalid`；`internal/core/workflow_graph_test.go` 的 `TestValidateWorkflowGraph` 逐条覆盖这些违规，并覆盖"an explicit default reference"与"a slot declared for later"两个必须放行的文档。
-- 仍缺：该实现用 `len()` 按字节计 `description` 长度，含中文的说明在约 166 个字符时就会被拒，与 D1 的"1–500 个字符"不符，也没有按字符计的边界测试；"未引用槽位给警告"没有实现；证据在未合并的 `preflight` 分支上。
+- 本次直接证据：**Covered（第二、三行）、Partial（第一行）** — [`internal/core/workflow_graph.go`](https://github.com/ora-space/cloud/blob/df507f0/internal/core/workflow_graph.go) 的槽位校验产生 `slot_name_missing` / `slot_name_invalid` / `slot_name_reserved` / `slot_name_duplicate` / `slot_description_invalid` / `slot_hint_invalid`；`internal/core/workflow_graph_test.go` 的 `TestValidateWorkflowGraph` 逐条覆盖这些违规，并覆盖"an explicit default reference"与"a slot declared for later"两个必须放行的文档。字符计数由 `utf8.RuneCountInString` 完成，边界用例是写死的字面量而不是从 `maxSlotDescription` 派生：`strings.Repeat("深", 500)` 必须通过、`strings.Repeat("深", 501)` 与 501 个 ASCII 字符必须被拒（500 个中文字符是 1500 字节，按字节计的实现从第 167 个字符起就会拒，这正是这条用例固定的回归）。
+- 仍缺：**槽位名违规只有单元证据**，没有一条真实 HTTP 的发布请求带非法槽位名并断言问题码与"不产生快照"，第一行因此按 `Partial` 记（真实 HTTP 只覆盖了 `slot_not_declared`，记在[发布与启动门禁用例](../workflow/publish-and-start-admission.md#publishing-refuses-an-unsupported-node-or-configuration-and-names-it)）。**"声明了但没有节点引用的槽位只给警告"（D2）还没有实现**：校验放行了这种文档（单元用例"a declared but unreferenced slot"），但没有任何警告输出，这条义务今天也没有单独的登记行——留在这里作为缺口，等编辑器侧决定警告怎么给时再拆行。
 
 ## A Hint Never Resolves An Executor And Is Written Only By The Author
 
@@ -46,7 +47,7 @@ desktop 不受本决策约束（ora-space/circus#124），没有可依托的参�
 
 - 决策依据：D3、D5，不变量 4、5；运行时"不顶替"的完整义务见[个人槽位映射用例](../model-access/executor-slot-mappings.md#an-unresolvable-slot-is-reported-to-the-initiator-and-never-substituted)。
 - 本次直接证据：**Partial** — [cloud#65](https://github.com/ora-space/cloud/pull/65) 的 `integration/workflow_admission_test.go` 中 `TestWorkflowRunNamedSlotGate` 给槽位带上 `hint`，断言运行者无映射时以 `slot_not_configured` 拒绝，`hint` 只作为拒绝参数返回；`validSlotHint` 只校验形状。
-- 仍缺：cloud 编辑器还没有槽位和 `hint` 的界面，导入路径仍保留 `executor`（见下一条），"不自动写入"和"作者显式写入"都没有直接证据；证据在未合并的 `preflight` 分支上。
+- 仍缺：cloud 编辑器还没有槽位和 `hint` 的界面，导入路径仍保留 `executor`（见下一条），"不自动写入"和"作者显式写入"都没有直接证据。
 
 ## Importing A Pre-slot Graph Drops Its Executor And Runs On Default
 
@@ -65,4 +66,4 @@ desktop 不受本决策约束（ora-space/circus#124），没有可依托的参�
 
 - 决策依据：D2、D5，不变量 1、5。
 - 本次直接证据：**Partial** — [cloud#65](https://github.com/ora-space/cloud/pull/65) 的 `workflowReferencedSlots` 把没有 `executorSlot` 的节点（含仍带 `executor` 的旧节点）读作 `default`；`internal/core/workflow_graph_test.go` 的 `TestValidateWorkflowGraph` 用例"the pre-slot executor field is accepted"是直接证据。
-- 仍缺：Cloud main 的编辑器（`frontend/src/features/workflows/editor/workflow-inspector-fields.tsx`）仍按 `DEMO_AGENT_MODELS` 写 `executor`，导入（`frontend/src/features/workflows/runtime/graph-import.ts`）仍按 `executor` 校验并保留它；丢弃字段、导入摘要、`executorSlot` 优先和新 schema 落盘都没有实现，属本决策落地顺序第 2、3 步。
+- 仍缺：Cloud main 的编辑器（`frontend/src/features/workflows/editor/workflow-inspector-fields.tsx`）仍把选中的 agent CLI 与模型 ID 写成 `agentConfig.executor`，导入（`frontend/src/features/workflows/runtime/graph-import.ts`）仍按 `executor` 校验并保留它；丢弃字段、导入摘要、`executorSlot` 优先和新 schema 落盘都没有实现，属本决策落地顺序第 2、3 步。

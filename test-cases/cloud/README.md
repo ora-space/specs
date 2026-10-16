@@ -29,9 +29,10 @@
 [个人槽位映射与按槽位绑定决策](../../decisions/cloud/model-access/20261015-executor-slot-mappings-and-per-slot-run-bindings.md)
 于 2026-10-16 经 owner 批准，为 `approved`，本领域首期核心用例同批建立。Cloud 至今没有工作流执行者：生产里的
 运行停在 `pending`，唯一写节点状态的是开发夹具，而根决策已把模拟 trace 排除在验收之外，所以执行类义务在
-cloud 侧全部为 `Missing`；main 也还没有槽位与个人槽位映射。门禁类义务（图校验、启动门禁、槽位解析）的实现在
-评审中的未合并 `preflight` [cloud#65](https://github.com/ora-space/cloud/pull/65)（head `0c064a2d`）上，按
-`Partial` 登记，不当作已经落地。
+cloud 侧全部为 `Missing`；main 也还没有个人槽位映射。门禁类义务（图校验、启动门禁、槽位解析）的实现在
+[cloud#65](https://github.com/ora-space/cloud/pull/65) 上，已随合并提交
+[`df507f0`](https://github.com/ora-space/cloud/commit/df507f0) 落到 main，按逐条核对该提交的实现与测试后得到的证据
+状态登记（`Covered` / `Partial`），不再按"未合并"整体降级。
 
 desktop 参考实现（`8909f07`）的直接证据在每个用例里单独标注，并如实记下与它不同的地方：同一 run 内多个 agent 节点首期串行（desktop 在同一次调度 pass 里并行派发 sibling agent，所以"至多一个串行执行者"这一条在它身上是 `Partial`）、图在整个运行生命周期内不可变（desktop 另有 `snapshot_switch` 可替换冻结图）、发布时就拒绝不可执行节点（desktop 只在启动时拒绝）、启动表单用 `snapshotId`（desktop 无此表单）。这些义务没有 desktop 证据可依托，只能由 Cloud 自己的测试证明。
 
