@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: approved
 ---
 
 # 工作流 agent 节点按执行器槽位引用执行器，图里不再存 agent CLI 与模型 ID
@@ -9,7 +9,9 @@ status: proposed
 运行发起者提供，见 [model-access 后续决策](../model-access/20261015-executor-slot-mappings-and-per-slot-run-bindings.md)。
 同一张图因此可以由作者以外的人运行，也可以在 cloud 上执行。
 
-本决策状态为 `proposed`。涉及 cloud 的图 schema、编辑器、导入和发布校验；运行时的解析、启动门禁和锁定由
+本决策状态为 `approved`：2026-10-16 经 owner 批准，核心用例见[执行器槽位用例](../../../test-cases/cloud/workflow/executor-slots.md)。
+本文是 `decisions/cloud/workflow/` 根决策（工作流执行契约与规范图 schema，`0-cloud-side-scheduler-owns-workflow-execution.md`）
+的后续决策。涉及 cloud 的图 schema、编辑器、导入和发布校验；运行时的解析、启动门禁和锁定由
 model-access 后续决策承担。desktop 的图行为（编辑器、默认执行器、启动门禁、旧图迁移）不在本决策范围，由
 ora-space/circus#124 另行决定；过渡期 desktop 继续写旧的 `executor` 字段。cloud 自己已存的图不做数据迁移，
 只在导入和读取时按 D5 处理旧字段。
@@ -18,7 +20,7 @@ ora-space/circus#124 另行决定；过渡期 desktop 继续写旧的 `executor`
 
 | 前序约定 | 本文处理 |
 |---|---|
-| 规范图 schema 由 specs 拥有、两端共用（ora-space/circus#67 第 2 问的结论，所在 ADR 待写） | 继承，不变；本文在其中增加执行器槽位 |
+| `cloud/workflow` 根决策 D2：规范图 schema 由 specs 拥有、两端共用，发布按服务端首期可执行子集校验 | 继承，不变；本文在其中增加执行器槽位，槽位的声明与引用属于发布校验 |
 | [desktop workflow 根决策](../../desktop/core/workflow/0-node-runtime-orchestration.md)：agent 节点用 `agentConfig.executor { agentCli, modelId }` 固定执行器 | 修改，仅限 cloud：agent 节点改为引用槽位，图里不出现 agent CLI 与模型 ID；desktop 保持现状，见 ora-space/circus#124 |
 | agent 节点的 `roleId` 指向 agent definition，提供 system instructions | 继承，不变；槽位与 role 正交，节点同时引用两者 |
 | [model-access 根决策](../model-access/0-personal-model-connections-and-run-scoped-proxy.md) D1：模型 ID 是不透明字符串 | 继承，不变；`hint` 里的模型 ID 同样不透明，也不参与解析 |
@@ -43,7 +45,7 @@ ora-space/circus#124 另行决定；过渡期 desktop 继续写旧的 `executor`
 ```
 
 - `name` 是小写标识符（`^[a-z][a-z0-9_-]{0,63}$`），图内唯一。
-- `description` 必填，去掉首尾空白后为 1–500 个字符。
+- `description` 必填，去掉首尾空白后为 1–500 个字符（按 Unicode 字符计，不按字节）。
 - 槽位按模型需求命名（如 `strong`、`fast`），不按角色命名。
 
 为什么这样定：
@@ -131,8 +133,6 @@ cloud 自己已存的图不做数据迁移。读取时按与导入相同的规�
 
 - **desktop 的图行为**：编辑器、默认执行器、启动门禁、旧图迁移，见 ora-space/circus#124。
 - **按工作流覆盖个人映射**：首期只有个人全局映射，覆盖属于后续扩展。
-- **本文的位置**：执行器槽位属于规范图 schema，应当和 ora-space/circus#67 第 2 问的 schema ADR 放在一起。若那份 ADR 成为
-  `decisions/cloud/workflow/` 的根决策，本文作为它的后续决策；若规范图 schema 另设共享目录，本文随之移动。
 
 ## 落地顺序
 

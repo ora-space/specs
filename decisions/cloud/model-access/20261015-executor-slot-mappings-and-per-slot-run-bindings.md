@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: approved
 ---
 
 # 个人槽位映射为工作流解析执行器，每次运行按槽位锁定多组模型绑定
@@ -9,10 +9,12 @@ status: proposed
 任何一个槽位未配置或不可用，整次创建回滚，不回退到 `default`、`hint` 或作者的选择。
 一次运行从此可以有多组绑定，每个节点会话的临时授权指向它所属槽位的那一组。
 
-本决策状态为 `proposed`。涉及 Cloud 的个人设置、运行创建门禁、模型绑定与授权，以及 model-gateway 的模型校验。
+本决策状态为 `approved`：2026-10-16 经 owner 批准，核心用例见[个人槽位映射与按槽位绑定用例](../../../test-cases/cloud/model-access/executor-slot-mappings.md)。
+涉及 Cloud 的个人设置、运行创建门禁、模型绑定与授权，以及 model-gateway 的模型校验。
 图 schema 中的槽位定义见 [执行器槽位决策](../workflow/20261015-executor-slots-replace-agent-model-ids.md)。
-绑定挂在哪个运行实体上（IssueRun 还是 WorkflowRun）取决于 ora-space/circus#67 第 3 问，本文用"运行"指代，
-等 ora-space/circus#67 定了再落到具体表。不带工作流的 OpenCode IssueRun 行为不变：它等价于只用 `default` 一个槽位的运行。
+本文的"运行"按 `cloud/workflow` 根决策（`decisions/cloud/workflow/0-cloud-side-scheduler-owns-workflow-execution.md`）D3、D8 落到两种运行实体：
+工作流运行的执行聚合是 WorkflowRun，绑定挂在 `workflow_runs.id` 上；agent 类 IssueRun 的绑定仍挂在 `issue_runs.id` 上。
+不带工作流的 OpenCode IssueRun 行为不变：它等价于只用 `default` 一个槽位的运行。
 PostgreSQL 采用追加迁移；历史运行的单组绑定不改写。cloud 首期只支持 opencode。
 
 ## 继承与修改
@@ -23,6 +25,7 @@ PostgreSQL 采用追加迁移；历史运行的单组绑定不改写。cloud 首
 | 根决策 D2：Cloud 保存业务权威，model-gateway 独占密钥解密 | 继承，不变；映射只保存连接引用和模型 ID，不涉及密钥 |
 | 根决策 D3：创建运行的同一事务中冻结连接版本、密钥引用、模型和发起者 Git 身份；任一项不可用则回滚 | 修改：冻结对象从"一次运行一组"改为"一次运行、每个用到的槽位一组"；回滚条件扩展为任一槽位未配置或不可用。撤销语义继承，不变 |
 | 根决策 D4：临时授权由证书目标和当前数据库状态共同决定 | 继承，并收紧：授权所指的绑定必须属于该会话执行所在的运行，且对应该节点引用的槽位 |
+| `cloud/workflow` 根决策 D3：WorkflowRun 是工作流的执行聚合，`run_model_bindings` 增至（运行，槽位）唯一；D8：`execution_work` / `node_executions` 增加可选的 WorkflowRun 归属，Controller 契约不变 | 继承，不变；本文的"运行"即这两种运行实体，"会话执行所在的运行"即会话执行登记的归属 |
 | 根决策 D5：模型 ID 必须与运行冻结值相同 | 修改：模型 ID 必须与**授权所指绑定**的冻结值相同 |
 | [Thread 后续决策](../thread/20261010-personal-model-initiator-controls-input.md)：只有发起者可追加，发起者与管理员可结束 | 继承，不变；本文给出工作流运行的发起者是谁（D2） |
 | [Node agent-runtime 后续决策](../../node/agent-runtime/20261010-run-scoped-model-proxy.md) D1：会话规格带可选的 `model_binding_id` | 继承，不变；绑定本来就按会话传递，多组绑定不需要改 Node 协议 |
@@ -52,8 +55,9 @@ D3 把每次运行锁定的执行器展示在运行详情里，事后可以查�
 | 触发方式 | 发起者 |
 |---|---|
 | 直接运行 | 点"运行"的人 |
+| issue 里的 manual workflow IssueRun | 创建该 IssueRun 的人 |
 | 在 issue 里 @ 工作流 | 点 Confirm 的人 |
-| 定时任务（ora-space/circus#84） | 任务所有者，每次触发时按其当时的映射解析 |
+| 定时任务（[定时任务执行归属](../../desktop/core/scheduled-task/0-local-and-cloud-execution-ownership.md)的第二阶段） | 任务所有者，每次触发时按其当时的映射解析 |
 
 **门禁。** 创建运行时，从被运行的快照收集所有被引用的槽位（含隐式 `default`），逐个检查：
 
@@ -63,7 +67,7 @@ D3 把每次运行锁定的执行器展示在运行详情里，事后可以查�
 任一槽位不满足，整次创建回滚，不产生运行，也不消费任何额度。错误列出每个缺口的槽位名、`description`、
 引用它的节点和原因。不改用 `default`、`hint` 或作者的选择兜底。
 
-**缺口怎么补。** 直接运行和 @ Confirm 的表单在提交前为每个槽位展示 `description` 和解析出的执行器；
+**缺口怎么补。** 直接运行、manual workflow IssueRun 和 @ Confirm 的表单在提交前为每个槽位展示 `description` 和解析出的执行器；
 有缺口时内联列出，运行者可以当场选择执行器（或显式"采用作者的选择"，即 `hint`），写入个人映射后再提交。
 定时任务没人在场：那次触发失败，并通知任务所有者缺哪些槽位，不重试到配好为止。
 
@@ -72,7 +76,8 @@ D3 把每次运行锁定的执行器展示在运行详情里，事后可以查�
 ### D3：每个用到的槽位锁定一组绑定，重试和恢复都用这份记录
 
 - 门禁通过后，在同一事务里为每个用到的槽位创建一组绑定，内容与根决策 D3 相同（连接版本、密钥引用、连接名、协议、
-  服务地址、认证方式、模型），另外记录槽位名。（运行，槽位）唯一。
+  服务地址、认证方式、模型），另外记录槽位名。（运行，槽位）唯一：运行实体由判别列区分，WorkflowRun 与 IssueRun
+  各有一个（运行，槽位）唯一约束（`cloud/workflow` 根决策 D3）。
 - 这次运行从头到尾都用这份记录：节点重试、运行恢复都不重新解析映射。运行期间改映射，只影响之后新建的运行。
 - **撤销语义不变**：清除密钥、停用或删除连接时，所有指向它的绑定被永久撤销，包括在途运行的。
   之后需要该槽位的节点在申请授权时失败，按节点失败处理，不换用别的绑定；重新启用连接也不能复活这些绑定。
@@ -89,6 +94,7 @@ D3 把每次运行锁定的执行器展示在运行详情里，事后可以查�
 
 - 每个节点会话的会话规格带上它所属槽位的绑定引用（沿用 `model_binding_id`，Node 协议不变）。
 - 申请授权时，Cloud 除了根决策 D4 的检查，还验证这组绑定属于该会话执行所在的运行，并且对应发起这个会话的节点所引用的槽位。
+  "会话执行所在的运行"取自会话执行登记的归属（agent IssueRun 或 WorkflowRun，`cloud/workflow` 根决策 D8）。
   绑定和会话的对应关系由 Cloud 在派发时登记，不取信于请求体。
 - 代理（根决策 D5）要求请求的模型 ID 与**授权所指绑定**的冻结值相同。授权本来就按会话指向一组绑定，
   所以这只是把"运行冻结值"的表述改准确，代理的行为不变。
@@ -115,8 +121,6 @@ D3 把每次运行锁定的执行器展示在运行详情里，事后可以查�
 
 ## 本决策未解决的问题
 
-- **绑定挂在哪个运行实体上**：取决于 ora-space/circus#67 第 3 问（WorkflowRun 是否作为执行聚合）。
-  现有 `run_model_bindings.run_id` 是 `UNIQUE` 且引用 `issue_runs`，按本文需要改为（运行，槽位）唯一。
 - **按工作流覆盖个人映射**：后续扩展；覆盖之后仍然不回退。
 - **多 agent CLI**：首期只有 opencode。支持更多 CLI 时，映射和绑定需要记录 CLI，门禁需要检查 CLI 是否可用。
 - **desktop**：desktop 的映射和默认执行器见 ora-space/circus#124，不受本文约束。
@@ -124,9 +128,10 @@ D3 把每次运行锁定的执行器展示在运行详情里，事后可以查�
 ## 落地顺序
 
 1. **个人槽位映射**：存储、读写接口和设置页；`default` 直接读写个人默认模型。完成条件：映射只能本人读写，连接删除后映射保留并显示原因。
-2. **按槽位锁定绑定**：追加迁移，绑定增加槽位名，（运行，槽位）唯一；不带工作流的 IssueRun 写 `default`。
-   完成条件：现有 OpenCode IssueRun 的行为和测试不变。需要 ora-space/circus#67 第 3 问先定。
-3. **启动门禁**：接入 ora-space/circus#69 的统一启动门禁，覆盖直接运行、@ Confirm 和定时任务。完成条件：缺任一槽位都回滚且错误可定位。
+2. **按槽位锁定绑定**：追加迁移，绑定增加槽位名和运行实体判别列，现有 `run_model_bindings.run_id` 的 `UNIQUE`
+   改为按运行实体的（运行，槽位）唯一；不带工作流的 IssueRun 写 `default`。随 `cloud/workflow` 根决策落地顺序第 4 步交付。
+   完成条件：现有 OpenCode IssueRun 的行为和测试不变。
+3. **启动门禁**：接入 ora-space/circus#69 的统一启动门禁，覆盖直接运行、manual workflow IssueRun、@ Confirm 和定时任务。完成条件：缺任一槽位都回滚且错误可定位。
 4. **授权与代理**：授权按会话所属槽位校验绑定。完成条件：会话无法用另一个槽位的绑定取得授权。
 
 第 1 步只新增个人设置，不影响任何运行。第 2 步起，绑定记录的结构改变，但单槽位运行的可观察行为不变；
