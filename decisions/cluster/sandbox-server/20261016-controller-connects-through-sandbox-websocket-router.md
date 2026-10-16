@@ -11,7 +11,7 @@ Controller 不再直接拨号 Node。cluster 联调允许 Controller 与 Node �
 本文为 `proposed`：方向与部署认证边界仍待 owner 审查，不宣告已批准或已完成真实业务验收。
 涉及 cluster 的 Sandbox Server、desktop 的 Controller 与配置；不修改 Cloud 业务权威和 Node
 运行时控制协议。它对齐 sandbox 的连接行为，不复制其尚未补齐的生产认证能力，也不以其 Go POC
-runtime 替代真实 Rust Node。来源为 circus #160，preflight 实现由 circus #165 承接。
+runtime 替代真实 Rust Node。
 
 ## 问题与约束
 
