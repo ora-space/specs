@@ -22,12 +22,24 @@
 
 真实端到端证据采用 cluster Compose 或等价真实部署链路，遵守 minicloud 与 Controller 过渡监听退役。核心用例使用英文二级标题作为稳定代码引用，实施时按义务逐项补充直接测试和对应仓库提交。
 
-## 已批准的执行器槽位决策
+## 已批准的工作流执行决策
 
-[执行器槽位决策](../../decisions/cloud/workflow/20261015-executor-slots-replace-agent-model-ids.md)与[个人槽位映射与按槽位绑定决策](../../decisions/cloud/model-access/20261015-executor-slot-mappings-and-per-slot-run-bindings.md)于 2026-10-16 经 owner 批准，为 `approved`。Cloud main 还没有槽位与个人槽位映射；槽位校验与启动门禁在评审中的未合并 `preflight` [cloud#65](https://github.com/ora-space/cloud/pull/65) 上，按 `Partial` 登记，不当作已经落地。
+[工作流执行根决策](../../decisions/cloud/workflow/0-cloud-side-scheduler-owns-workflow-execution.md)与它的两份后续决策
+[执行器槽位决策](../../decisions/cloud/workflow/20261015-executor-slots-replace-agent-model-ids.md)、
+[个人槽位映射与按槽位绑定决策](../../decisions/cloud/model-access/20261015-executor-slot-mappings-and-per-slot-run-bindings.md)
+于 2026-10-16 经 owner 批准，为 `approved`，本领域首期核心用例同批建立。Cloud 至今没有工作流执行者：生产里的
+运行停在 `pending`，唯一写节点状态的是开发夹具，而根决策已把模拟 trace 排除在验收之外，所以执行类义务在
+cloud 侧全部为 `Missing`；main 也还没有槽位与个人槽位映射。门禁类义务（图校验、启动门禁、槽位解析）的实现在
+评审中的未合并 `preflight` [cloud#65](https://github.com/ora-space/cloud/pull/65)（head `0c064a2d`）上，按
+`Partial` 登记，不当作已经落地。
+
+desktop 参考实现（`8909f07`）的直接证据在每个用例里单独标注，并如实记下与它不同的地方：同一 run 内多个 agent 节点首期串行（desktop 在同一次调度 pass 里并行派发 sibling agent，所以"至多一个串行执行者"这一条在它身上是 `Partial`）、图在整个运行生命周期内不可变（desktop 另有 `snapshot_switch` 可替换冻结图）、发布时就拒绝不可执行节点（desktop 只在启动时拒绝）、启动表单用 `snapshotId`（desktop 无此表单）。这些义务没有 desktop 证据可依托，只能由 Cloud 自己的测试证明。
 
 | 领域 | 核心用例 | 重点风险 |
 | --- | --- | --- |
+| workflow | [执行身份与调用绑定](workflow/execution-identity-and-invocation.md) | 图随活稿漂移、身份不全、IssueRun 与 WorkflowRun 的半连接 |
+| workflow | [调度串行与恢复](workflow/scheduler-serialism-and-recovery.md) | 多副本重复派发、迟到回调、崩溃丢进度、谎报成功、没有取消入口 |
+| workflow | [发布与启动门禁](workflow/publish-and-start-admission.md) | 冻结执行不了的图、UUID 绕过校验、槽位被顶替、快照字段错名 |
 | workflow | [执行器槽位](workflow/executor-slots.md) | 槽位名变体、`hint` 被当兜底或被自动写入、旧图拒收或保留执行器 |
 | model-access | [个人槽位映射与按槽位绑定](model-access/executor-slot-mappings.md) | 映射越权、槽位被顶替、在途运行被改映射、会话借用别的槽位授权 |
 

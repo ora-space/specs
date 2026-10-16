@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: approved
 ---
 
 # 工作流由 Cloud 侧调度器执行：WorkflowRun 是执行聚合，服务端首期只做 start / agent / condition / output
@@ -10,12 +10,16 @@ Cloud 侧新增一个工作流调度器，复用既有控制面（`execution_wor
 唯一来源，desktop 是参考实现**；服务端首期只执行 `start` / `agent` / `condition` / `output` 四个节点，
 Controller 契约不变，不建 `controller/workflow`。
 
-本决策状态为 `proposed`。涉及 cloud 的规范图 schema、运行身份模型、调度与执行契约、发布与启动门禁；涉及
-specs 的规范图 schema 与首期核心用例（见「落地顺序」）；涉及 desktop 只作为参考实现，**本决策不修改任何
+本决策于 2026-10-16 经 owner 批准，状态为 `approved`，首期实现与真实边界验收尚未完成（Cloud 至今没有
+工作流执行者）。核心用例见[执行身份与调用绑定](../../../test-cases/cloud/workflow/execution-identity-and-invocation.md)、
+[调度串行与恢复](../../../test-cases/cloud/workflow/scheduler-serialism-and-recovery.md)与
+[发布与启动门禁](../../../test-cases/cloud/workflow/publish-and-start-admission.md)，新保障的直接证据按核心用例
+逐项登记为 `Partial` / `Missing`。涉及 cloud 的规范图 schema、运行身份模型、调度与执行契约、发布与启动门禁；
+涉及 specs 的规范图 schema 与首期核心用例（见「落地顺序」）；涉及 desktop 只作为参考实现，**本决策不修改任何
 desktop 决策**。参考实现的证据基线：desktop `8909f07`（引擎模块非测试代码约 9.3 千行、测试约 8.2 千行，
 `WorkflowRunEngineRepository` 31 个方法，覆盖 loop / iteration / region / retry / aggregator / resume /
-snapshot switch），cloud 现状 `a307027`（生产里 `workflow_runs` 只能是 `pending`，
-`executor_type='workflow'` 的 IssueRun 永远停在 `queued`）。
+snapshot switch），cloud 现状 `a307027`（本文起草时；批准时 main 已推进到 `7704089`，下述现状在它上面仍成立：
+生产里 `workflow_runs` 只能是 `pending`，`executor_type='workflow'` 的 IssueRun 永远停在 `queued`）。
 
 **非目标**：iteration、loop、HITL、retry、resume、snapshot switch 首期一律不做（理由与去向见 D1 与 D4）；
 私有仓库的凭据与克隆（D5）；成果交付（D7）；按工作流覆盖个人槽位映射（属 #118 的后续扩展）。
@@ -86,8 +90,15 @@ desktop 的 Rust 引擎核心为共享组件"。** 这是硬触发条件，不�
 #### 条件③：对拍用例与批准同时就位
 
 本 ADR 处于 `proposed` 期间不写核心用例（[specs/AGENTS.md](../../../AGENTS.md) 的 ADR 生命周期规定）。
-**ADR 批准为 `approved` 时，首期子集的核心用例必须同时就位，并要求 desktop 与 cloud 两侧都通过**，之后 #70
-才开工。这是"语义单一来源"唯一能落地的约束。
+**ADR 批准为 `approved` 时，首期子集的核心用例必须同时就位**，它们就是首期实现的验收清单，desktop 与 cloud
+两侧都要以直接证据逐项填满。这是"语义单一来源"唯一能落地的约束。本条已履行**仅指"状态与用例同批就位"**：
+状态改为 `approved` 的同一批变更里，首期核心用例落入 `test-cases/cloud/workflow/`（见开头链接的三份文档），
+其中 desktop 参考实现（`8909f07`）的直接证据按用例逐项登记。**用例里如实登记的 `Missing` / `Partial`
+（cloud 侧今天还没有工作流执行者）仍是待完成的真实义务，"本条已履行"不表示实现验收已经通过。**
+
+开工与合并按 owner 的结论：`#69` / `#70` 可以按 owner 已批准的结论以 `preflight` 与 ADR 评审并行开工，实现 PR
+按最终 ADR 逐项核对，并在依赖 issue 关闭后按"落地顺序"合并。**ADR 合入 main 与实现验收通过是两件事**，
+不能因为本决策已是 `approved` 就认为首期义务已经落地。
 
 #### 条件④：调度器边界按 desktop 端口的形状定义
 
@@ -205,6 +216,15 @@ Workspace 归属），在新契约下无法执行，也无法诚实补出来；�
 **同一 run 内多个 agent 节点首期串行。** 理由：它们共用该运行的 Workspace，并行会让文件改动互相踩踏，也会
 让成果归属无法界定。并行留作后续扩展。
 
+**这是本决策新增的范围限制，不是参考实现的现状**：desktop 的串行约束的是"同一 run 的调度命令与回调走同一个
+执行者"（条件②），它在同一次调度 pass 里**并行**派发同一 run 的 sibling agent 节点——引擎测试
+（`crates/application/src/workflow_run/engine/aggregator_tests.rs` 的 `parallel_fan_in_uses_the_declared_priority`、
+`crates/application/src/workflow_run/engine/d2_tests.rs` 的
+`failed_run_binds_in_flight_sibling_and_does_not_dispatch_join`）正是依赖这一点，其文档也写明并行 agent
+共用 Workspace 只提供时间窗 diff。因此首期核心用例
+"至多一个串行执行者"在 desktop 侧只能记 `Partial`，能直接证明"节点串行"的是 Cloud 自己的测试。
+**本段只固定 Cloud 首期（owner 已批准）的范围限制，不改变 desktop 的决策，也不把 desktop 的并行行为判为错误。**
+
 **取消是请求加有界终态**（继承 issue-run D6）：取消先记录请求（`cancel_requested_at` 的等价列），运行进入
 有界的收尾路径，**实际的终态在清理完成后才写入**；不因为收到请求就直接写终态。**首期必须有取消的写入者**（D6）。
 
@@ -279,8 +299,6 @@ agent 运行侧同样缺取消的写入者（G-026），**一并补上**，因�
 - **多副本下单 run 排他权的参数**：锁的键、租约时长、续租、失效窗口的具体数值，由实现按 Cloud 既有的
   claim/lease 给出并在运行 issue 记录。本文只固定 D1 条件②的不变量。
 - **成果交付的具体契约**（D7 延后）：由后续决策给出。
-- **首期核心用例的具体条目**：在本文变为 `approved` 时随它落入 `test-cases/cloud/workflow/`，
-  并要求 desktop 与 cloud 两侧通过（条件③）。
 - **存量 queued 结算的执行时点**：随实现 PR 还是独立迁移，由实现方定。
 - **`awaiting_input` 的处置**：`workflow_runs.status` 的 CHECK 里已有该取值；首期不产生它，是否保留由实现定。
 - **按工作流覆盖槽位映射**：属 #118 之后的扩展，不在本文范围。
@@ -288,7 +306,10 @@ agent 运行侧同样缺取消的写入者（G-026），**一并补上**，因�
 ## 落地顺序
 
 1. **本 ADR 评审**（与 specs PR #98 的槽位后续决策一起）→ owner 置 `approved`；**同一时刻**首期子集的核心
-   用例落入 `test-cases/cloud/workflow/`，desktop 与 cloud 两侧通过。这是条件③，也是下一步开工的前提。
+   用例落入 `test-cases/cloud/workflow/`，desktop 与 cloud 两侧的证据按义务逐项登记（cloud 侧执行类义务今天
+   仍是 `Missing`，实现完成后才逐项填满）。这是条件③。按 owner 的结论，`#69` / `#70` 可以以 `preflight`
+   与评审并行开工，实现 PR 按最终 ADR 逐项核对，并在依赖 issue 关闭后按本顺序合并；**本步合入 ADR 不等于
+   第 2、3 步的验收已经通过。**
 2. **统一启动与发布门禁**（#69）：三种入口共用一个启动函数；发布门禁按首期可执行子集明确拒绝并给出原因；
    `version` → `snapshotId` 改名。完成条件：引用未声明槽位、含首期不支持节点或配置的图被拒绝且原因可定位；
    合法草稿仍可保存；manual workflow IssueRun 不能再用任意 UUID 绕过校验。
