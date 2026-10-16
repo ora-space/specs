@@ -1,5 +1,37 @@
 # Glossary
 
+## Deployment
+
+### Deployment Release（部署版本）
+
+针对明确运行平台发布的一组相互兼容、内容固定的软件与依赖。它表达交付组合的身份，不表示某个站点
+已经安装或通过现场验收。
+_Avoid_: latest tag as release identity, installed site
+
+### Deployment Bundle（部署包）
+
+可交付到目标环境、承载一个 Deployment Release 所需软件、依赖及装配说明的完整交付物。
+它不是某个单独的容器镜像，也不包含部署实例的业务数据和秘密。
+_Avoid_: one Docker image, site backup
+
+### Deployment Site（部署实例）
+
+由部署方管理、拥有自身站点配置、持久身份与业务数据的一套 Ora 服务实例。不同部署实例可以使用同一个
+Deployment Release；版本相同不意味着它们共享身份或数据。
+_Avoid_: release version, source checkout
+
+### Runtime Dependency Snapshot（运行依赖快照）
+
+为一个声明支持的执行组合固定的完整运行依赖集合。它表达该组合可取得哪些准确内容，不表示某个会话
+已经完成安装，也不等同于偶然保留的下载缓存。
+_Avoid_: warmed developer cache, installed session state
+
+### Deployment Evidence（部署验收证据）
+
+绑定具体部署包内容和验证环境、说明特定部署义务实际结果的记录。构建完成、服务就绪和业务执行成功
+是不同义务，不能用其中一种记录代表其余结果。
+_Avoid_: container healthy as complete acceptance
+
 ## Session MCP
 
 `Session MCP Selection` 是一次 Agent Session 的 MCP 选择策略。普通聊天使用 `Automatic` 自动发现；
