@@ -4,6 +4,10 @@ status: implemented
 
 # Controller 接入沙盒网络并以双向 TLS 直连 Node，Sandbox Server 的 WS 路由退为本机传输工具
 
+> 历史决策：D1 的直连要求、D3 固定的 Controller 对端及 D4 的路由用途已由
+> [Controller 经 Sandbox Server WebSocket 路由连接 Node](20261016-controller-connects-through-sandbox-websocket-router.md)
+> 修改。Node 证书签发、TLS 监听与业务目标绑定继续继承；本文保留原直连方案的历史依据。
+
 Cloud 模式下，Controller 不再经 Sandbox Server 的 WS 路由连接沙盒 Node，而是自己接入沙盒网络，以
 `wss://ora-sandbox-<sandboxId>:<port>/ora-node/v1` 直连 Node。连接两端双向认证：Node 出示 Sandbox Server 按运行
 代次签发的服务端证书，Controller 按容器名校验它；Node 只接受部署固定的那一张 Controller 证书。WS 路由

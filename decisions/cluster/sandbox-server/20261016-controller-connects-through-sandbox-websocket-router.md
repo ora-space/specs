@@ -1,14 +1,14 @@
 ---
-status: proposed
+status: approved
 ---
 
 # Controller 经 Sandbox Server WebSocket 路由连接 Node，联调允许同网
 
-提议将 cluster 的 Controller–Node 接入改为与 `ora-space/sandbox` 一致的受控 WebSocket
+cluster 的 Controller–Node 接入采用与 `ora-space/sandbox` 一致的受控 WebSocket
 路由：Controller 连接统一入口并以沙盒 ID 选择目标，Sandbox Server 另建到 Node 的连接并中继。
 Controller 不再直接拨号 Node。cluster 联调允许 Controller 与 Node 同网，不要求网络隔离。
 
-本文为 `proposed`：接入方向与逐跳连接的信任边界仍待 owner 审查，尚不构成已批准的架构约定。
+本文为 `approved`：统一路由接入、逐跳连接的信任边界及协调升级范围已获批准。
 涉及 cluster 的 Sandbox Server、desktop 的 Controller 与配置；不修改 Cloud 业务权威和 Node
 运行时控制协议。它对齐 sandbox 的连接行为，不复制其尚未补齐的生产认证能力，也不以其 Go POC
 runtime 替代真实 Rust Node。
@@ -88,5 +88,6 @@ Controller、Sandbox Server 和配置需要协调升级。旧 Node 固定的客�
 身份验证。管理证书生成应幂等复用现有 CA，新增独立 router 身份。
 
 评审需核对双沙盒路由与重连、错误目标、创建未完成、终止墓碑、真实 Node hello，以及受影响的
-Cloud/插件/Agent/Revision 验收。子层传输测试不能代替完整业务链路；在 ADR 批准后再维护对应
-核心测试用例。生产认证与过期证书轮换属于后续工作。
+Cloud/插件/Agent/Revision 验收。子层传输测试不能代替完整业务链路；直接证据与缺口见
+[路由接入核心用例](../../../test-cases/cluster/sandbox-server/routed-node-connection.md)。
+生产认证与过期证书轮换属于后续工作。

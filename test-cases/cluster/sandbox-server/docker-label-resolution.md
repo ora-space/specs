@@ -4,14 +4,15 @@
 本文件登记 Sandbox Server 把 `ate-target-actor` 解析为 Docker 容器中 Node 地址的承诺；中继的透传、
 close code 与 ping/pong 语义见 cluster `README.md`，Controller 侧的失败分类见
 [传输核心用例](../../node/protocol/frame-channel-transports.md)，本文不重复登记。证据来自 ora-space/cluster 仓库（核对基线 `aef10f3`），路径相对该仓库根目录。
-Cloud 模式的 Controller 不经此路由，直连见[Node 直连用例](direct-node-connection.md)。
+Cloud 模式的 Controller 经此路由接入；lifecycle 前置检查、逐跳 TLS 与终止语义见
+[路由接入用例](routed-node-connection.md)。本文的 ws 地址是 resolver 的发现结果，启用管理 TLS 时由中继以 wss 连接。
 
 ## Docker Target Resolves To Exactly One Running Node On The Sandbox Network
 
 ### 风险
 
 解析把连接送到错误的 Node：同一 sandbox ID 的多个容器被任选其一，或者使用宿主机发布端口、其他网络
-上的地址，使经路由到达的明文 Node 入口暴露在路由之外；或缓存了容器重建前的旧地址。
+上的地址，使连接到达错误的后端；或缓存了容器重建前的旧地址。
 
 ### 前置状态
 
@@ -42,7 +43,7 @@ Controller 以 `ate-target-actor: <atespace>/<sandbox-id>` 发起 WebSocket Upgr
 | 多个匹配一律拒绝 | `sandbox-server/internal/route/docker_test.go` 的 `TestDockerResolveFailures` 以两个同标签运行中容器断言 `ErrSandboxUnavailable`；解析失败时 server 在拨号前返回（`sandbox-server/internal/server/server_test.go` 的 `TestDiscoveryFailuresMapToFixedResponses`） | Covered |
 | 不缓存 | `sandbox-server/internal/route/docker_test.go` 的 `TestDockerResolveReflectsEachQuery`：两次解析之间改变 IP，断言第二次返回新地址 | Covered |
 | 只读 | 类型层：`route.NewDocker` 只接受 `ContainerLister`（仅 `ListContainers`），解析无法调用写 API；尚缺记录 Engine 请求方法的直接断言 | Partial |
-| 真实 Docker 端到端路由 | cluster#3 以替身 Node 镜像在真实 dockerd 上手工验收（握手、`404`、`503`），尚无自动化测试 | Missing |
+| 真实 Docker 端到端路由 | cluster `sandbox-server/integration/routed_docker_test.go` 的 `TestDockerLifecycleRoutesRealNode` 经生产服务创建真实 Node，验证 routed hello、实际终止与后续 404；未单独注入全部 Docker 发现故障 | Partial |
 
 ### 决策依据
 
@@ -74,7 +75,8 @@ Controller 请求的 target 分别处于：无匹配容器；匹配容器未运�
 
 ### 禁止结果
 
-容器存在时返回 `404`；响应体包含 Docker 错误原文、容器 ID 或网络名；Docker 失联导致进程退出。
+仅凭容器暂时不可路由返回 `404`；响应体包含 Docker 错误原文、容器 ID 或网络名；Docker 失联导致进程退出。
+启用 lifecycle 时，终止墓碑优先于存活容器并返回 `404`，这是路由接入决策的明确覆盖规则。
 
 ### 验证义务与证据
 
