@@ -4,7 +4,7 @@
 Cloud 今天没有工作流调度器：[`0029_workflow_runs.sql`](https://github.com/ora-space/cloud/blob/7704089d453f88d66e06d462aafe554e03a11855/internal/core/migrations/0029_workflow_runs.sql)
 写明"Cloud has no workflow engine"，生产里的运行停在 `pending`，唯一会写节点状态的是开发夹具
 `MockWorkflowRunSimulator`（[`internal/collab/collab.go`](https://github.com/ora-space/cloud/blob/7704089d453f88d66e06d462aafe554e03a11855/internal/collab/collab.go)），
-而根决策明确模拟 trace 不能作为验收证据。因此本文件的义务在 D1 落地顺序第 3 步（#70）交付真实调度器之前全部是 `Missing`。
+而根决策明确模拟 trace 不能作为验收证据。因此本文件的义务在 D1 落地顺序第 3 步（ora-space/circus#70）交付真实调度器之前全部是 `Missing`。
 
 ## At Most One Serial Executor Advances A Workflow Run
 
@@ -23,7 +23,7 @@ Cloud 今天没有工作流调度器：[`0029_workflow_runs.sql`](https://github
 - 决策依据：D1 条件②（无状态调度、单 run 串行、多副本与租约），D4（同 run 内 agent 节点首期串行），不变量 3。
 - desktop 参考实现（`8909f07`）一侧：**Partial** — 同一 run 只有一个推进者有直接证据：per-run 排他锁是 backend composition 里的 `KeyedResourceLocks`（[`crates/backend/src/git_cleanup/keyed_locks.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/git_cleanup/keyed_locks.rs) 的 `exclusive_waits_for_shared_holders`），[`crates/backend/src/workflow/run/operations/tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/operations/tests.rs) 的 `concurrent_resume_from_failure_reruns_the_failed_node_once`（两线程各持排他权，结果恰为 (resumed, refused)=(1,1)）与 `concurrent_cancel_and_complete_report_the_committed_outcome`。**但"同一 run 内多个 agent 节点串行"与参考实现相反**：desktop 在同一次调度 pass 里并行派发 sibling agent，并允许它们同时 in-flight（[`crates/application/src/workflow_run/engine/aggregator_tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/application/src/workflow_run/engine/aggregator_tests.rs) 的 `parallel_fan_in_uses_the_declared_priority`、`d2_tests.rs` 的 `failed_run_binds_in_flight_sibling_and_does_not_dispatch_join`），其文档也写明并行 agent 共用 Workspace 只提供时间窗 diff、不提供改动归属。首期串行是本决策相对参考实现的**偏离**，没有 desktop 证据可依托，只能靠 Cloud 自己的测试证明。
 - 本次直接证据：**Missing** — 没有工作流执行者，也没有任何按 run 取排他权的代码路径。参考实现用进程内锁表（desktop `workflow_run/engine/engine.rs:43-49`），根决策明确要求 Cloud 换成跨进程等价物并在运行 issue 记录参数。
-- 仍缺：锁的键、租约时长、续租与失效窗口的具体数值由实现给出；多副本联合验证属 D1 落地顺序第 3 步（#70）。
+- 仍缺：锁的键、租约时长、续租与失效窗口的具体数值由实现给出；多副本联合验证属 D1 落地顺序第 3 步（ora-space/circus#70）。
 
 ## A Node Result Commit Is A Compare And Swap And Late Callbacks Are No-ops
 
@@ -61,7 +61,7 @@ Cloud 今天没有工作流调度器：[`0029_workflow_runs.sql`](https://github
 - 决策依据：D1 条件②（每次推进从已提交状态重算、崩溃后不恢复内部状态），D4（崩溃恢复只依据已提交的节点结果），不变量 4。
 - desktop 参考实现（`8909f07`）一侧：**Covered** — 分支激活与就绪集合只从持久化行推导（[`crates/application/src/workflow_run/engine/branch_projection.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/application/src/workflow_run/engine/branch_projection.rs) 的 `selected_branch_activates_only_the_matching_successor`、`fan_in_with_an_inactive_branch_still_becomes_ready`、`unresolved_condition_leaves_successors_unreached` 等），并且经编码 → 真实 SQLite 重载 → 再解析后执行仍成立（[`crates/backend/src/workflow/run/aggregator_persistence_tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/aggregator_persistence_tests.rs) 的 `persisted_branch_outputs_reach_downstream`、`persisted_false_value_reaches_downstream`）；崩溃后只重做失败节点与其后继、已成功 sibling 保留（[`crates/backend/src/workflow/run/resume_tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/resume_tests.rs) 的 `resume_from_failure_after_orphaned_crash_recovery`、`resume_from_failure_redoes_failed_join_and_finishes`）。说明：desktop 的串行执行者是进程内的，跨进程多副本不适用，这一条的多副本部分在参考实现里没有对应证据。
 - 本次直接证据：**Missing** — 生产路径没有推进者，运行停在 `pending`；开发夹具的 trace 不经过任何重算路径，不能作为该义务的证据。参考语义为 desktop 的 `resume`（`engine.rs:328-330`："Recomputes the ready set from persisted state"）。
-- 仍缺：本用例与上一条共同构成 D1 落地顺序第 3 步的验收面（#70："真实跑通 Start → Agent → Output，fixtures=false"）。
+- 仍缺：本用例与上一条共同构成 D1 落地顺序第 3 步的验收面（ora-space/circus#70："真实跑通 Start → Agent → Output，fixtures=false"）。
 
 ## A Node With No Committed Result Is Never Recorded Successful
 

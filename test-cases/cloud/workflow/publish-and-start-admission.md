@@ -2,7 +2,7 @@
 
 依据[工作流执行根决策](../../../decisions/cloud/workflow/0-cloud-side-scheduler-owns-workflow-execution.md)（D2、D3）
 与它的[执行器槽位后续决策](../../../decisions/cloud/workflow/20261015-executor-slots-replace-agent-model-ids.md)。
-main 上的发布只冻结活稿、不校验图，三种入口也还没有共用的启动门禁；首期门禁由 D1 落地顺序第 2 步（#69，运行
+main 上的发布只冻结活稿、不校验图，三种入口也还没有共用的启动门禁；首期门禁由 D1 落地顺序第 2 步（ora-space/circus#69，运行
 [#132](https://github.com/ora-space/circus/issues/132)）实现，当前是未合并的 `preflight`
 [cloud#65](https://github.com/ora-space/cloud/pull/65)（head `0c064a2d`）。所以本文件的证据按"实现已在评审、尚未落到 main"
 如实标 `Partial`，并把其中还没实现的部分标 `Missing`。

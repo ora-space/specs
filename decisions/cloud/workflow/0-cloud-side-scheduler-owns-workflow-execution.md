@@ -22,7 +22,7 @@ snapshot switch），cloud 现状 `a307027`（本文起草时；批准时 main �
 生产里 `workflow_runs` 只能是 `pending`，`executor_type='workflow'` 的 IssueRun 永远停在 `queued`）。
 
 **非目标**：iteration、loop、HITL、retry、resume、snapshot switch 首期一律不做（理由与去向见 D1 与 D4）；
-私有仓库的凭据与克隆（D5）；成果交付（D7）；按工作流覆盖个人槽位映射（属 #118 的后续扩展）。
+私有仓库的凭据与克隆（D5）；成果交付（D7）；按工作流覆盖个人槽位映射（属 ora-space/circus#118 的后续扩展）。
 **兼容边界**：desktop 的图行为不变（见 ora-space/circus#124）；cloud 已存的图不做数据迁移；
 已永久 `queued` 的 `executor_type='workflow'` IssueRun 按 D3 一次性结算。
 
@@ -89,16 +89,10 @@ desktop 的 Rust 引擎核心为共享组件"。** 这是硬触发条件，不�
 
 #### 条件③：对拍用例与批准同时就位
 
-本 ADR 处于 `proposed` 期间不写核心用例（[specs/AGENTS.md](../../../AGENTS.md) 的 ADR 生命周期规定）。
-**ADR 批准为 `approved` 时，首期子集的核心用例必须同时就位**，它们就是首期实现的验收清单，desktop 与 cloud
-两侧都要以直接证据逐项填满。这是"语义单一来源"唯一能落地的约束。本条已履行**仅指"状态与用例同批就位"**：
-状态改为 `approved` 的同一批变更里，首期核心用例落入 `test-cases/cloud/workflow/`（见开头链接的三份文档），
-其中 desktop 参考实现（`8909f07`）的直接证据按用例逐项登记。**用例里如实登记的 `Missing` / `Partial`
-（cloud 侧今天还没有工作流执行者）仍是待完成的真实义务，"本条已履行"不表示实现验收已经通过。**
-
-开工与合并按 owner 的结论：`#69` / `#70` 可以按 owner 已批准的结论以 `preflight` 与 ADR 评审并行开工，实现 PR
-按最终 ADR 逐项核对，并在依赖 issue 关闭后按"落地顺序"合并。**ADR 合入 main 与实现验收通过是两件事**，
-不能因为本决策已是 `approved` 就认为首期义务已经落地。
+首期子集的核心用例与本决策的 `approved` 状态同批建立在 `test-cases/cloud/workflow/`（见开头链接的三份文档），
+它们就是首期实现的验收清单，desktop 与 cloud 两侧都要以直接证据逐项填满。这是"语义单一来源"唯一能落地的约束。
+desktop 参考实现（`8909f07`）的直接证据按用例逐项登记。**`approved` 不表示实现已通过验收**：用例里登记为
+`Missing` / `Partial` 的义务（cloud 侧今天还没有工作流执行者）仍待完成，逐项取得直接证据后首期才算落地。
 
 #### 条件④：调度器边界按 desktop 端口的形状定义
 
@@ -149,7 +143,7 @@ desktop 节点——这样门禁才能给出确切原因，而不是"未知类�
 **按服务端首期可执行子集拒绝，并给出原因**（先例：desktop 的 `first_unsupported_node()`，
 `loop_graph.rs:51-59`），不静默忽略。**未完成的草稿仍然可以保存**：保存保持宽松，发布才是"这份图将成为运行
 执行的冻结文档"的时刻（继承 MCP 决策 D4）。**安装状态不是发布门禁**：是否已安装、配置是否完整属于运行时
-检查（MCP D4），由启动门禁处理（#69）。发布也不检查映射（槽位决策：发布者不一定是运行者）。
+检查（MCP D4），由启动门禁处理（ora-space/circus#69）。发布也不检查映射（槽位决策：发布者不一定是运行者）。
 
 ### D3：WorkflowRun 是执行聚合，IssueRun 通过 `workflow_invocation_ref` 引用它
 
@@ -168,7 +162,7 @@ desktop 节点——这样门禁才能给出确切原因，而不是"未知类�
 - `issue_interactions.run_id` 的语义**不变**，仍指向那次调用的 IssueRun；WorkflowRun 经由
   `workflow_invocation_ref` 到达。这样重复 Confirm 的幂等与既有时间线行为（`executor_type='workflow'` 的
   IssueActivity）都不需要改动。
-- **三种入口走同一个启动函数**（#69）：同一个函数负责门禁校验、冻结身份、创建运行实体。manual workflow
+- **三种入口走同一个启动函数**（ora-space/circus#69）：同一个函数负责门禁校验、冻结身份、创建运行实体。manual workflow
   IssueRun 不能再像今天那样只校验 UUID 形状（`issue_runs.go:81-104`，注释原文"Team/workflow keep the opaque
   UUID shape, resolved by ports later"）就落库。
 
@@ -234,11 +228,11 @@ Workspace 归属），在新契约下无法执行，也无法诚实补出来；�
 ### D5：仓库凭据首期只支持匿名公开 Git
 
 首期执行只支持从匿名可访问的公开 Git 仓库取得代码，私有仓库的凭据链路（ora-space/circus#16）**不作为前置**。
-理由是 #16 体量大，而当前真实可用的路径就是公开 Git。私有仓库与凭据属于后续决策，本决策不预设它的形状。
+理由是 ora-space/circus#16 体量大，而当前真实可用的路径就是公开 Git。私有仓库与凭据属于后续决策，本决策不预设它的形状。
 
 ### D6：取消写入者纳入首期
 
-**取消的写入者纳入首期**：没有写入者就无法取消，工作流的取消（以及 #75 依赖它的能力）都落不了地。
+**取消的写入者纳入首期**：没有写入者就无法取消，工作流的取消（以及 ora-space/circus#75 依赖它的能力）都落不了地。
 agent 运行侧同样缺取消的写入者（G-026），**一并补上**，因为它与工作流运行共用同一条收尾路径。
 
 ### D7：首期只保证资源释放，成果交付延后
@@ -254,7 +248,7 @@ agent 运行侧同样缺取消的写入者（G-026），**一并补上**，因�
 侧调度器，agent 节点仍走既有的 AgentSession 执行路径，Controller 的职责与协议不变，**没有新的 Controller
 契约**。[执行器槽位后续决策](20261015-executor-slots-replace-agent-model-ids.md) 与
 [个人槽位映射决策](../model-access/20261015-executor-slot-mappings-and-per-slot-run-bindings.md)
-（specs PR #98）是本文的后续决策，一起评审。
+是本文的后续决策。
 
 复用控制面时有一处必须说清的边界：`execution_work.run_id` 与 `node_executions` 现在都指向 `issue_runs`
 （`0024_agent_run_control_plane.sql:33-63`），而工作流运行没有 IssueRun。处置：**由 Cloud 自己的表承载这个
@@ -301,21 +295,19 @@ agent 运行侧同样缺取消的写入者（G-026），**一并补上**，因�
 - **成果交付的具体契约**（D7 延后）：由后续决策给出。
 - **存量 queued 结算的执行时点**：随实现 PR 还是独立迁移，由实现方定。
 - **`awaiting_input` 的处置**：`workflow_runs.status` 的 CHECK 里已有该取值；首期不产生它，是否保留由实现定。
-- **按工作流覆盖槽位映射**：属 #118 之后的扩展，不在本文范围。
+- **按工作流覆盖槽位映射**：属 ora-space/circus#118 之后的扩展，不在本文范围。
 
 ## 落地顺序
 
-1. **本 ADR 评审**（与 specs PR #98 的槽位后续决策一起）→ owner 置 `approved`；**同一时刻**首期子集的核心
-   用例落入 `test-cases/cloud/workflow/`，desktop 与 cloud 两侧的证据按义务逐项登记（cloud 侧执行类义务今天
-   仍是 `Missing`，实现完成后才逐项填满）。这是条件③。按 owner 的结论，`#69` / `#70` 可以以 `preflight`
-   与评审并行开工，实现 PR 按最终 ADR 逐项核对，并在依赖 issue 关闭后按本顺序合并；**本步合入 ADR 不等于
-   第 2、3 步的验收已经通过。**
-2. **统一启动与发布门禁**（#69）：三种入口共用一个启动函数；发布门禁按首期可执行子集明确拒绝并给出原因；
+1. **核心用例就位**：首期子集的核心用例随本决策 `approved` 落入 `test-cases/cloud/workflow/`，desktop 与 cloud
+   两侧的证据按义务逐项登记（cloud 侧执行类义务今天仍是 `Missing`，实现完成后才逐项填满）。这是条件③；
+   **本步完成不等于第 2、3 步的验收已经通过。**
+2. **统一启动与发布门禁**（ora-space/circus#69）：三种入口共用一个启动函数；发布门禁按首期可执行子集明确拒绝并给出原因；
    `version` → `snapshotId` 改名。完成条件：引用未声明槽位、含首期不支持节点或配置的图被拒绝且原因可定位；
    合法草稿仍可保存；manual workflow IssueRun 不能再用任意 UUID 绕过校验。
-3. **Cloud 侧调度器**（#70）：按 D1 条件②、④ 实现无状态调度、单 run 串行、节点结果提交与就绪集合推进，
+3. **Cloud 侧调度器**（ora-space/circus#70）：按 D1 条件②、④ 实现无状态调度、单 run 串行、节点结果提交与就绪集合推进，
    真实跑通 Start → Agent → Output，fixtures=false 下直接运行从 `pending` 进入真实运行与成功/失败结算。
-4. **运行身份与绑定**（#70 或紧随其后）：`workflow_runs` 增加 `created_by` / `project_id`；
+4. **运行身份与绑定**（ora-space/circus#70 或紧随其后）：`workflow_runs` 增加 `created_by` / `project_id`；
    `workspaces.workflow_run_id`；`run_model_bindings` 改成按（运行，槽位）唯一；`workflow_invocation_ref`
    成为实引用。
 5. **存量结算与取消写入者**（D3、D6）：一次性结算永久 queued 的 `executor_type='workflow'` IssueRun；
