@@ -1,6 +1,6 @@
 # 沙盒 Node 直连用例的历史入口
 
-现行管理通道采用[已批准的路由接入决策](../../../decisions/cluster/sandbox-server/20261016-controller-connects-through-sandbox-websocket-router.md)。
+现行管理通道采用[已实现的路由接入决策](../../../decisions/cluster/sandbox-server/20261016-controller-connects-through-sandbox-websocket-router.md)。
 直接验证义务与证据已改挂到[路由接入核心用例](routed-node-connection.md)。本文件保留既有路径和锚点，
 不再把旧直连方案作为当前系统承诺；原始内容可从 Git 历史查阅。
 

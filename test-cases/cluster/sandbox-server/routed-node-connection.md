@@ -1,9 +1,10 @@
 # Controller 经 Sandbox Server 路由连接 Node
 
-依据[已批准的路由接入决策](../../../decisions/cluster/sandbox-server/20261016-controller-connects-through-sandbox-websocket-router.md)。
+依据[已实现的路由接入决策](../../../decisions/cluster/sandbox-server/20261016-controller-connects-through-sandbox-websocket-router.md)。
 本文取代[历史直连用例](direct-node-connection.md)的接入与认证对端约定，继承 Node TLS 监听、证书用途及材料隔离义务。
 Docker 标签解析见[解析用例](docker-label-resolution.md)；业务目标、Cloud 许可与 fencing 继续由运行时控制协议负责。
-证据对应 desktop `3e7893f2`、cluster `23b775e`，路径相对各自仓库根目录；不代表配套 PR 已合并。
+证据基线为已合并的 desktop [`dac9401a`](https://github.com/ora-space/desktop/commit/dac9401aa839bb063fb69cad3ed0dbd8cab2b226)、
+cluster [`ac126c57`](https://github.com/ora-space/cluster/commit/ac126c57e4814423035e4df0ffc9c4f631353ef4)，路径相对各自仓库根目录。
 
 ## Every Sandbox Uses The Configured Router Without Direct Fallback
 
@@ -61,7 +62,7 @@ Docker 标签解析见[解析用例](docker-label-resolution.md)；业务目标�
 |---|---|---|
 | 成功 ensure、合法 target 与墓碑优先 | cluster `sandbox-server/internal/lifecycle/router_test.go` 的 `TestRouterRequiresSucceededLiveEnsureEvenWhileContainerRemains` 覆盖未知、创建中、成功、墓碑及非法 target | Covered |
 | 唯一目标、重新发现与固定错误分类 | cluster `sandbox-server/internal/route/docker_test.go` 和 `internal/server/server_test.go` 的解析失败固定响应测试；详细义务见 Docker 标签解析用例 | Covered |
-| 真实 Docker lifecycle 与连接收尾 | cluster `sandbox-server/integration/routed_docker_test.go` 的 `TestDockerLifecycleRoutesRealNode` 经生产服务 ensure、真实 Node hello、terminate 关闭已有连接并拒绝新连接为 404；仅显式配置隔离入口时启用，默认跳过不能记为实跑通过 | Covered |
+| 真实 Docker lifecycle 与连接收尾 | cluster `sandbox-server/integration/routed_docker_test.go` 的 `TestDockerLifecycleRoutesRealNode` 包含生产服务 ensure、真实 Node hello、terminate 关闭已有连接及后续 404 的断言。仅显式配置隔离入口时启用，常规测试默认跳过；本用例未附含命令、栈与源码基线的可复核实跑记录，不能将测试存在或跳过计为完整实跑证据 | Partial |
 | 断线与 shutdown 释放双方 | cluster `TestAbruptNodeLossClosesControllerWithInternalError`、`TestShutdownClosesBothSidesWithGoingAway`；完整故障交错与旧 fleet target 有界收敛未由这些测试证明 | Partial |
 
 决策依据：路由接入 D2、不变量 2、5；继承生命周期的墓碑与实际终止证据顺序。
