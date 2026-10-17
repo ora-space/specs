@@ -1,9 +1,15 @@
 # 部署方共享出网：模型转发、资产下载、解析与策略切换
 
 决策依据：[部署方出口与显式解析 ADR](../../../decisions/cloud/model-access/20261017-deployment-owned-egress-and-explicit-resolution.md)
-（`approved`）。以下都是新增/改变的验证义务，当前没有对应实现的直接证据，统一为 `Missing`。
-表中的场景是验收要求，不是已经执行的测试。原公网、凭据、冻结和撤销的已有证据继续见
+（`approved`）。Cloud 的共享策略实现已有下列受控测试证据；部署入口的拓扑采集、双服务停启和摘要比对仍缺直接证据。
+状态逐项区分 `Partial` 与 `Missing`，不把受控服务或原有测试扩展为真实企业部署验收。原公网、凭据、冻结和撤销的已有证据继续见
 [个人模型访问](personal-model-access.md)；这些证据不能替代企业策略的组合验证。
+
+Cloud 实现与验证入口：[cloud#80](https://github.com/ora-space/cloud/pull/80)。本次证据来自
+`internal/egress/{policy,dns,health}_test.go`、`internal/modelgateway/egress_test.go` 和
+`integration/deployment_egress_test.go`，后者使用真实 HTTP/PostgreSQL/TCP DNS；模型转发的上游为
+受控 TLS 服务，不是现场供应商。部署相关义务仍由 cluster 承接，ADR 保持 `approved`。
+
 
 ## Public deployments must retain the existing HTTPS and trusted DNS policy
 
@@ -27,9 +33,9 @@
 
 | 义务 | 直接证据要求 | 状态 |
 | --- | --- | --- |
-| 共享规范化和精确匹配 | 配置与保存/转发边界覆盖根点、端口、Unicode、畸形 host、IP literal 与不同路径 | Missing |
-| 未列出的所有目标均拒绝 | 未许可 host 的公网（含 `7.x` 借用公网编号夹具）、RFC1918/ULA；断言 DNS/上游零调用 | Missing |
-| 保存与转发独立且一致 | 真实保存接口、版本/幂等冲突、DNS 失败不提交；旧绑定不能绕过收紧许可 | Missing |
+| 共享规范化和精确匹配 | 配置与保存/转发边界覆盖根点、端口、Unicode、畸形 host、IP literal 与不同路径。直接证据：`egress.TestStrictStartupConfiguration` 覆盖规范化、不同路径、端口/Unicode/畸形 host/IP/query；HTTP 保存与代理测试覆盖主要入口，全部变体的入口组合仍待补齐 | Partial |
+| 未列出的所有目标均拒绝 | 未许可 host 的公网（含 `7.x` 借用公网编号夹具）、RFC1918/ULA；断言 DNS/上游零调用。直接证据：`TestPolicyTCPRejectsMixedAnswersAndUnlistedHostsBeforeLookup` 计数 DNS；`TestEnterpriseModelAndAssetShareTransportPolicy` 验证模型/Fetch 未许可目标无上游调用；借用公网地址的保存路径见 `TestDeploymentEgressSaveReplayAndPermissionReduction` | Partial |
+| 保存与转发独立且一致 | 真实保存接口、版本/幂等冲突、DNS 失败不提交；旧绑定不能绕过收紧许可。直接证据：`TestDeploymentEgressSaveReplayAndPermissionReduction` 用真实 HTTP/PG 与单连接池证明 DNS 在事务外、失败不写新版本、重放不查询；`TestEnterpriseModelAndAssetShareTransportPolicy` 拒绝未许可冻结目标。并发变更矩阵仍待补齐 | Partial |
 
 ## Revocation must remain available when egress admission is unavailable
 
@@ -43,9 +49,9 @@
 
 | 义务 | 直接证据要求 | 状态 |
 | --- | --- | --- |
-| 降低权限独立于准入 | 真实 HTTP/PostgreSQL/Gateway 覆盖三种操作与三种不可准入状态，断言永久撤销且 DNS/上游零调用 | Missing |
-| 纯停用只降低权限 | 历史 URL 原样可停用，夹带修改配置拒绝，跨用户/版本冲突仍拒绝；启用后旧绑定继续无效 | Missing |
-| 幂等不受之后网络变化影响 | 保存成功后改变 DNS/策略，合法相同重试返回原结果；原有幂等冲突仍成立 | Missing |
+| 降低权限独立于准入 | 真实 HTTP/PostgreSQL/Gateway 覆盖三种操作与三种不可准入状态，断言永久撤销且 DNS/上游零调用。直接证据：`TestDeploymentEgressRevocationSurvivesRemovedTarget` 真实 PG/HTTP 验证目标移除后三种操作永久撤销；`TestDeploymentEgressSaveReplayAndPermissionReduction` 覆盖 DNS 故障。全部状态与凭据 HTTP 入口组合仍待补齐 | Partial |
+| 纯停用只降低权限 | 历史 URL 原样可停用，夹带修改配置拒绝，跨用户/版本冲突仍拒绝；启用后旧绑定继续无效。直接证据：`TestDeploymentEgressSaveReplayAndPermissionReduction` 验证纯停用不查询 DNS、夹带改名不能绕过、跨用户拒绝；`TestDeploymentEgressRevocationSurvivesRemovedTarget` 验证重新启用后旧绑定仍撤销 | Partial |
+| 幂等不受之后网络变化影响 | 保存成功后改变 DNS/策略，合法相同重试返回原结果；原有幂等冲突仍成立。直接证据：`TestDeploymentEgressSaveReplayAndPermissionReduction` 在真实 DNS 从成功变为 SERVFAIL 后重放原 POST，断言相同 ID 且 DNS 计数不变；幂等冲突与策略变更的组合仍待补齐 | Partial |
 
 ## Private exceptions must never override infrastructure and special address denies
 
@@ -59,9 +65,9 @@
 
 | 义务 | 直接证据要求 | 状态 |
 | --- | --- | --- |
-| 私网许可与可选 CIDR 独立 | RFC1918/ULA 的缺省拒绝、显式通过、CIDR 缺省和越界；另一个 target 许可无效 | Missing |
-| 不可覆盖拒绝 | 两调用方在白名单+allowPrivate+覆盖 CIDR 下，cluster 网络、宿主接口/网关/VIP、loopback、link-local 仍拒绝 | Missing |
-| 其他保留类别和全答案检查 | unspecified/multicast/documentation/benchmark/转换地址，A 允许+AAAA 拒绝及反向组合，mapped IPv6 | Missing |
+| 私网许可与可选 CIDR 独立 | RFC1918/ULA 的缺省拒绝、显式通过、CIDR 缺省和越界；另一个 target 许可无效。直接证据：`TestStrictStartupConfiguration` 与 `TestDenyPrecedenceAndPerTargetRanges` 直接覆盖缺省私网拒绝、显式许可、可选 CIDR 与越界；真实 TLS 私网成功见 `TestEnterpriseModelAndAssetShareTransportPolicy` | Partial |
+| 不可覆盖拒绝 | 两调用方在白名单+allowPrivate+覆盖 CIDR 下，cluster 网络、宿主接口/网关/VIP、loopback、link-local 仍拒绝。直接证据：`TestDenyPrecedenceAndPerTargetRanges` 与配置加载测试覆盖基础设施优先拒绝；两类业务入口逐地址类别的组合证据仍待补齐 | Partial |
+| 其他保留类别和全答案检查 | unspecified/multicast/documentation/benchmark/转换地址，A 允许+AAAA 拒绝及反向组合，mapped IPv6。直接证据：`TestDenyPrecedenceAndPerTargetRanges` 覆盖 mapped/保留类别，`TestPolicyTCPRejectsMixedAnswersAndUnlistedHostsBeforeLookup` 使用真实 TCP DNS 的 A 安全/AAAA 禁区组合；反向组合仍待补齐 | Partial |
 | 拓扑自动采集与可选补充 | 部署入口从 Docker 静态/动态 Node 池、默认桥和宿主接口生成双栈拒绝表，补充网段/地址只能合并；采集失败命令报错，未声明额外 NAT/VIP 不阻止启动 | Missing |
 
 ## Enterprise resolution must use only the configured resolver or static mapping
@@ -76,9 +82,9 @@
 
 | 义务 | 直接证据要求 | 状态 |
 | --- | --- | --- |
-| 显式解析及无回退 | 真实受控 TCP DNS 服务与系统诱饵计数，超时/失败/单族错误拒绝，NODATA 语义 | Missing |
-| 有界协议校验 | CNAME 深度/循环、响应关联、超长/畸形/附加记录；地址验证发生在任何 dial 前 | Missing |
-| 静态映射与 TLS 身份 | 无 resolver 的全静态配置、混合配置、静态全地址检查；HTTP Host/SNI/证书仍为原域名 | Missing |
+| 显式解析及无回退 | 真实受控 TCP DNS 服务与系统诱饵计数，超时/失败/单族错误拒绝，NODATA 语义。直接证据：`TestTCPDNSFamiliesCNAMEAndFailureBoundaries` 真实 TCP DNS 覆盖双族、单族 NODATA/失败；`TestDeploymentEgressAssetDNSRejectionLeavesNoDocuments` 证明实际 Fetch 与模型调用使用该 resolver。系统诱饵计数及真实超时矩阵尚缺 | Partial |
+| 有界协议校验 | CNAME 深度/循环、响应关联、超长/畸形/附加记录；地址验证发生在任何 dial 前。直接证据：`TestTCPDNSFamiliesCNAMEAndFailureBoundaries` 覆盖查询 ID、截断、additional-only、CNAME 跟随/循环；深链、超长报文与所有畸形响应仍待直接证据 | Partial |
+| 静态映射与 TLS 身份 | 无 resolver 的全静态配置、混合配置、静态全地址检查；HTTP Host/SNI/证书仍为原域名。直接证据：`TestEnterpriseModelAndAssetShareTransportPolicy` 使用全静态配置、真实非回环 TLS 上游，验证原 SNI、正常证书和无信任证书拒绝；混合配置组合仍待补齐 | Partial |
 
 ## Verified dialing and connection reuse must preserve the current target boundary
 
@@ -88,7 +94,7 @@
 - 必须成立：每请求按启动快照检查目标；新拨号完整验证后只拨数字地址；连接按实现固定的有界存活时间/空闲超时回收，回收后新拨号重新检查；原 hostname TLS 不变。
 - 禁止结果：验证后系统再次解析、无限复用旧连接、跨 host HTTP/2 合并、TLS 降级、跟随跳转、向环境代理发送认证头或回收后自动重发生成。
 - 决策依据：D3、D5。
-- 验证义务与证据：`Missing`；需计数真实 DNS/dial/HTTP 边界，覆盖新 dial、keep-alive/HTTP/2 的最大存活与空闲回收、回收后混合坏地址拒绝、错误证书、3xx、HTTP/SOCKS 代理与有限脱敏错误；纯匹配函数单测不够。
+- 验证义务与证据：`Partial`；`TestConnectionLifetimeClosesActiveAndIdleSockets` 通过真实到期回调关闭活跃/空闲连接，`TestPolicyPreventsReusedConnectionToUnlistedAuthority` 验证复用后的逐请求门禁，受控 TLS 测试覆盖代理/重定向/证书。仍需计数真实 DNS/dial/HTTP 边界，覆盖新 dial、keep-alive/HTTP/2 的最大存活与空闲回收、回收后混合坏地址拒绝、错误证书、3xx、HTTP/SOCKS 代理与有限脱敏错误；纯匹配函数单测不够。
 
 ## Policy configuration must take effect through restarting both services
 
@@ -102,10 +108,10 @@
 
 | 义务 | 直接证据要求 | 状态 |
 | --- | --- | --- |
-| 配置加载失败不启动 | 两服务分别覆盖指定路径缺文件、版本/字段/重复键、空 CIDR、冲突开关及非法 topology，断言失败进程不监听业务端口、不回退 public | Missing |
-| 文件仅在启动加载 | 运行中修改文件不改变快照，按流程停止两个服务并替换配置后重启；新目标/拒绝项仅在重启后生效 | Missing |
+| 配置加载失败不启动 | 两服务分别覆盖指定路径缺文件、版本/字段/重复键、空 CIDR、冲突开关及非法 topology，断言失败进程不监听业务端口、不回退 public。直接证据：`TestStrictStartupConfiguration`/`TestSnapshotAndCanonicalDigest` 覆盖 schema/文件/静态禁区；`TestEnterpriseModelAndAssetShareTransportPolicy` 覆盖开发例外冲突。完整两进程无监听启动矩阵待部署测试 | Partial |
+| 文件仅在启动加载 | 运行中修改文件不改变快照，按流程停止两个服务并替换配置后重启；新目标/拒绝项仅在重启后生效。直接证据：`TestSnapshotAndCanonicalDigest` 实际改文件后旧对象不变、重新 Load 后生效；双服务重启流程待 cluster 验收 | Partial |
 | 停止旧流和池 | 实际停止 Cloud 与 Gateway，证明 SSE/资产下载终止、旧池丢弃；未完整取包任务零文档结果，重启后新拨号按新策略拒绝旧目标；停止失败不换文件 | Missing |
-| 摘要比对 | 两端 healthz/管理接口报告规范化摘要与 schema；`ora verify` 对相同配置成功、摘要缺失/不一致报错，不依赖请求级对端确认 | Missing |
+| 摘要比对 | 两端 healthz/管理接口报告规范化摘要与 schema；`ora verify` 对相同配置成功、摘要缺失/不一致报错，不依赖请求级对端确认。直接证据：`TestHealthExposesOnlyPolicyIdentity` 验证 healthz schema/摘要且不暴露配置；`TestSnapshotAndCanonicalDigest` 验证规范化与有效公网 DNS 影响摘要；ora verify 双端比对待 cluster 实现 | Partial |
 | 回滚与拓扑变更 | 管理员显式选择旧文件后重复停止/替换/启动；拓扑重新自动采集并合并可选补充，未声明 NAT/VIP 不成为额外启动门槛 | Missing |
 
 ## Current policy must constrain frozen bindings without reviving revoked grants
@@ -116,7 +122,7 @@
 - 必须成立：有效旧绑定仍用原 URL/模型/Key 并受当前出口限制；准入失败不改写绑定；恢复许可只适用于仍有效的授权；永久撤销永不复活。
 - 禁止结果：旧运行自动换新 Key/URL/槽位、把临时网络拒绝误写为永久撤销、部署配置读取或注入真实 Key 给 Cloud/Node。
 - 决策依据：D5、D6；根决策 D1–D4 与槽位后续 ADR。
-- 验证义务与证据：`Missing`（企业策略组合）；需真实数据库+Gateway 贯通修改/撤销/恢复许可矩阵、原绑定字段核对和解密边界断言，不能只引用原永久撤销数据库测试。
+- 验证义务与证据：`Partial`；`TestDeploymentEgressRevocationSurvivesRemovedTarget` 验证企业目标移除后永久撤销及重新启用不复活，`TestDeploymentEgressAssetDNSRejectionLeavesNoDocuments` 验证网络拒绝不写永久撤销。仍需完整真实数据库+Gateway 贯通修改/撤销/恢复许可矩阵、原绑定字段核对和解密边界断言，不能只引用原永久撤销数据库测试。
 
 ## Model forwarding and asset downloads must share one deployment policy
 
@@ -130,9 +136,9 @@
 
 | 义务 | 直接证据要求 | 状态 |
 | --- | --- | --- |
-| 两者使用同一集合与解析来源 | 同一部署快照的真实 Cloud Fetch/Gateway HTTP 贯通：许可内私网成功，未许可公网（含 7.x）/私网/错误端口拒绝；更换一个 resolver/静态映射同时影响两者，记录 DNS 目标而非只测共享函数 | Missing |
-| 全答案与不可覆盖拒绝 | 两入口分别覆盖 A/AAAA 混合禁区、cluster/宿主/loopback/link-local；新拨号完整校验，连接存活/空闲回收后重新解析，不建立禁止地址连接 | Missing |
-| URL 与凭据边界不同但准入一致 | 合法签名 query 下载成功、模型 query 拒绝；服务端断言原路径/query 且资产 GET 无模型认证头，日志/失败信息不含签名 URL；别名/重定向/错误证书均拒绝 | Missing |
-| 资产原完整性与失败边界 | 真实 Fetch+PostgreSQL 验证 16 MiB/10–30–60 秒、摘要失败先于解析、包级失败零文档结果及下次触发重试；导入 revision 围栏不被策略切换绕过 | Missing |
+| 两者使用同一集合与解析来源 | 同一部署快照的真实 Cloud Fetch/Gateway HTTP 贯通：许可内私网成功，未许可公网（含 7.x）/私网/错误端口拒绝；更换一个 resolver/静态映射同时影响两者，记录 DNS 目标而非只测共享函数。直接证据：`TestEnterpriseModelAndAssetShareTransportPolicy` 从模型 handler 与实际 Fetch 访问同一许可内私网 TLS 服务；`TestDeploymentEgressAssetDNSRejectionLeavesNoDocuments` 用同一策略和 TCP DNS 拒绝两条调用链；现场整体重配验收尚缺 | Partial |
+| 全答案与不可覆盖拒绝 | 两入口分别覆盖 A/AAAA 混合禁区、cluster/宿主/loopback/link-local；新拨号完整校验，连接存活/空闲回收后重新解析，不建立禁止地址连接。直接证据：共享准入的全答案/拒绝优先测试及真实 Fetch/模型 DNS 拒绝已有直接证据；两入口全部地址类别和连接回收后的 DNS 变化矩阵尚缺 | Partial |
+| URL 与凭据边界不同但准入一致 | 合法签名 query 下载成功、模型 query 拒绝；服务端断言原路径/query 且资产 GET 无模型认证头，日志/失败信息不含签名 URL；别名/重定向/错误证书均拒绝。直接证据：`TestEnterpriseModelAndAssetShareTransportPolicy` 检查合法签名 query 原字节、资产无模型认证头、模型 SSE/工具调用、未许可目标、3xx、TLS 不可信与摘要失败；错误 hostname 和完整日志矩阵待补齐 | Partial |
+| 资产原完整性与失败边界 | 真实 Fetch+PostgreSQL 验证 16 MiB/10–30–60 秒、摘要失败先于解析、包级失败零文档结果及下次触发重试；导入 revision 围栏不被策略切换绕过。直接证据：`TestDeploymentEgressAssetDNSRejectionLeavesNoDocuments` 实际 Fetch+PG 证明 DNS 拒绝为包级失败且零文档结果；受控 TLS Fetch 校验摘要。原大小/超时和导入 revision 证据仍见资产用例，不扩大为新策略全矩阵 | Partial |
 | 内部对象存储不是 HTTPS 旁路 | object key 只走固定私有客户端且不能携带 host；同一 cluster 服务若作为 HTTPS URL 则被拒，无自动降级 | Missing |
 | 共同配置重启生效 | 同时停止两服务、替换文件并重启，移除任一 target 后两调用方按新快照拒绝且旧池已销毁；停止取消未完整取包任务无部分导入，摘要不一致时 verify 报错 | Missing |
