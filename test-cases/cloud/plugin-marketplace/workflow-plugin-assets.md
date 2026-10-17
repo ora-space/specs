@@ -5,7 +5,7 @@
 
 企业 HTTPS 取包的新增规则见[部署方共享出网 ADR D7](../../../decisions/cloud/model-access/20261017-deployment-owned-egress-and-explicit-resolution.md#d7共享网络准入保留模型与资产各自的业务边界)。
 两调用方共用白名单/DNS、配置重启生效及企业内网取包义务见[共享出网用例](../model-access/deployment-owned-egress.md#model-forwarding-and-asset-downloads-must-share-one-deployment-policy)，
-Cloud 共享准入与受控调用的直接证据已逐项登记，部署整体更新证据仍缺。下方 cloud#77 的 Covered/Partial 证据只覆盖其所列既有边界，不扩展为企业策略证据。
+Cloud 共享准入、受控调用及离线部署更新的直接证据已逐项登记，尚缺的故障组合仍明确保留。下方 cloud#77 的 Covered/Partial 证据只覆盖其所列既有边界，不扩展为企业策略证据。
 
 资产导入已随 [cloud#77](https://github.com/ora-space/cloud/pull/77) 实现：来源记录、取包与
 逐文档导入、独立读取接口与前端展示。下表的直接证据以
