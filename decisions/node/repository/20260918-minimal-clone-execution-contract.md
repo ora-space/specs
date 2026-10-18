@@ -12,6 +12,10 @@ status: implemented
 > 收窄：被信号终止且收尾已确认的尝试判为中断失败。受理与 Git 执行的线程划分见
 > [Git 副作用移出受理 worker](20260925-clone-git-effects-run-outside-the-admission-worker.md)。其余规则不变。
 
+> 历史决策：D2 中"HTTPS 可使用部署已配置的非交互凭据来源"已被[最小 clone 执行契约 D2 的凭据来源修订](20261010-minimal-clone-execution-contract-credential-source-amendment.md)
+> 扩展为"部署静态来源**或** Cloud 侧 Credential Service 按 Project 逐次授权解析，且后者只交付给凭据
+> 执行身份 C"。D2 的其余每一句、以及本文其余决策都未被修订，仍然有效；该修订自身仍是 `proposed`。
+
 本文继承[根决策](0-clone-selected-repository-branch.md)，状态为 `implemented`：实现位于 desktop 的
 `crates/node-protocol`（`CloneRepositoryMessage`、`CloneExecutionResult` 与源地址校验）、`crates/node-db`（clone 执行
 记录，schema v3）、`crates/gitlancer/src/git/branch_clone.rs` 与 `apps/ora-node/src/repository/`。验证见

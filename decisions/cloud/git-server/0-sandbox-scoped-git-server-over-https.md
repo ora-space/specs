@@ -13,6 +13,13 @@ Git Server 是 Cloud 仓库中与 model-gateway 并列的独立程序，只提�
 按证书目标与当前数据库状态判定能否读写该仓库；推送在 `pre-receive` 中再按 ref 逐项判定。Git Server 不保存
 任何授权状态，Controller 不参与授权。
 
+> **修订说明（2026-10-12／2026-10-13）**：上面这段描述的是**写方向与本文原始形态**。**读方向已被取代**：沙盒面向的
+> 只读镜像通道不再要求、也不接受客户端证书，也不接受任何请求自述的字段（含 `Ora-Execution-Id`），认证目标改由
+> 服务端在每次请求内把连接来源解析为部署自有的容器状态得出，`git-access` 身份不再签发。取代它的决策是
+> [工作区内容搬运](20261012-workspace-content-transport-over-the-internal-git-server.md)（proposed）；D2、D3、D5 与
+> 不变量、落地顺序中受影响的部分都已就地标注。写方向（把成果推回内部仓库或用户上游）仍待
+> `20261012-push-execution-authority.md`（proposed）裁决，本文不放行任何写。
+
 本 ADR 处于 `proposed`，是新建领域 `cloud/git-server` 的根决策。涉及 Cloud 仓库新增的 Git Server 程序、
 cluster 仓库的 Sandbox Server（签发 git-access 客户端身份）与 Compose 部署、desktop 的 Node（交付时推送、
 恢复时拉取）。本文确定 Git Server 的服务边界、协议、访问控制、远端 ref 规则与 Cloud 核验推送的接口；Revision
@@ -72,6 +79,11 @@ SSH 对人类开发者更顺手，但这里的客户端是 Node，不是人。
 
 ### D2：认证只认沙盒的 git-access 证书
 
+> **已修订（2026-10-12）**：本决策"由 Node 出示 git-access 客户端证书"的部分已由
+> [工作区内容搬运](20261012-workspace-content-transport-over-the-internal-git-server.md)（proposed）取代：沙盒面向的读监听不由客户端
+> 证书认证，`git-access` 身份不再签发，认证目标改由服务端解析来源容器得出。以下原文保留为决策历史与代价对照，不构成
+> 当前推荐。
+
 - Node 配置启用 Git Server 时，Sandbox Server 创建已获许可的沙盒，为该租户、Workspace 与代次另签一张
   git-access 客户端证书：`clientAuth` 用途，URI 为
   `spiffe://ora.local/git-access/tenant/{tenantId}/runtime/{workspaceId}/generation/{generation}`。签发与交付方式
@@ -88,6 +100,10 @@ SSH 对人类开发者更顺手，但这里的客户端是 Node，不是人。
 一种身份泄露不能直接换用到另一服务。代价是每个沙盒多一份启动材料，但签发流程与存放位置都已存在。
 
 ### D3：每个请求按证书目标、声明的执行与 Cloud 当前状态判定
+
+> **已修订（2026-10-12）**：读方向不再接受 `Ora-Execution-Id` 一类声明执行的请求头作为授权输入，判定目标只由
+> [工作区内容搬运](20261012-workspace-content-transport-over-the-internal-git-server.md)（proposed）D5 解析出的 Workspace 决定：读请求既不需要、
+> 也不得声明自己服务哪个执行。以下原文保留为决策历史与代价对照，其写方向的部分仍待 push 执行授权 ADR 重新裁决。
 
 每个仓库请求都带 `Ora-Execution-Id` 请求头，声明它服务的执行；证书决定“是谁”，请求头只说明“为哪个执行”，
 不能自行声明认证目标。Git Server 在不持有事务的只读查询中，依据 Cloud 数据库的当前状态判定：
@@ -148,6 +164,11 @@ up-to-date 而不发出更新，也不会失败。这与对象存储“每次尝
 
 ### D5：Node 执行 Git 访问，证书私钥不进入工作负载
 
+> **已修订（2026-10-12）**：本决策整体不再实施。Node 不执行任何带凭据或带身份的 Git 访问，内部只读通道不带证书、
+> 不带凭据、不带 header；来源身份由服务端解析，见
+> [工作区内容搬运](20261012-workspace-content-transport-over-the-internal-git-server.md)（proposed）D3、D4、D7、D9。以下原文保留为决策历史：
+> 它同时记录了本文自认的缺口（工作负载可读私钥）与它同已批准 D11"不经 argv 传递"的冲突，是本次修订的直接依据。
+
 - 交付时由 Node 进程执行 `git push`，恢复时由 Node 执行 `git fetch`。git-access 证书与私钥来自管理 tmpfs 中的
   文件，只在当次命令中以 `-c http.sslCert=... -c http.sslKey=... -c http.sslCAInfo=...` 传入，执行 ID 以
   `-c http.extraHeader=Ora-Execution-Id: ...` 传入；不写入 checkout 的 `.git/config`、全局 Git 配置、日志或
@@ -207,6 +228,10 @@ Cloud 的交付处理几乎保持原结构，D4 的“只能新建”也保证�
 
 ## 不变量
 
+> **修订说明（2026-10-12）**：下列第 1、2、9 条中依赖"客户端证书目标"的部分，已由
+> [工作区内容搬运](20261012-workspace-content-transport-over-the-internal-git-server.md)（proposed）改为"服务端解析出的来源容器身份 + 逐请求判定"，
+> 第 5、6、7 条中涉及推送与沙盒证书的部分随 D2、D3、D5 的修订一并失效或改写；其余条目不变。
+
 1. Git Server 的仓库监听只接受 git-access 用途的客户端证书，不接受 WSS 或 model-access 证书，也没有其他认证方式。
 2. 证书不携带授权；每个仓库请求都按证书目标、声明的执行与 Cloud 数据库当前状态判定，任一条件不满足即拒绝。
 3. Git Server 不保存授权状态；它的重启不改变任何判定结果。
@@ -242,16 +267,19 @@ Cloud 的交付处理几乎保持原结构，D4 的“只能新建”也保证�
 
 ## 本决策未解决的问题
 
-- 镜像上游、Node 改从 Git Server clone、推回用户远端：涉及上游凭据与仓库凭据连续性，另立 ADR（D7）。
+- 镜像上游、Node 改从 Git Server clone：已由 [工作区内容搬运](20261012-workspace-content-transport-over-the-internal-git-server.md)（proposed）承接；
+  推回用户远端仍待另立 ADR（D7）。
 - 向用户展示的分支（快进模式的 `refs/heads/...`）：需要时由后续 ADR 增加（D4）。
-- 仓库的配额、GC、失败交付尝试留下的 ref 与对象的清理、删除 Project 时的清理。
+- 仓库的配额、GC、失败交付尝试留下的 ref 与对象的清理、删除 Project 时的清理。**均未实现（2026-10-13）**：
+  镜像侧在 `cloud/internal/mirror` 与 `cloud/internal/mirrorpublish` 内有机制，但没有生产调用方，因此不得记为
+  完成；镜像的权威记录按本次裁决定为受控持久卷上的文件系统记录，不引入数据库 migration。
 - 用户或浏览器读取仓库内容（diff 预览、下载）的入口与授权。
 - 生产部署的多副本与存储后端。
 
 ## 落地顺序
 
-1. **Sandbox Server 签发 git-access 客户端身份**，沿用 model-access 的签发与存放方式。完成条件：启用时 Node 在管理
-   tmpfs 中拿到证书，工作负载读不到，未启用时不签发；WSS 与 model-access 身份不受影响。行为不变。
+1. ~~**Sandbox Server 签发 git-access 客户端身份**~~ **已被取代**：不再签发 git-access 身份，改为
+   [工作区内容搬运](20261012-workspace-content-transport-over-the-internal-git-server.md)（proposed）的落地顺序第 1、2 步（部署前提固化与来源解析接口）。
 2. **Git Server 程序本体**：证书解析、逐请求的数据库判定、smart HTTP、`pre-receive`、按需建仓与 ref 查询监听。
    完成条件：用真实 `git` 客户端与真实 PostgreSQL 的集成测试证明不变量 1–11、13：缺执行 ID、执行属于别的沙盒、
    执行已结束、旧代证书、跨 Project、写执行输入之外的 ref、更新已存在的 ref、删除、两次请求之间执行结束、数据库
@@ -260,6 +288,13 @@ Cloud 的交付处理几乎保持原结构，D4 的“只能新建”也保证�
 3. **Compose 接入**：Git Server 加入 cluster 栈，接入沙盒网络与默认网络。行为不变。
 4. **Node 交付时推送、恢复时拉取，Cloud 经 ref 查询核验并登记**：在 Revision 后续 ADR 获批后实施，证明不变量 12。
    从这一阶段开始，新交付 Revision 的代码改动存放在 Git Server，会话 JSONL 仍在对象存储。
+
+> **修订说明（2026-10-13）**：第 2、3、4 步中依赖"客户端证书目标"与"Node 出示 git-access 证书"的部分**已被取代**
+> ——读方向的授权改由服务端解析来源容器得出，写方向的身份方案仍待 push 执行授权 ADR 裁决。取代它的是
+> [工作区内容搬运](20261012-workspace-content-transport-over-the-internal-git-server.md)（proposed）的落地顺序，
+> 已实际落地的部分（部署前提固化、来源解析接口、只读 Git Server 与镜像存储、隔离读取验收）记在那里。下列第 2–4
+> 步的原文保留为决策历史与代价对照，**不构成当前计划**：其中的 `pre-receive` ref 规则与"按需建仓"仍适用于写方向，
+> 但"证书解析"与"逐请求的数据库判定"的读方向形态已作废。
 
 先交付并独立验收访问控制，再改动 Revision 链路，使安全边界可以在没有业务调用方的情况下单独评审；任何一步失败都不
 影响已有的对象存储路径。

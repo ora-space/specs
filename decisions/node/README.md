@@ -5,7 +5,7 @@
 
 | 目录 | 范围 |
 |---|---|
-| [repository](repository/0-clone-selected-repository-branch.md) | 当前最小闭环：clone 指定仓库的指定分支；范围根决策与[最小执行契约](repository/20260918-minimal-clone-execution-contract.md)均 approved，尚未实现 |
+| [repository](repository/0-clone-selected-repository-branch.md) | 当前最小闭环：clone 指定仓库的指定分支；范围根决策与[最小执行契约](repository/20260918-minimal-clone-execution-contract.md)均已 `implemented`。凭据来源由[凭据来源修订](repository/20261010-minimal-clone-execution-contract-credential-source-amendment.md)（proposed）扩展，执行侧隔离由[受控 Node 的仓库凭据执行使用独立 OS 身份](repository/20261010-controlled-node-git-authentication-isolation.md)（proposed）规定，其执行器归属由[凭据执行器归属当前正式产品](repository/20261012-credential-executor-belongs-to-the-current-product.md)（proposed）调整为当前正式产品的独立部署单元。执行器、凭据物化、部署固定的 helper 与 `broker-resolver` 客户端已实现，并在验收自建的、真正拒绝匿名访问的远端上取得私有仓库 Clone 全链路的端到端证据；[checkout 交付到 Workspace 的通道](repository/20261012-checkout-delivery-into-the-workspace.md)仍为 **proposed**，交付未实现，`repository_credential_executor_unavailable` 继续拒绝 |
 | `worktree` | main worktree、task worktree 及 Git worktree 生命周期 |
 | `agent-runtime` | Agent 进程、ACP 转发、会话连接和运行恢复 |
 | `plugin-runtime` | Plugin 安装、启动、停止、运行和本地状态 |
