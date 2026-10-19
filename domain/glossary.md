@@ -105,18 +105,18 @@ _Avoid_: 把连接称为 API Key，或把每个模型都称为一条连接
 
 ### Default Model（默认模型）
 
-用户选定的全局模型连接与该连接内的一个模型，供 OpenCode 普通运行和工作流 `default` 槽位使用。
+用户选定的全局模型连接与该连接内的一个模型，供 OpenCode 普通运行、工作流 `default` 槽位和独立聊天使用。
 显式 Claude 的个人配置不继承或改变该选择。
 _Avoid_: 空间共享默认值、平台统一模型
 
 ### Model Binding（模型绑定）
 
-创建一次运行时固定的发起者、连接版本、凭据引用和模型。
+创建一次运行或一个聊天会话时固定的发起者、连接版本、凭据引用和模型。
 _Avoid_: 运行中随设置变化的默认值
 
 ### Model Grant（模型授权）
 
-允许特定运行在限定时间内使用其模型绑定的临时资格。
+允许特定运行或聊天会话在限定时间内使用其模型绑定的临时资格。
 _Avoid_: 用户长效 API Key、登录会话
 
 ### Run Initiator（运行发起者）
@@ -127,6 +127,23 @@ _Avoid_: 项目拥有者、后来追加评论的人
 个人 Agent 配置、冻结执行配置、模型访问上下文与 adapter 的区别见
 [Agent 模型配置术语](#agent-model-configuration)。这些术语复用本节的连接和授权概念，
 不另建插件级 Key 或第二份全局默认值。
+
+## Personal Chat
+
+本节为独立聊天页定义领域语言。聊天与 Agent Issue Run 的 Thread 是两种不同的对话契约，边界见
+[独立聊天根决策](../decisions/cloud/chat/0-personal-chat-through-model-gateway.md)。
+
+### Chat Session（聊天会话）
+
+创建者私有的、只追加消息的对话，创建时冻结一个 Model Binding。它不属于 Space、Issue 或运行，
+不产生 Workspace、Node 执行或 Revision，其他成员与管理员都不可读。
+_Avoid_: 空间共享对话、把 Thread 或评论当作聊天
+
+### Chat Turn（聊天轮次）
+
+一条用户消息与它对应的一条助手回复，回复以请求作用域的流式响应交付。一轮至多一次上游模型尝试，
+同一会话同一时刻至多一轮进行中；没有排队轮次。
+_Avoid_: 把单条消息当作一轮、把排队的输入当作聊天
 
 ## Agent Model Configuration
 
