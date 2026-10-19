@@ -11,6 +11,7 @@ Cloud 实现与验证入口：[cloud#80](https://github.com/ora-space/cloud/pull
 受控 TLS 服务，不是现场供应商。部署实现见 [cluster#25](https://github.com/ora-space/cluster/pull/25)：
 `egress_config.py`、`egress_topology.py`、`egress_health.py`；直接验收为 `scripts/offline/smoke_egress.py`
 及其受控 DNS/TLS/公共 API 场景，控制流故障与双栈拓扑矩阵见 `test_egress.py`。
+慢下载源保持 ZIP 不完整并等待客户端关闭，直接检查取消早于独立 Fetch 截止，避免把小包自然完成或超时作为策略取消证据。
 整包正常路径另由 `smoke.py` 覆盖真实 Node 两轮、成果与释放、认证配置轮换；它不证明真实企业模型已验收。
 
 
