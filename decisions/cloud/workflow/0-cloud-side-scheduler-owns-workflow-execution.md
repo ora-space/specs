@@ -159,17 +159,17 @@ desktop 的 `condition.rs` 为准（D1），而 Cloud 首期实现与它仍有�
 | `condition_rule_not_an_object` | `cases.conditions` | 比较项不是对象：Cloud 会静默判为不匹配 |
 | `condition_selector_unsupported` | `cases.conditions.variableSelector` | 选择器不是「至少两个非空字符串」的列表；一段选择器在 Cloud 读作整个节点输出 |
 | `condition_operator_unsupported` | `cases.conditions.operator` | 算子不在求值器算子表里（即 desktop `ComparisonOperator::parse` 的全集）：Cloud 会静默判为不匹配 |
-| `condition_value_template_unsupported` | `cases.conditions.value` | 期望值里带 `{{#…#}}`：desktop 解析它并保留绑定类型，Cloud 按字面文本比较 |
 
 `field` 是相对节点 `data` 的路径，不带数组下标：同一节点有多个分支或比较项出错时各返回一条问题，问题定位到节点和字段，不指出是第几个分支或比较项。
 
 **未完成的分支不拒绝**：没有 `cases`、或某个分支还没有比较项，都按"落到 else"处理，两侧语义一致，属于草稿的
 正常中间状态。
 
-**另一类差异不进发布门禁**，因为它们只在值被解析出来之后才成立，文档本身看不出来：数组/对象上的 `contains`、
-非字符串上的 `starts_with` / `ends_with`、期望值模板的解析语义、选择器的取值遍历。这些连同对应的 desktop
-对拍用例一并拆到 **ora-space/circus#210**；#210 完成后逐项删掉上表里相应的拒绝项，所以上表是**会缩短的
-清单**，不是 condition 的最终语义。
+**condition 求值语义已对齐 desktop（ora-space/circus#210）**：数组/对象上的 `contains`、非字符串上的
+`starts_with` / `ends_with`、期望值模板 `{{#…#}}` 的解析、选择器的取值遍历这四项已按 desktop
+`condition.rs` 实现并对拍（cloud `internal/core/workflow_condition_parity_test.go`），上表里
+`condition_value_template_unsupported` 一行随之删除，其余拒绝项不变。这四项当初不进发布门禁，是因为
+它们只在值被解析出来之后才成立、文档本身看不出来。
 
 **工作流资产导入走同一道门禁**：导入的每份文档都经过这次发布校验，因此插件包里带的不支持写法按**单份文档**
 失败，不影响同包其他文档（导入路径见[资产导入与已发布快照决策](20261016-asset-import-and-published-snapshots.md)）。
