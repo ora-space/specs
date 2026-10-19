@@ -119,7 +119,7 @@ Cloud 实现与验证入口：[cloud#80](https://github.com/ora-space/cloud/pull
 | 摘要比对 | `TestHealthExposesOnlyPolicyIdentity`、`ApplicationTests` 与 `VerificationTests`；实际 `smoke_egress.py` 注入单端不同策略使 ora verify 失败，再经真实 apply 恢复，覆盖同代成功/不一致拒绝及输入/生成快照变更识别；多副本真实部署矩阵待补齐 | Partial |
 | 回滚与拓扑变更 | 工具使用同一采集/停机/替换/启动路径，`ApplicationTests` 连续应用不同输入且未设 complete 门槛；实际 smoke 显式修复失败配置后恢复。现场拓扑变更与完整旧配置回滚的实测组合仍待补齐 | Partial |
 
-可选 Repo Executor 的部署接线证据为 `Partial`：cluster `ApplicationTests.test_optional_executor_stops_and_restarts_with_the_same_readonly_policy` 验证同一只读文件、停止/重建参数；`test_executor_is_selected_from_explicit_config_and_orphan_cannot_be_omitted` 验证显式选择与遗漏参与者拒绝；`VerificationTests.test_optional_executor_and_all_replicas_must_participate` 验证副本缺失与摘要不符拒绝，`test_executor_health_uses_plain_http_8084_and_shared_headers` 通过真实 HTTP 验证管理探针契约。这些证据不替代 Repo Executor 镜像的共享策略实现、三类真实服务一起停启与真实外部仓库验收。
+可选 Repo Executor 的部署接线证据为 `Partial`：cluster `ApplicationTests.test_optional_executor_stops_and_restarts_with_the_same_readonly_policy` 验证同一只读文件、停止/重建参数；`test_executor_is_selected_from_explicit_config_and_orphan_cannot_be_omitted` 验证显式选择与遗漏参与者拒绝；`test_explicit_extra_layer_survives_auth_override_and_policy_mounts_last` 通过真实 Compose 导出验证额外服务不被认证覆盖、策略层最后生效；`VerificationTests.test_optional_executor_and_all_replicas_must_participate` 验证副本缺失与摘要不符拒绝，`test_executor_health_uses_plain_http_8084_and_shared_headers` 通过真实 HTTP 验证管理探针契约。这些证据不替代 Repo Executor 镜像的共享策略实现、三类真实服务一起停启与真实外部仓库验收。
 ## Current policy must constrain frozen bindings without reviving revoked grants
 
 - 风险：冻结被误读为永久网络许可，或策略重新允许后复活已撤销凭据。

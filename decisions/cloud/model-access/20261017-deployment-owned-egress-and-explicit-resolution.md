@@ -10,9 +10,11 @@ model-gateway 模型转发与 Cloud 工作流资产 HTTPS 下载共用一份部�
 两类目标域名由同一套部署方 resolver 或静态映射解析，不回退系统 DNS。
 未启用企业模式的部署保持既有公网 HTTPS 与可信公网 DoH 行为。
 
-`approved` 表示共享网络边界和部署更新规则已经决定；Cloud 与离线部署的局部受控证据不替代 D7 所有调用方的实现与验证。
-Repo Executor 也须纳入共同配置、停止/重启与摘要检查；整份 ADR 在全部适用调用方和部署义务补齐后才转 `implemented`。
-不改个人 Key 入口、运行绑定或数据库历史，不包含真实供应商能力与现场连通性验收。
+`approved` 表示网络边界和启动加载、双服务重启生效的部署方式已有 owner 决策；本文规定其稳定契约，
+不表示能力已经实现。
+实现和部署证据齐备后才转 `implemented`。涉及 Cloud 保存门禁、model-gateway、Cloud 工作流资产
+下载器与 cluster 部署装配；
+不改个人 Key 入口、运行绑定、协议支持范围或数据库历史，不包含真实供应商能力与现场连通性验收。
 
 ## 问题与约束
 
@@ -52,10 +54,26 @@ model-gateway。Cloud 的模型连接保存门禁、工作流资产 HTTPS 下载
 显式提供时必须非空且每个地址都命中该目标的集合；不能合并其他目标的许可。无需每目标必填 CIDR。
 `allowPrivate` 只打开 D3 所列私网类别，不解除绝对拒绝或其他保留地址限制。
 
-离线部署将管理员输入放在 `egress-settings.json`，包含策略字段与可选 `additionalTopology`；
-部署入口采集拓扑并生成两服务共同只读挂载的 `deployment-egress.json`。用户不能用输入覆盖采集结果。
-配置字段和操作说明见 Cloud 的 `docs/deployment-egress.md` 与 cluster 的 `docs/offline-images.zh.md`；
-模板不包含真实站点或凭据，默认空企业白名单不授予任何目标访问权。
+以下仅为配置形状，保留域名/文档地址不是可运行的生产配置；无凭据、真实站点参数或连接 base path：
+
+```json
+{
+  "schemaVersion": 1,
+  "mode": "enterprise",
+  "resolver": {"transport": "tcp", "address": "192.0.2.53:53"},
+  "targets": [{
+    "host": "model.example.invalid", "port": 443,
+    "allowPrivate": true, "allowedCidrs": ["10.60.0.0/16"]
+  }, {
+    "host": "assets.example.invalid", "port": 443,
+    "allowPrivate": true, "staticAddresses": ["10.61.0.10"]
+  }],
+  "topology": {
+    "clusterCidrs": ["172.30.0.0/16"],
+    "hostAddresses": ["192.0.2.10"]
+  }
+}
+```
 
 `public` 不接受 enterprise 专用字段，两类 HTTPS 出网统一使用既有部署 DoH 配置及公网数字
 bootstrap；未配置时沿用原公网默认值，资产下载器不再独立选择 resolver。
@@ -154,8 +172,7 @@ Cloud 与 model-gateway 只在进程启动时加载一次配置（含 topology�
 本进程快照执行；不依赖另一进程的请求级确认。两端短暂不一致可能导致保存通过而转发拒绝，或
 保存被拒；它不免除实际出网方的独立准入校验，也不构成一次成功的配置更新。
 
-部署入口先用同一 Cloud 解析器预检管理员输入与采集结果，不查询供应商、不连接数据库。预检失败保留原文件和服务。
-配置应用按现场目录互斥，并通过部署入口按顺序执行：
+配置更新通过部署入口按顺序执行：
 
 1. 停止 Cloud、全部 model-gateway 与 Repo Executor，确认旧进程已经退出；停止终止在途模型流、资产下载并丢弃
    两端业务和 DNS 连接池，不自动重发模型生成。未完整取包/校验的任务不产生逐文档结果，之后只
@@ -221,9 +238,11 @@ object-key 通路，不能为本机 HTTPS 源开特例。本 ADR 不扩大到 No
 
 核心义务见[部署方共享出网用例](../../../test-cases/cloud/model-access/deployment-owned-egress.md)和
 [工作流插件资产用例](../../../test-cases/cloud/plugin-marketplace/workflow-plugin-assets.md)。
-Cloud 的共享 schema/准入、模型保存、资产下载器和 Gateway 转发，与 cluster 的拓扑采集、只读挂载、双服务重启及
-`ora verify` 摘要比对共同兑现本契约。受控验证覆盖真实 DNS/TLS、HTTP/PostgreSQL、Node 与离线部署；
-已有根决策的证据不自动扩展为新增企业策略证据，具体覆盖和未完成故障组合以核心用例逐项标记。
+先交付共享 schema/准入与 Cloud 保存、资产下载器、Gateway 转发接线，再交付 cluster 的自动拓扑采集、只读挂载、双服务重启及
+`ora verify` 摘要比对，最后用受控双栈 DNS/TLS/连接回收和真实部署验证。完成定义包括非企业公网回归、保存/拨号
+一致性、两类调用方的内网成功/白名单外借用公网地址拒绝、全部基础设施禁区、策略更新取消资产
+下载/模型流、资产签名 query 与摘要/大小回归，以及旧绑定撤销；不能只凭配置
+解析单测将本 ADR 改为 implemented。现有根决策保持 implemented，本 ADR 的新义务单独补证据。
 
 实际 resolver、模型地址、CIDR、NAT 别名和真实模型能力由部署现场提供，不从名称推测。现场 Key
 仍走个人凭据入口，不写入配置、镜像或公开仓库。动态热更新、多副本无中断栅栏、DoH/DoT 等额外
