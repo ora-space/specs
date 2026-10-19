@@ -114,7 +114,7 @@ Cloud 实现与验证入口：[cloud#80](https://github.com/ora-space/cloud/pull
 | 义务 | 直接证据要求 | 状态 |
 | --- | --- | --- |
 | 配置加载失败不启动 | Cloud 配置单元/二进制启动探针与 `ApplicationTests` 覆盖无效配置；`smoke_egress.py` 验证未知输入字段不动旧服务/快照，启动失败后双服务均停止。完整错误类别的双进程矩阵仍待补齐 | Partial |
-| 文件仅在启动加载 | `TestSnapshotAndCanonicalDigest` 与实际 `smoke_egress.py`：输入修改后 verify 拒绝未应用状态，经 apply 改为静态解析并移除旧目标，两个容器身份变化而镜像身份不变，新请求按新快照判定 | Covered |
+| 文件仅在启动加载 | `TestSnapshotAndCanonicalDigest` 与实际 `smoke_egress.py`：输入修改后 verify 拒绝未应用状态，经 apply 改为静态解析并移除旧目标，两个容器身份变化而镜像身份不变，新请求按新快照判定 默认 Cloud/model-gateway 的直接证据已具备；实际 Repo Executor 组合仍待补齐 | Partial |
 | 停止旧流和池 | `smoke_egress.py` 实际移除两个已停止的旧容器、重建同一镜像，受控慢资产下载取消且零文档结果；`ApplicationTests` 断言停止失败不换文件。活跃模型 SSE 的进程停止组合仍待补齐 | Partial |
 | 摘要比对 | `TestHealthExposesOnlyPolicyIdentity`、`ApplicationTests` 与 `VerificationTests`；实际 `smoke_egress.py` 注入单端不同策略使 ora verify 失败，再经真实 apply 恢复，覆盖同代成功/不一致拒绝及输入/生成快照变更识别；多副本真实部署矩阵待补齐 | Partial |
 | 回滚与拓扑变更 | 工具使用同一采集/停机/替换/启动路径，`ApplicationTests` 连续应用不同输入且未设 complete 门槛；实际 smoke 显式修复失败配置后恢复。现场拓扑变更与完整旧配置回滚的实测组合仍待补齐 | Partial |
