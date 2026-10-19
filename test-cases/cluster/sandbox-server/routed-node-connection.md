@@ -80,6 +80,6 @@ cluster [`ac126c57`](https://github.com/ora-space/cluster/commit/ac126c57e481442
 | 义务 | 直接证据与缺口 | 状态 |
 |---|---|---|
 | 新方案启停和数据保留 | cluster `runtime-control-acceptance.py` 验证启停、重启、Git 基线及强停保留数据；未直接覆盖旧直连版本升级 | Partial |
-| 跨版本迁移失败关闭、数据恢复与回滚 | 正式步骤见 cluster `docs/sandbox-routing.md`；完整迁移/回滚演练尚无直接测试 | Missing |
+| 跨版本迁移失败关闭、数据恢复与回滚 | 正式步骤见 cluster `docs/sandbox/routing.md`；完整迁移/回滚演练尚无直接测试 | Missing |
 
 决策依据：路由接入的升级与验证义务、不变量 3、4；完整生产认证与凭据轮换另行处理。

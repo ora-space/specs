@@ -1,2 +1,7 @@
 /drafts/*
 !/drafts/.gitkeep
+
+# Glossaries live in domain/glossary.md; implementation records live in issues (see AGENTS.md).
+CONTEXT.md
+CONTEXT-MAP.md
+/implementation/

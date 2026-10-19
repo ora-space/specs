@@ -7,7 +7,7 @@
 钩子驱动结算、派发与释放）。
 
 跨仓库真实链路证据来自 cluster 的 M2 验收（`task agent:session:acceptance` 与 `task agent:session:browser`，见
-[agent-session-acceptance](https://github.com/ora-space/cluster/blob/main/docs/agent-session-acceptance.md)）：真实
+[Agent 会话验收](https://github.com/ora-space/cluster/blob/main/docs/testing/agent-session.md)）：真实
 Gateway/Cloud/Controller/Node 与 Deno 运行的 echo agent 上，@agent 评论创建运行；Thread 依次出现 `meta`、echo 回复与
 `turnEnded` 并进入 `idle`；订阅者收到 SSE `issue_run.thread_appended`；追加的用户轮次变为 `delivered` 并得到回复；结束会话后
 `threadState` 为 `ended`，会话结果为 `agent_session_ended/user_ended`；未配置对象存储时交付记为 `skipped`，运行 Workspace

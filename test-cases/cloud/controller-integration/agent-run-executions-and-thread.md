@@ -2,7 +2,9 @@
 
 依据[已批准的 controller-integration 后续决策](../../../decisions/cloud/controller-integration/20260928-agent-run-executions-thread-and-upload-grants.md)。
 proto 已在 `ora-space/cloud` 合并（cloud#35）；服务端证据来自 [cloud#41](https://github.com/ora-space/cloud/pull/41)
-原分支后续提交中经真实 gRPC、PostgreSQL、RustFS 的集成测试。以下覆盖控制面；生产 Rust Node/Controller 与 B 业务投影仍需各自验收。Revision 草案状态保留，实际实现差异见[实现与验收记录](../../../implementation/agent-control-plane-a.md)。
+原分支后续提交中经真实 gRPC、PostgreSQL、RustFS 的集成测试。以下覆盖控制面；生产 Rust Node/Controller 与 B 业务投影仍需各自验收。Revision 草案状态保留，实际实现差异见
+[历史实现与验收记录](https://github.com/ora-space/specs/blob/41f9dd1910feb071e055685a1172a4dd488cc5ec/implementation/agent-control-plane-a.md)。
+该固定快照仅保存原证据，不替代下述验证义务与覆盖状态。
 
 ## Session And Delivery Work Is Registered On Its Cloud-Chosen Node
 

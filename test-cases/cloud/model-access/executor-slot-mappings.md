@@ -5,10 +5,15 @@
 单组绑定的冻结、撤销和授权语义仍由[个人模型访问用例](personal-model-access.md)维护；本文件只登记"一次运行多组绑定"带来的新义务。
 图里槽位怎样声明见[执行器槽位用例](../workflow/executor-slots.md)。
 
-证据基线：Cloud main 没有个人槽位映射，`run_model_bindings` 是
+证据基线：main 上的 `run_model_bindings` 是
 `run_id uuid NOT NULL UNIQUE REFERENCES issue_runs(id)`（`0033_personal_model_connections.sql`），即一次 IssueRun 一组绑定。
 工作流启动门禁已随 [cloud#65](https://github.com/ora-space/cloud/pull/65) 合并进 main（合并提交
-[`df507f0`](https://github.com/ora-space/cloud/commit/df507f0)），下面按逐条核对的证据登记。
+[`df507f0`](https://github.com/ora-space/cloud/commit/df507f0)）。[cloud#72](https://github.com/ora-space/cloud/pull/72)
+在堆叠里补上个人槽位映射的存储与路由、按（运行，槽位）唯一的冻结、以及会话授权对**自己槽位**的收窄；下面按逐条核对的证据登记。
+
+关于拒绝码：启动门禁的**信封码**是 `409 workflow_executor_unconfigured`，每个缺口在 `params.slots[]` 里带的 `reason`
+才是 `slot_not_configured`（另有 `connection_unavailable` / `credential_missing` / `model_unavailable`）。
+本文件提到的 `slot_not_configured` 指的都是后者。
 
 ## Personal Slot Mappings Stay Owner Scoped And Default Is The Default Model
 
@@ -21,14 +26,14 @@
 
 | 义务 | 所需直接证据 | cloud 侧状态 |
 | --- | --- | --- |
-| 映射只有本人可读写，写入受版本和幂等约束 | 真实 PostgreSQL + HTTP：跨用户、管理员读写拒绝，并发写入与重复写入 | Missing |
-| 写入校验连接归属和模型存在 | 真实 HTTP：他人连接、不存在的模型被拒并可定位 | Missing |
-| `default` 就是个人默认模型 | 真实 PostgreSQL：设置默认模型后 `default` 槽位按它解析；写 `default` 映射被拒 | Partial |
-| 连接失效时映射保留并说明原因 | 真实 PostgreSQL + HTTP：删除、停用连接或下架模型后映射仍在，门禁原因可区分 | Missing |
+| 映射只有本人可读写，写入受版本和幂等约束 | 真实 PostgreSQL + HTTP：跨用户、管理员读写拒绝，并发写入与重复写入 | Partial |
+| 写入校验连接归属和模型存在 | 真实 HTTP：他人连接、不存在的模型被拒并可定位 | Covered |
+| `default` 就是个人默认模型 | 真实 PostgreSQL：设置默认模型后 `default` 槽位按它解析；写 `default` 映射被拒 | Covered |
+| 连接失效时映射保留并说明原因 | 真实 PostgreSQL + HTTP：删除、停用连接或下架模型后映射仍在，门禁原因可区分 | Partial |
 
 - 决策依据：D1，不变量 5；继承根决策 D1。
-- 本次直接证据：**Partial** — 个人默认模型本身的归属和版本由 main 的 `internal/core/model_connections_db_test.go`（`TestPersonalModelOwnershipDefaultsAndVersions`）覆盖；[cloud#65](https://github.com/ora-space/cloud/pull/65) 的 `requireWorkflowExecutorSlots` 让 `default` 槽位直接复用 OpenCode 运行绑定的 `defaultExecutorGap`，`integration/workflow_admission_test.go` 的 `TestWorkflowRunDefaultSlotGate` 断言设置默认模型后 `default` 通过门禁，停用连接、下架模型时原因分别是 `connection_unavailable` / `model_unavailable`。
-- 仍缺：个人槽位映射的存储、接口和设置页都不存在（cloud#65 把所有命名槽位报为 `slot_not_configured`）；写 `default` 映射被拒、映射级联保留没有直接证据。
+- 本次直接证据：**Partial（第一、四行）、Covered（第二、三行）** — 个人默认模型本身的归属和版本由 main 的 `internal/core/model_connections_db_test.go`（`TestPersonalModelOwnershipDefaultsAndVersions`）覆盖；[cloud#65](https://github.com/ora-space/cloud/pull/65) 的 `requireWorkflowExecutorSlots` 让 `default` 槽位直接复用 OpenCode 运行绑定的 `defaultExecutorGap`，`integration/workflow_admission_test.go` 的 `TestWorkflowRunDefaultSlotGate` 断言设置默认模型后 `default` 通过门禁，停用连接、下架模型时原因分别是 `connection_unavailable` / `model_unavailable`。[cloud#72](https://github.com/ora-space/cloud/pull/72) 补上映射本身：`TestExecutorSlotMappingsLifecycle` 走真实路由断言跨用户的列表为空、CAS 冲突是 `version_conflict`、写入别人的连接是 `not_found`、未知模型是 `model_not_found`、不支持的 CLI 是 `unsupported_agent_cli`、给 `default` 建映射被拒，并断言连接停用后映射仍在、`available=false`、`unavailableReason=model_connection_unavailable`，此时对该槽位的写入以 `model_connection_disabled` 被拒；`TestExecutorSlotMappingsDeleteCASAndReplay` 断言 `version_required`、CAS、同 key 重放与新 key 404。
+- 仍缺：**管理员读取被拒**与**并发写同一映射**没有用例；连接被**删除**（而非停用）或模型被**移除**后映射的保留与原因没有用例。
 
 ## An Unresolvable Slot Is Reported To The Initiator And Never Substituted
 
@@ -42,13 +47,13 @@
 | 义务 | 所需直接证据 | cloud 侧状态 |
 | --- | --- | --- |
 | 解析发起者的映射，作者与发布者的配置不起作用 | 真实 HTTP + PostgreSQL：作者已配置、发起者未配置时被拒；反之通过 | Partial |
-| 任一缺口整次回滚，不发生顶替 | 真实 PostgreSQL：缺口下运行行与绑定行都不存在；其他槽位或 `default` 已配置时仍被拒 | Partial |
-| 一次列出全部缺口，带说明、节点和原因 | 真实 HTTP：多个槽位同时缺失时的拒绝参数 | Partial |
+| 任一缺口整次回滚，不发生顶替 | 真实 PostgreSQL：缺口下运行行与绑定行都不存在；其他槽位或 `default` 已配置时仍被拒 | Covered |
+| 一次列出全部缺口，带说明、节点和原因 | 真实 HTTP：多个槽位同时缺失时的拒绝参数 | Covered |
 | 定时任务触发失败、通知所有者、不重试 | 真实调度器 + 通知：缺槽位的触发结果与通知内容 | Missing |
 
 - 决策依据：D2，不变量 3；继承根决策 D3 的回滚语义。
-- 本次直接证据：**Partial** — [cloud#65](https://github.com/ora-space/cloud/pull/65) 的 `admitWorkflowRun` 以调用者身份解析，`requireWorkflowExecutorSlots` 先收集全部缺口再以 `workflow_executor_unconfigured` 拒绝，每个缺口带 `slot`、`nodeIds`、`reason`、`description` 和 `hint`；`integration/workflow_admission_test.go` 的 `TestWorkflowRunDefaultSlotGate` 断言每次拒绝后只存在那一次被放行的运行，`TestWorkflowRunNamedSlotGate` 断言默认模型已配置时命名槽位仍以 `slot_not_configured` 拒绝。
-- 仍缺：没有个人槽位映射，"作者已配置、发起者未配置"无法构造；多缺口同时出现的断言、四种入口逐一的发起者身份没有直接证据；定时任务的工作流触发属[定时任务执行归属](../../../decisions/desktop/core/scheduled-task/0-local-and-cloud-execution-ownership.md)的第二阶段，尚无实现。
+- 本次直接证据：**Partial（第一行）、Covered（第二、三行）** — [cloud#65](https://github.com/ora-space/cloud/pull/65) 的 `admitWorkflowRun` 以调用者身份解析，`requireWorkflowExecutorSlots` 先收集全部缺口再以 **409 `workflow_executor_unconfigured`** 拒绝，每个缺口带 `slot`、`nodeIds`、`reason`、`description` 和 `hint`（`slot_not_configured` 是缺口里的 `reason`，不是信封码）；`integration/workflow_admission_test.go` 的 `TestWorkflowRunDefaultSlotGate` 断言每次拒绝后只存在那一次被放行的运行，`TestWorkflowRunNamedSlotGate` 断言默认模型已配置时命名槽位仍被拒、且不产生运行。[cloud#72](https://github.com/ora-space/cloud/pull/72) 的 `TestWorkflowRunGateRefusesUnresolvedSlots` 在 DB 层补上"回滚后 0 绑定"与"一次列出 `default` 与 `strong` 两个缺口"：每个缺口带 `slot` / `reason` / `nodeIds`，图里声明过的槽位还带 `description`（用例断言 `strong` 的 `description` 是作者写的 `Heavy lifting`、`nodeIds` 是引用它的 `a2`）。
+- 仍缺：**"作者已配置、发起者未配置"的对拍**没有直接用例（映射已存在，现在可以构造，但还没有这条用例）；四种入口逐一的发起者身份要等接线（circus#71 / #74 / #77）；定时任务的工作流触发属[定时任务执行归属](../../../decisions/desktop/core/scheduled-task/0-local-and-cloud-execution-ownership.md)的第二阶段，尚无实现，归 circus#76。
 
 ## Each Referenced Slot Freezes One Binding That Retries And Recovery Reuse
 
@@ -61,15 +66,15 @@
 
 | 义务 | 所需直接证据 | cloud 侧状态 |
 | --- | --- | --- |
-| 每个用到的槽位恰好一组绑定，（运行，槽位）唯一 | 真实 PostgreSQL：多槽位运行的绑定行与唯一约束，两种运行实体各自成立 | Missing |
-| 运行期间改映射不影响在途运行，重试和恢复不重新解析 | 真实 PostgreSQL + 执行侧：改映射后重试与恢复仍用原绑定 | Missing |
+| 每个用到的槽位恰好一组绑定，（运行，槽位）唯一 | 真实 PostgreSQL：多槽位运行的绑定行与唯一约束，两种运行实体各自成立 | Partial |
+| 运行期间改映射不影响在途运行，重试和恢复不重新解析 | 真实 PostgreSQL + 执行侧：改映射后重试与恢复仍用原绑定 | Partial |
 | 撤销某槽位只让该槽位的节点失败且不可复活 | 真实 PostgreSQL：撤销一个槽位的连接后，其他槽位照常授权，该槽位授权失败，重新启用仍失败 | Partial |
 | 不带工作流的 OpenCode IssueRun 等价于单个 `default` 槽位 | 真实 PostgreSQL：迁移后的绑定行槽位名为 `default`，既有冻结与撤销测试不变 | Partial |
 | 运行详情只展示连接名和模型 | 真实 HTTP：响应结构不含密钥、密钥引用和服务地址 | Missing |
 
 - 决策依据：D3，不变量 1、2、6；修改根决策 D3。
-- 本次直接证据：**Partial** — 单组绑定的冻结、撤销不复活由 main 的 `internal/core/model_connections_db_test.go`（`TestOpenCodeModelRunAtomicSnapshotAndThreadPermissions`、`TestModelGrantsScopeRenewalFreezeAndRevocation`）直接覆盖，它们是"每个槽位一组"在单槽位下的特例，也是 OpenCode IssueRun 行为不变的回归基线。
-- 仍缺：`run_model_bindings` 还没有槽位名、运行实体判别列和（运行，槽位）唯一约束，WorkflowRun 也没有绑定；多槽位、重试与恢复不重新解析、运行详情都没有直接证据，随[工作流执行根决策](../../../decisions/cloud/workflow/)落地顺序第 4 步交付。
+- 本次直接证据：**Partial（第一、二行）、Partial（第三行）** — 单组绑定的冻结、撤销不复活由 main 的 `internal/core/model_connections_db_test.go`（`TestOpenCodeModelRunAtomicSnapshotAndThreadPermissions`、`TestModelGrantsScopeRenewalFreezeAndRevocation`）直接覆盖，它们是"每个槽位一组"在单槽位下的特例，也是 OpenCode IssueRun 行为不变的回归基线。[cloud#72](https://github.com/ora-space/cloud/pull/72) 的 `TestWorkflowRunGateFreezesBindings` 断言一次运行的两个槽位各冻结一组绑定；`0040_executor_slot_bindings.sql` 把唯一性拆成每种运行实体一条部分唯一索引，判别列 + 恰好一个约束来自 [cloud#68](https://github.com/ora-space/cloud/pull/68) 的 `0039_workflow_run_identity.sql`。
+- 仍缺：**直接插入重复（运行，槽位）被拒**的用例（目前只有迁移里的索引作为证据）；**改映射后重试与恢复仍读冻结行**的用例（现有用例只证明创建时冻结）；**运行详情只展示连接名和模型**（归 circus#74）；不带工作流的 OpenCode IssueRun 与迁移回填的对拍断言。
 
 ## A Node Session Is Granted Only Its Own Slot's Binding
 
@@ -82,9 +87,9 @@
 
 | 义务 | 所需直接证据 | cloud 侧状态 |
 | --- | --- | --- |
-| 授权只对会话所属槽位的绑定成立 | 真实 PostgreSQL：同一运行另一槽位、另一运行的绑定申请授权都被拒 | Missing |
+| 授权只对会话所属槽位的绑定成立 | 真实 PostgreSQL：同一运行另一槽位、另一运行的绑定申请授权都被拒 | Partial |
 | 代理按授权所指绑定校验模型 ID | 真实 HTTP 代理：多槽位运行中用 `fast` 的授权请求 `strong` 的模型被拒 | Partial |
 
 - 决策依据：D4，不变量 4；修改根决策 D5，继承根决策 D4。
-- 本次直接证据：**Partial** — 单组绑定下"授权跟随确认的运行范围、模型必须等于冻结值"由 main 的 `TestModelGrantsScopeRenewalFreezeAndRevocation` 与 `internal/modelgateway/service_test.go` 覆盖；它们证明了按绑定校验模型的代理行为，但没有"同一运行多组绑定"的场景。
-- 仍缺：会话与槽位绑定的登记、跨槽位授权拒绝都没有实现；`execution_work` / `node_executions` 的 WorkflowRun 归属也还不存在（工作流执行根决策 D8）。
+- 本次直接证据：**Partial（两行）** — 单组绑定下"授权跟随确认的运行范围、模型必须等于冻结值"由 main 的 `TestModelGrantsScopeRenewalFreezeAndRevocation` 与 `internal/modelgateway/service_test.go` 覆盖。[cloud#72](https://github.com/ora-space/cloud/pull/72) 把工作流会话接上同一条链：`TestWorkflowLiveModelBindingResolvesRun` 覆盖自己的槽位绑定解析成功、非本次会话的 execution 被拒；`TestWorkflowLiveModelBindingRefusesAnotherSlotsBinding` 覆盖**同一 execution 下用另一个槽位的 binding id 被拒**（`model_grant_revoked`）。绑定 id 由调用方在请求体里给出，模型 mTLS 证书只绑 tenant / workspace / generation，从不绑槽位，所以"属于这次运行"必须显式收窄到"属于这次会话执行"，谓词是 `e.input->>'modelBindingId' = b.id::text`。
+- 仍缺：**另一运行的绑定申请授权被拒**的显式用例（现有负向用例覆盖的是同一运行的另一个槽位）；多槽位运行中用 `fast` 的授权请求 `strong` 的模型被代理拒绝的 HTTP 用例。

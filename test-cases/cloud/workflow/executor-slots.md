@@ -7,9 +7,14 @@
 
 证据基线：cloud#65 已随合并提交
 [`df507f0`](https://github.com/ora-space/cloud/commit/df507f0) 落到 Cloud main，槽位校验与 `hint` 的形状校验在
-[`internal/core/workflow_graph.go`](https://github.com/ora-space/cloud/blob/df507f0/internal/core/workflow_graph.go) 里；编辑器与导入路径还没有跟上，
+[`internal/core/workflow_graph.go`](https://github.com/ora-space/cloud/blob/df507f0/internal/core/workflow_graph.go) 里；[cloud#72](https://github.com/ora-space/cloud/pull/72)
+在堆叠里补上运行侧的解析与冻结（个人映射、按槽位绑定、启动门禁的同一个解析器）。编辑器与导入路径还没有跟上，
 仍靠演示目录 `DEMO_AGENT_MODELS` 往 `agentConfig.executor` 写 agent CLI 与模型 ID，见下面各条。desktop 不受本决策约束
 （ora-space/circus#124），没有可依托的参考实现。
+
+关于拒绝码：启动门禁的**信封码**是 `409 workflow_executor_unconfigured`，每个缺口在 `params.slots[]` 里带的
+`reason` 才是 `slot_not_configured`（另有 `connection_unavailable` / `credential_missing` / `model_unavailable`）。
+本文件与[槽位映射用例](../model-access/executor-slot-mappings.md)提到的 `slot_not_configured` 指的是后者。
 
 ## Executor Slot Declarations Are Validated Before A Graph Is Published
 
@@ -28,7 +33,7 @@
 
 - 决策依据：D1、D2，不变量 2、3。
 - 本次直接证据：**Covered（第二、三行）、Partial（第一行）** — [`internal/core/workflow_graph.go`](https://github.com/ora-space/cloud/blob/df507f0/internal/core/workflow_graph.go) 的槽位校验产生 `slot_name_missing` / `slot_name_invalid` / `slot_name_reserved` / `slot_name_duplicate` / `slot_description_invalid` / `slot_hint_invalid`；`internal/core/workflow_graph_test.go` 的 `TestValidateWorkflowGraph` 逐条覆盖这些违规，并覆盖"an explicit default reference"与"a slot declared for later"两个必须放行的文档。字符计数由 `utf8.RuneCountInString` 完成，边界用例是写死的字面量而不是从 `maxSlotDescription` 派生：`strings.Repeat("深", 500)` 必须通过、`strings.Repeat("深", 501)` 与 501 个 ASCII 字符必须被拒（500 个中文字符是 1500 字节，按字节计的实现从第 167 个字符起就会拒，这正是这条用例固定的回归）。
-- 仍缺：**槽位名违规只有单元证据**，没有一条真实 HTTP 的发布请求带非法槽位名并断言问题码与"不产生快照"，第一行因此按 `Partial` 记（真实 HTTP 只覆盖了 `slot_not_declared`，记在[发布与启动门禁用例](../workflow/publish-and-start-admission.md#publishing-refuses-an-unsupported-node-or-configuration-and-names-it)）。**"声明了但没有节点引用的槽位只给警告"（D2）还没有实现**：校验放行了这种文档（单元用例"a declared but unreferenced slot"），但没有任何警告输出，这条义务今天也没有单独的登记行——留在这里作为缺口，等编辑器侧决定警告怎么给时再拆行。
+- 仍缺：**槽位名违规只有单元证据**，没有一条真实 HTTP 的发布请求带非法槽位名并断言问题码与"不产生快照"，第一行因此按 `Partial` 记（真实 HTTP 只覆盖了 `slot_not_declared`，记在[发布与启动门禁用例](../workflow/publish-and-start-admission.md#publishing-refuses-an-unsupported-node-or-configuration-and-names-it)）。映射侧的同一规则有真实路由证据：[cloud#72](https://github.com/ora-space/cloud/pull/72) 的 `TestExecutorSlotMappingsLifecycle` 断言写入 `default` 与非法名 `Bad` 被拒——那是映射名，不是发布路径的槽位声明。**"声明了但没有节点引用的槽位只给警告"（D2）还没有实现**：校验放行了这种文档（单元用例"a declared but unreferenced slot"），但没有任何警告输出，这条义务今天也没有单独的登记行——留在这里作为缺口，等编辑器侧决定警告怎么给时再拆行。
 
 ## A Hint Never Resolves An Executor And Is Written Only By The Author
 
@@ -41,13 +46,13 @@
 
 | 义务 | 所需直接证据 | cloud 侧状态 |
 | --- | --- | --- |
-| `hint` 不解析执行器，运行者未配置的槽位仍被拒绝 | 真实 HTTP + PostgreSQL：带 `hint` 的槽位在运行者无映射时被拒，拒绝信息带 `hint`，且不产生运行 | Partial |
+| `hint` 不解析执行器，运行者未配置的槽位仍被拒绝 | 真实 HTTP + PostgreSQL：带 `hint` 的槽位在运行者无映射时被拒，拒绝信息带 `hint`，且不产生运行 | Covered |
 | 导入、保存、发布不写入 `hint` | 真实 HTTP + 前端：三条路径前后的图文档中 `hint` 不变 | Missing |
 | 只有作者的显式操作写入或清空 `hint`，写入前有共享提示 | 前端测试：填入、清空与提示 | Missing |
 
 - 决策依据：D3、D5，不变量 4、5；运行时"不顶替"的完整义务见[个人槽位映射用例](../model-access/executor-slot-mappings.md#an-unresolvable-slot-is-reported-to-the-initiator-and-never-substituted)。
-- 本次直接证据：**Partial** — [cloud#65](https://github.com/ora-space/cloud/pull/65) 的 `integration/workflow_admission_test.go` 中 `TestWorkflowRunNamedSlotGate` 给槽位带上 `hint`，断言运行者无映射时以 `slot_not_configured` 拒绝，`hint` 只作为拒绝参数返回；`validSlotHint` 只校验形状。
-- 仍缺：cloud 编辑器还没有槽位和 `hint` 的界面，导入路径仍保留 `executor`（见下一条），"不自动写入"和"作者显式写入"都没有直接证据。
+- 本次直接证据：**Covered** — [cloud#65](https://github.com/ora-space/cloud/pull/65) 的 `integration/workflow_admission_test.go` 中 `TestWorkflowRunNamedSlotGate` 给槽位带上 `hint`，断言运行者无映射时启动门禁以 **409 `workflow_executor_unconfigured`** 拒绝、该槽位在 `params.slots[]` 里的 `reason` 是 `slot_not_configured`、`hint` 只作为拒绝参数返回，且不产生运行；`validSlotHint` 只校验形状。[cloud#72](https://github.com/ora-space/cloud/pull/72) 的 `TestWorkflowRunGateRefusesUnresolvedSlots` 在 DB 层补上同一结论（回滚后 0 绑定）。
+- 仍缺（后两行）：cloud 编辑器还没有槽位和 `hint` 的界面，导入路径仍保留 `executor`（见下一条），"不自动写入"和"作者显式写入"都没有直接证据，归 ora-space/circus#73 / #77。
 
 ## Importing A Pre-slot Graph Drops Its Executor And Runs On Default
 

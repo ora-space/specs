@@ -1,3 +1,29 @@
+# 文档归属
+
+顶层只有 `decisions/`、`test-cases/`、`domain/` 和 `drafts/`，不要新建其他顶层目录或文件。新增或修改规格文档时，
+先确定内容所属的领域与用途，再按下表维护：
+
+| 内容 | 位置与职责 |
+|---|---|
+| 术语、领域概念与关系 | `domain/`；共享术语统一维护在 [`domain/glossary.md`](domain/glossary.md) |
+| 架构决策、行为规则与取舍 | `decisions/` 对应领域的叶子目录 |
+| 核心验证义务与代表性证据 | `test-cases/`；领域目录继续镜像 `decisions/` |
+| 任务进度、讨论、运行记录与验收报告 | `ora-space/circus` 的 issue |
+| 临时探索草稿 | `drafts/`（不进入版本库）；定稿后进入对应归属 |
+
+- 修改术语或领域模型前，先查阅 `domain/glossary.md`，复用既有定义；新增共享概念也在该词汇表维护，
+  其他文档引用它，不另建重复的词汇来源。术语说明定义概念及边界。
+- specs 不创建或保留 `CONTEXT.md`、`CONTEXT-MAP.md` 或其他单独的词汇表文件，根目录和领域子目录均适用；
+  工具或 skill 要求写 `CONTEXT.md` 时，同样改写进 `domain/glossary.md`。目录导读使用对应目录的 `README.md`，
+  协作规则维护在本文件；`CLAUDE.md` 继续引用 `AGENTS.md`。
+- specs 不放实现说明，不创建 `implementation/` 或其他存放实现记录、验收记录、进度的目录和文件；模块接缝与
+  数据流以代码和对应 ADR 为准，最终实现偏离 ADR 时按 ADR 生命周期写进 ADR 正文。验收报告也不能替代核心
+  用例中的验证义务与证据状态。
+- `.gitignore` 忽略 `CONTEXT.md`、`CONTEXT-MAP.md` 和 `implementation/`，不要用 `git add -f` 绕过。
+- 将历史运行或验收报告移出规格树前，先在 circus issue 完整归档，保留原始结论、适用时间、固定源码
+  链接和内容摘要，确认归档成功后再移除。历史证据链接与当前实现入口分别维护。
+- 移动文档时，同步检查本仓库与消费代码仓库的路径、锚点和引用；具体完成条件见下文“Markdown 路径变更”。
+
 # 决策记录（ADR）
 
 `decisions` 用于承载 ADR。ADR 必须放在对应领域的叶子节点文件夹下，例如：

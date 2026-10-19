@@ -62,6 +62,19 @@ desktop 参考实现（`8909f07`）的直接证据在每个用例里单独标注
 | --- | --- | --- |
 | git-server | [代码中心契约](git-server/project-repository-code-hub-contract.md) | 监听与上下文头错配、ref 规则绕过、已结束 Operation 仍可写、删除回滚丢同步、快照领先 Git Server、跨 Project 可达、执行器出网越过部署白名单 |
 
+外部线的四篇决策（[Repo Executor 根决策](../../decisions/cloud/repo-executor/0-repo-executor-sole-external-git-boundary.md)、
+[同步](../../decisions/cloud/project/20261016-repository-binding-and-snapshot-sync.md)、
+[发布](../../decisions/cloud/project/20261017-explicit-fast-forward-publish.md)、
+[Git 凭据存储](../../decisions/cloud/identity-access/20261016-git-credentials-in-independent-credential-store.md)）经 owner 批准为
+`approved`，在契约之上各自登记执行器、同步、发布与凭据的义务。实现尚未合入 main，这些义务目前都是 Missing。
+
+| 领域 | 核心用例 | 重点风险 |
+| --- | --- | --- |
+| repo-executor | [执行器边界](repo-executor/repo-executor-boundary.md) | 授权与任务不符、明文凭据泄露、出网越过共享策略或 DNS rebinding、lease 失效、`uncertain` 后重推、进程残留 |
+| project | [仓库同步](project/repository-binding-and-snapshot-sync.md) | 同一 Operation 执行两次、expected old 过时、未核验推进快照、终态事务建两个后继、凭据来源重复、等待快照不结束 |
+| project | [显式发布](project/explicit-fast-forward-publish.md) | 越权审批、发布源校验与契约不一致、失去租约后重推、`uncertain` 无上限、发布后快照不含发布提交 |
+| identity-access | [Git 凭据存储](identity-access/git-credential-store.md) | token 经过 Cloud、授权重放或跨用途、未确认就 `stored`、能力跨版本延续、管理员使用他人个人凭据、撤销不彻底 |
+
 ## 已实现的 Issue 协作交互
 
 [Issue 协作根决策](../../decisions/cloud/issue-collaboration/0-typed-targets-and-explicit-execution-intent.md)为 `implemented`，补登 Cloud 已上线的协作契约。

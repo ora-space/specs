@@ -6,7 +6,7 @@ Controller/Node）、迁移测试与前端测试。Node 的恢复步骤见
 [Node 恢复前序 Revision](../../node/revision/prior-revision-restore.md)。
 
 跨仓库真实链路证据来自 cluster 的 `task revision:resume:acceptance`（见
-[revision-resume-acceptance](https://github.com/ora-space/cluster/blob/main/docs/revision-resume-acceptance.md)）：同一 Issue
+[Revision 交付与续接验收](https://github.com/ora-space/cluster/blob/main/docs/testing/revisions.md)）：同一 Issue
 连续运行三次，第二次看到第一次的提交，第三次的 bundle 包含前两次的提交，空运行沿用前序 bundle。验收失败不能单独
 定位到下列某条义务，因此只作为补充引用，不据此标记 `Covered`。
 

@@ -2,7 +2,7 @@
 
 依据[已批准的 operation 后续决策](../../../decisions/cloud/operation/20260928-plugin-step-and-run-workspace-release.md)。
 本文件登记 Workspace 在插件安装后才开放准入、插件不再经 Substrate、运行 Workspace 只由 IssueRun 建删的承诺。
-直接证据来自 [cloud#41](https://github.com/ora-space/cloud/pull/41) 的 `integration` 包。M1 真实联调由 [cluster `task plugin:acceptance`](https://github.com/ora-space/cluster/blob/main/docs/plugin-step-acceptance.md) 补充：
+直接证据来自 [cloud#41](https://github.com/ora-space/cloud/pull/41) 的 `integration` 包。M1 真实联调由 [cluster `task plugin:acceptance`](https://github.com/ora-space/cluster/blob/main/docs/testing/plugin-step.md) 补充：
 真实 Gateway/Cloud/Controller/Sandbox Server/Node 下，创建操作在 clone 后经过 plugin 步骤，采样确认结算前
 `admission_open` 始终为 false，Node 把发布包落到 Workspace 数据卷，Cloud 接管 Node 事件写回 `installed`。
 该验收只覆盖全部成功的路径；单项失败、整体失败与结果未知仍以上述集成测试为证据。

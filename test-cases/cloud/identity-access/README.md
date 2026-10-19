@@ -42,3 +42,15 @@
 - [Cloud Outage Is A Stable Failure That Keeps Sessions](proxy-and-credentials.md#cloud-outage-is-a-stable-failure-that-keeps-sessions)
 - [Only The Owner Reads And Writes A Git Identity](user-git-commit-identity.md#only-the-owner-reads-and-writes-a-git-identity)
 - [Session Start Fixes The Trigger User's Identity](user-git-commit-identity.md#session-start-fixes-the-trigger-users-identity)
+
+## Git 凭据存储用例
+
+依据 [Git 凭据存储决策](../../../decisions/cloud/identity-access/20261016-git-credentials-in-independent-credential-store.md)，
+实现尚未合入，证据均为 `Missing`。
+
+- [Git Tokens Reach Only The Browser And The Credential Store](git-credential-store.md#git-tokens-reach-only-the-browser-and-the-credential-store)
+- [Submission And Execution Authorizations Are Distinct And Single-Use](git-credential-store.md#submission-and-execution-authorizations-are-distinct-and-single-use)
+- [A Reference Becomes Stored Only After Cloud Confirms The Version](git-credential-store.md#a-reference-becomes-stored-only-after-cloud-confirms-the-version)
+- [Capabilities Hold For One Store Version And Are Proven, Not Declared](git-credential-store.md#capabilities-hold-for-one-store-version-and-are-proven-not-declared)
+- [Administrators Cannot Use Another Member's Personal Credential](git-credential-store.md#administrators-cannot-use-another-members-personal-credential)
+- [Revocation Stops New Authorizations And Destroys Ciphertext](git-credential-store.md#revocation-stops-new-authorizations-and-destroys-ciphertext)

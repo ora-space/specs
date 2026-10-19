@@ -116,6 +116,6 @@ Sandbox Server 继续在 `-addr` 上提供根决策的 WS 路由与中继，供�
 
 cluster#6 与 desktop#632 一起落地：Compose 生成管理证书与私有卷，Controller 接入沙盒网络，Sandbox Server 在
 ensure 时签发 Node 身份，Node 入口脚本落盘证书并以 `mutual_tls_websocket` 监听，Controller 在 Cloud 模式下改为
-直连。真实链路由 cluster 的 `scripts/runtime-control-acceptance.py` 验收（见 cluster `docs/runtime-control.md`）。
+直连。真实链路由 cluster 的 `scripts/runtime-control-acceptance.py` 验收（见 cluster `docs/testing/runtime-control.md`）。
 保持不变：WS 路由与静态表的行为、生命周期 effect 语义。开始改变：Cloud 模式的 Controller–Node 连接不再经过
 Sandbox Server。

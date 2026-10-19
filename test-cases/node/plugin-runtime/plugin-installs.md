@@ -1,7 +1,7 @@
 # Node 插件安装
 
 依据[已实现的 Node plugin-runtime 根决策](../../../decisions/node/plugin-runtime/0-node-installs-plugins-into-workspace-home.md)。
-证据来自 desktop 的实际包、本地 HTTP、Node 进程与 SQLite 测试。状态按直接覆盖范围维护；跨仓库 M1 联调不由这些测试替代，由 [cluster `task plugin:acceptance`](https://github.com/ora-space/cluster/blob/main/docs/plugin-step-acceptance.md) 提供：
+证据来自 desktop 的实际包、本地 HTTP、Node 进程与 SQLite 测试。状态按直接覆盖范围维护；跨仓库 M1 联调不由这些测试替代，由 [cluster `task plugin:acceptance`](https://github.com/ora-space/cluster/blob/main/docs/testing/plugin-step.md) 提供：
 真实 Node 从 GitHub Releases 下载通用发布包、校验后发布到 Workspace 数据卷的
 `/var/lib/ora/node/plugins/installed/<ns>/<id>/<version>/`。它不覆盖原生 target 发布包与失败路径，下表状态不变。
 
