@@ -106,7 +106,7 @@ Cloud 实现与验证入口：[cloud#80](https://github.com/ora-space/cloud/pull
 - 风险：仅改文件却误以为策略已生效，旧进程/池仍发送，或加载失败退回宽许可、摘要不一致未被发现。
 - 前置状态：旧快照已加载且存在活跃 SSE、HTTPS 资产下载与空闲连接；新快照移除目标或收紧 CIDR/topology。
 - 触发：运行中仅改文件，或经部署入口停止两服务、换文件、再启动；配置加载失败、摘要不一致及显式回滚。
-- 必须成立：文件变动不热生效；确认两个服务旧进程退出后才换文件/启动，旧流与所有池已终止；有效新配置在启动时加载，失败进程不启动；`ora verify` 比对两端摘要，缺失/不一致报错。
+- 必须成立：文件变动不热生效；确认 Cloud、model-gateway 及已配置的 Repo Executor 旧进程退出后才换文件/启动，旧流与所有池已终止；有效新配置在启动时加载，失败进程不启动；`ora verify` 比对两端摘要，缺失/不一致报错。
 - 禁止结果：只关 idle 池或不确认退出就替换文件、无效配置自动回退 public/旧配置、摘要不一致仍宣称部署校验成功、自动重发中断的生成。
 - 决策依据：D1、D3、D6。
 - 验证义务与证据：
@@ -119,6 +119,7 @@ Cloud 实现与验证入口：[cloud#80](https://github.com/ora-space/cloud/pull
 | 摘要比对 | `TestHealthExposesOnlyPolicyIdentity`、`ApplicationTests` 与 `VerificationTests`；实际 `smoke_egress.py` 注入单端不同策略使 ora verify 失败，再经真实 apply 恢复，覆盖同代成功/不一致拒绝及输入/生成快照变更识别；多副本真实部署矩阵待补齐 | Partial |
 | 回滚与拓扑变更 | 工具使用同一采集/停机/替换/启动路径，`ApplicationTests` 连续应用不同输入且未设 complete 门槛；实际 smoke 显式修复失败配置后恢复。现场拓扑变更与完整旧配置回滚的实测组合仍待补齐 | Partial |
 
+可选 Repo Executor 的部署接线证据为 `Partial`：cluster `ApplicationTests.test_optional_executor_stops_and_restarts_with_the_same_readonly_policy` 验证同一只读文件、停止/重建参数；`test_executor_is_selected_from_explicit_config_and_orphan_cannot_be_omitted` 验证显式选择与遗漏参与者拒绝；`VerificationTests.test_optional_executor_and_all_replicas_must_participate` 验证副本缺失与摘要不符拒绝，`test_executor_health_uses_plain_http_8084_and_shared_headers` 通过真实 HTTP 验证管理探针契约。这些证据不替代 Repo Executor 镜像的共享策略实现、三类真实服务一起停启与真实外部仓库验收。
 ## Current policy must constrain frozen bindings without reviving revoked grants
 
 - 风险：冻结被误读为永久网络许可，或策略重新允许后复活已撤销凭据。
