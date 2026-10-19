@@ -29,8 +29,8 @@ provider redirect URI 的接受范围还取决于部署配置和该 provider，�
 
 直接前序是[部署绑定 Desktop 会话 ADR](https://github.com/ora-space/specs/blob/0eddd50e25ebb0e6408631b4653e4787f61e116c/decisions/cloud/identity-access/20261019-deployment-bound-desktop-sessions.md)，
 本文细化其中 D7 的 HTTP/浏览器门禁，并承接同域
-[轮换恢复提案](https://github.com/ora-space/specs/blob/0273e78667e7a56a4cab3f1af862ad6643193159/decisions/cloud/identity-access/20261019-desktop-session-rotation-and-recovery.md)
-保留的 HTTP 例外边界：不改变其 D5 有限恢复规则。两份提案均待独立评审，轮换提案本身不为
+[轮换恢复提案](https://github.com/ora-space/specs/blob/ae8046ba9da7237454085f271fd77c35b1e50743/decisions/cloud/identity-access/20261019-desktop-session-rotation-and-recovery.md)
+保留的 HTTP 例外边界：不改变其 D3–D5 轮换/恢复与失效规则。两份提案均待独立评审，轮换提案本身不为
 本文提供已批准的 HTTP 传输许可。
 
 | 前序约定 | 本提案处理 |
@@ -108,6 +108,27 @@ PKCE S256、loopback/deep link 回调目标和有效期。Gateway 的批准页�
 原生接口严格验证 bearer 用途、会话状态与当前授权，不从 Cookie、Origin 或用户选择的
 账号 ID 推导身份。HTTP 请求体与资格不得进入反向代理访问日志或诊断。
 
+HTTP 监听器/入口只暴露明确列入原生契约的发现、身份挑战、交接事务接入/换票和原生会话/
+受保护业务路由；它不服务网页 SPA、网页登录、provider callback、网页登录退出或管理端。
+不能把同一 Gateway 全部路由原样挂到第二个明文监听端口。HTTP 请求即使携带有效浏览器
+Cookie，也不能因此取得任何原生身份；HTTP 入口不得设置、续期、清理或降级浏览器 Cookie。
+HTTPS 浏览器身份路由与原生路由按实际配置的监听入口/可信 ingress 路由分离，不能靠未经
+验证的 Host、Forwarded 或 X-Forwarded-Proto 判定某次请求受 HTTPS 保护。
+
+双端点的部署配置使用一个可验证的修订；候选元数据与两次挑战必须对应同一端点对/修订。
+若配置在验证期间变化则取消并重新探测，不把不同时间分别验证过的旧/新地址拼成未被部署
+共同声明的端点对。修改配置立即失效未完成登录事务，已经取得的会话迁移仍按 D5 重新验证。
+
+HTTPS 下的身份挑战还须由首次交接协议固定签名与当前 TLS 对端的绑定方式：仅签 nonce/
+端点字符串只能拒绝重放，不能自动排除持有有效站点证书的代理在线转发另一个服务的挑战。
+候选绑定可以来自受信任 TLS 终止层的连接材料或被部署签名认可的端点证书公钥，须明确
+ingress 信任、证书更新及多副本语义后再选型；不接受任意转发 header 自报绑定，签名服务
+也不得盲签客户端自报的证书公钥/连接材料。
+在这项契约补齐前，不能以“已分别校验 TLS 与 nonce 签名”声称强部署身份验证已经闭环。
+HTTP 本来就不提供相同的传输绑定和防透明转发保证，仍按已确认风险处理，不假装此要求
+能用 HTTP 签名补足。相关概念见 [RFC 9266](https://www.rfc-editor.org/rfc/rfc9266)，
+本文不据此直接选定某个 channel binding 或宣称普通反向代理已支持它。
+
 ### D5：失败保留本地与旧信任，不静默降级
 
 | 失败 | 可观察行为 |
@@ -143,6 +164,8 @@ provider 接受它。推荐先批准 D1–D5 的双端点方案；纯 HTTP 浏�
 4. HTTPS 网页登录不被宣传为保护之后的 HTTP 会话，签名也不替代加密。
 5. Cookie/development/provider 的既有默认边界不因原生 HTTP opt-in 被全局放松。
 6. 任意失败不锁本地，不清旧信任，不把未发送内容传给新 server/账号。
+7. 原生 HTTP 入口不能导出网页登录/SPA/provider 路由，不能以 Cookie 或不可信转发头取得身份。
+8. 事务只使用同一部署配置修订的完整端点对，配置变化不能拼接出未经授权的交接目标。
 
 ## 替代方案与代价
 
@@ -164,5 +187,6 @@ provider 接受它。推荐先批准 D1–D5 的双端点方案；纯 HTTP 浏�
 签名密钥丢失/自动轮换、组织下发配置、自动迁移声明及多 server 并行仍在范围外。
 
 owner 选择后按结论纠偏并转 approved，再维护核心用例；推荐方案需要双端点、同主机
-多端口、错误身份/证书、HTTP 风险、浏览器/系统证书信任差异、provider callback 和迁移
+多端口、错误身份/证书、HTTP 路由/Cookie 隔离、不可信转发头、端点配置更新竞争、
+HTTP 风险、浏览器/系统证书信任差异、provider callback 和迁移
 失败的直接证据。第三阶段产品交付前不能只用配置单测代替真实系统浏览器与正式包验收。
