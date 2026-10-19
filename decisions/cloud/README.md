@@ -27,6 +27,7 @@ Cloud 的领域与协议边界划分，不预先决定 Go package、数据库表
 | `git-server` | 沙盒访问的 Git Server：协议、git-access 身份、按 Cloud 当前状态的逐请求授权与 ref 规则 |
 | `repo-executor` | 唯一访问外部 Git 仓库的执行器：服务身份、一次性授权与凭据兑换、同步与发布的执行步骤、结果分类和部署 |
 | `workflow` | 工作流图 schema、执行器槽位、发布与运行的门禁和执行契约 |
+| `scheduled-task` | Cloud 定时任务定义、持久 occurrence、无头 Prompt 单会话准入与通知边界 |
 
 Controller 的调度与恢复策略放在 `specs/decisions/controller/`，Node 的 Git、文件、进程、Agent、
 Plugin 和本地执行职责放在 `specs/decisions/node/`。跨层决策放在拥有业务不变量的一侧，并从其他
