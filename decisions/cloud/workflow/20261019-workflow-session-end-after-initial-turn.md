@@ -1,5 +1,5 @@
 ---
-status: approved
+status: implemented
 ---
 
 # 工作流会话在初始回合结束后由 Cloud 调度器结束：复用 EndSession 中继，有界等待后以命名原因失败
@@ -13,8 +13,9 @@ status: approved
 `session_end_deadline_exceeded` 失败，运行进入终态并释放 Workspace：已请求结束的会话不再可能让运行永久
 `running`（从未走到结束请求的路径见「本决策未解决的问题」）。
 
-**状态与影响面**：本文经 owner 评审批准（2026-10-20），状态为 `approved`；实现见运行
-ora-space/circus#293（cloud#96），核心用例见
+**状态与影响面**：本文经 owner 评审批准（2026-10-20），已由 cloud#96 实现并合并（merge commit
+`644a65e2`），并在真实栈上验收通过（运行 ora-space/circus#293，成功运行 `847bca1a`），状态为
+`implemented`；核心用例见
 [工作流会话结束核心用例](../../../test-cases/cloud/workflow/session-end-after-initial-turn.md)。涉及 cloud 的
 调度器与 `thread_commands` 持久化形状，以及 specs 的本文。**兼容边界**：`thread_commands` 从只接受
 IssueRun 扩展为两个归属列恰有其一；存量行全部带 `run_id`，不回填，IssueRun 的 Thread 路径不变。Controller
@@ -163,10 +164,11 @@ D6 的后续实现有两条不改变本文归属与触发判据的路径：会�
 
 ## 落地顺序
 
-- 阶段 1（Cloud 实现，运行 ora-space/circus#293）：新增迁移 `0045`、调度器触发与有界等待，带成功回合、
-  `cancelled` 回合、按节点隔离、超时失败四组数据库测试。完成条件是四组测试与既有 workflow/thread 测试
-  全绿；本阶段不改变 IssueRun 的 Thread 路径与任何 Controller 契约。
-- 阶段 2（状态同步）：实现合并后由落地运行把本文改为 `implemented`，按最终实现精简正文、核对偏离，
-  并在[核心用例](../../../test-cases/cloud/workflow/session-end-after-initial-turn.md)登记证据状态。
+- 已实现（Cloud，运行 ora-space/circus#293）：迁移 `0049_thread_commands_workflow_run.sql`、调度器触发与
+  有界等待；成功回合、`cancelled` 回合、按节点隔离、超时失败四组数据库测试与既有 workflow/thread 测试
+  全绿。cloud#96 已合并（`644a65e2`），并在真实栈通过成功场景验收（运行 #293，成功运行 `847bca1a`）。
+- 状态同步：本文已由落地运行 ora-space/circus#324 标记为 `implemented`，并按最终实现同步正文；
+  [核心用例](../../../test-cases/cloud/workflow/session-end-after-initial-turn.md) 已登记直接测试与
+  真实栈验收证据。
 - 保持不变：图 schema、发布门禁、运行身份的冻结项、节点终态的证据来源、失败与取消的既有结算，以及
   Controller 的线上契约。
