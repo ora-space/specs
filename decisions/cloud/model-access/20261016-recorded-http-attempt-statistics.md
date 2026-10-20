@@ -20,10 +20,12 @@ Model Gateway 为每次已授权的上游 HTTP 发送意图建立独立、无正
 ## D1：先持久化发送意图，每次尝试有独立身份
 
 网关为一次 HTTP 尝试生成 UUID，在发送上游之前由 Core 重新校验 grant、binding 和 execution，
-按数据库关系保存 tenant/run/model/protocol。客户端 header 和 body 不能指定统计归属。
-登记失败返回 `503 model_metrics_unavailable`，不发送模型请求；这是相对原代理新增的可用性依赖。
-登记后到实际发送前崩溃可能留下 `started`，因此记录数表示已登记尝试，不保证每条都被供应商接收。
-客户端重新发起的请求是新尝试；网关不因统计失败重发生成请求。
+按数据库关系保存 tenant、运行归属、model 与 protocol。运行归属跟随绑定的所有者判别列：IssueRun
+绑定写 `run_id`，WorkflowRun 绑定写 `workflow_run_id`，两者恰有其一，与 `run_model_bindings` 的
+`0040` 形状一致；两种绑定都只能登记由其冻结 execution 发起的尝试。客户端 header 和 body 不能指定
+统计归属。登记失败返回 `503 model_metrics_unavailable`，不发送模型请求；这是相对原代理新增的
+可用性依赖。登记后到实际发送前崩溃可能留下 `started`，因此记录数表示已登记尝试，不保证每条都被
+供应商接收。客户端重新发起的请求是新尝试；网关不因统计失败重发生成请求。
 
 ## D2：结束观察不可变，取消后仍可有界提交
 
@@ -59,6 +61,11 @@ OpenAI input 包含缓存，Anthropic input 不含缓存读写；推理是输出
 真实零保留，缺失标记与数值轴分开，虚线只能连接已知端点并说明中间缺失，不插值或累计。
 未来 Agent/ACP 报告仍为另一来源，不与 Gateway 相加；本决策不依赖 Desktop token_usage 扩展。
 
+本决策的读取范围仍是 IssueRun：`statistics` 与 `model-calls` 按 IssueRun 的 `run_id` 读取。
+WorkflowRun 的尝试已经登记，但它的统计读取需要单独定义聚合范围、游标与授权，在另行批准前不开放
+（决策见 circus#285，由 circus#286 落地）；WorkflowRun 登记行的 `run_id` 为空，不会进入上述
+IssueRun 读取。
+
 ## 不变量
 
 1. 统计归属由验证过的持久绑定决定，跨租户或跨 Run 游标不可读取。
@@ -81,8 +88,13 @@ OpenAI input 包含缓存，Anthropic input 不含缓存读写；推理是输出
 部署先用迁移身份执行 `cloudctl migrate`，再启动新 Cloud 与 Model Gateway；服务只校验 schema。
 新旧历史无回填，台账以外的运行不补造计量。新表含复合外键、状态/数值/完成形状约束和 Run 时间索引。
 
-验收需覆盖全新与升级及重复迁移、登记前拒绝、实际 HTTP 与数据库贯通、两协议 JSON/SSE、
-取消后收尾、并发不同完成结果、故障不重发、未知/零/部分覆盖率、越权与旧会话。
+后续追加 `0044_model_attempt_workflow_run.sql`：`model_request_attempts` 增加可空的
+`workflow_run_id`，`run_id` 改为可空，两者恰有其一；运行与绑定各按所有者引用
+`issue_runs`/`workflow_runs` 的 `(id, tenant_id)` 与 `run_model_bindings` 的
+`(id, run_id)`/`(id, workflow_run_id)`。它只扩展登记范围，不改变读取范围，也不回填历史行。
+
+验收需覆盖全新与升级及重复迁移、登记前拒绝、WorkflowRun 绑定登记、实际 HTTP 与数据库贯通、
+两协议 JSON/SSE、取消后收尾、并发不同完成结果、故障不重发、未知/零/部分覆盖率、越权与旧会话。
 长期未完成行的恢复、台账保留期限、增量汇总及大 Run 查询成本留给后续设计；当前全 Run 聚合
 仍受 Core 事务串行边界约束。真实供应商账单一致性不由合成协议测试证明。
 核心验证义务与直接证据见[已登记 HTTP 尝试统计](../../../test-cases/cloud/model-access/recorded-http-attempt-statistics.md)。

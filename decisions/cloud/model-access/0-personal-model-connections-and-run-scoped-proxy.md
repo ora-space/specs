@@ -4,6 +4,9 @@ status: implemented
 
 # 个人模型连接由用户配置，平台保管密钥并为每次运行代理模型请求
 
+> 后续决策：[个人 Agent 配置](20261017-personal-agent-configurations.md) 已批准将个人绑定扩展到
+> 显式 Claude 普通运行，尚待实现；保留 OpenCode/default、密钥保管与永久撤销的既有语义。
+
 > 后续决策：[部署方模型出口与显式解析](20261017-deployment-owned-egress-and-explicit-resolution.md)
 > 已实现 D5 的企业模式网络边界扩展；非企业模式继续本文的公网规则。新增验证义务和证据
 > 由后续决策的核心用例单独维护，不从本文原公网证据推定。

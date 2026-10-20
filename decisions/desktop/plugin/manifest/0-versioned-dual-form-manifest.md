@@ -4,6 +4,9 @@ status: implemented
 
 # 插件清单：resolver 版本化的双形态 `orax.toml` 与单一验证域模型
 
+> 后续决策：[Agent 配置声明与发行关联](20261017-agent-configuration-declarations.md) 已批准扩展
+> Agent 个人模型路线的静态声明与能力校验，尚待实现；本文的旧清单/v1 行为及其实现状态不因此改变。
+
 > 历史决策：`kind` 的封闭集合已由 [Extension Pack 决策](../extension-pack/0-extension-pack.md)（加入 `pack`，只允许 release 形态）与 [Workflow 插件类别根决策](../category/workflow/0-workflow-package-format.md)（加入 `workflow`）扩展为八种。D4 的配对表与正文枚举只列了前六种，以这两份决策为准；`pack` 与 `workflow` 都没有专属 section，也都不允许 target 形态。
 
 **release `url` 的类型已由

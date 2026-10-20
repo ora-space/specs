@@ -1,5 +1,8 @@
 # 插件清单 schema 与校验
 
+新增 Agent 静态声明和发行关联见[Agent 配置声明用例](agent-configuration-declarations.md)，
+其义务独立标为 `Missing`，不由下述既有清单测试推导。
+
 架构边界与不变量来自
 [插件清单根决策](../../../../decisions/desktop/plugin/manifest/0-versioned-dual-form-manifest.md)。
 namespace 归属与安装目录身份匹配的核心用例在

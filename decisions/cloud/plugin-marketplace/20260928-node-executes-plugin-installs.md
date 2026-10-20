@@ -4,6 +4,9 @@ status: implemented
 
 # 插件安装与移除由 Node 执行，新建 Workspace 自动补装 Space 插件
 
+> 后续决策：[Agent 配置元数据](20261017-agent-configuration-metadata.md) 已批准扩展个人模型
+> 路线的声明关联与安装结果校验，尚待实现；维护互斥和安装租约不变。
+
 插件的执行面从“`plugin_ensure`/`plugin_delete` Substrate effect”改为“Controller 派发给 Workspace Node 的
 执行”：载荷不变（仍由 Cloud 从目录快照自包含拼装、SHA-256 必选），但证据来自 Node 执行结果，经
 `ExecutionService` 的派发前登记与原子接管进入 Cloud。新建或启动的 Workspace 在 `plugin` 步骤安装 Space

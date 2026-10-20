@@ -71,9 +71,9 @@
 
 - 风险：有效 session 若被 Gateway 解释为“已授权”，或 Cloud 的 401/403 被改写，disabled user 与被移除的
   membership 就能继续访问。
-- 前置状态：浏览器持有有效 session；Cloud 中该用户随后被置为 `disabled`。
-- 触发：经 Gateway 请求 `/api/v1/me`。
-- 必须成立：Cloud 基于当前数据库状态返回 `403 user_disabled`，Gateway 原样透传；session 行不被吊销。
+- 前置状态：浏览器持有有效 session；Cloud 中该用户或其 tenant membership 随后被置为 `disabled`；另一个已登录用户尚不是该租户成员。
+- 触发：经 Gateway 请求 `/api/v1/me` 或租户资源；管理员邀请和停用成员；成员重新外部登录。
+- 必须成立：Cloud 基于当前数据库状态返回 `403 user_disabled` 或 `403 membership_required`，Gateway 原样透传；session 行不因授权拒绝而被吊销。租户创建者为 `admin`，邀请只授予普通 `member` 角色；停用在所有 Gateway 副本的下一次请求立即生效，重新登录不能恢复成员权限。
 - 禁止结果：Gateway 缓存授权结果；把 Cloud 拒绝改写为成功或吊销 session。
 - 决策依据：ADR D1，不变量 15。
 
@@ -82,7 +82,8 @@
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
 | disabled user 经 Gateway 得到 Cloud 的 `403 user_disabled` | `integration.TestGatewayLoginProxyLogoutAndCredentialBoundaries` | `Covered` |
-| membership 移除或 owner 不匹配的拒绝透传 | 只有 disabled user 路径，membership/owner 路径由 Cloud 自身测试覆盖但未经 Gateway 验证 | `Partial` |
+| 创建者角色、非成员拒绝、邀请角色、成员停用后两个 Gateway 副本立即拒绝，重新登录不恢复权限 | `integration.TestGatewayTenantAuthorizationUsesCurrentMembership`（真实 HTTP、PostgreSQL、Cloud 与两个 Gateway；外部 provider 为受控测试服务） | `Covered` |
+| membership 移除或 owner 不匹配的拒绝透传 | membership 停用已有经 Gateway 的直接证据；移除和 owner 路径仍由 Cloud 自身测试覆盖，尚无对应 Gateway 验证 | `Partial` |
 
 ## Authorized Event Streams Outlive Proxy Timeouts
 

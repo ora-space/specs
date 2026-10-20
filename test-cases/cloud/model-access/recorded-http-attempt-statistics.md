@@ -3,6 +3,8 @@
 决策依据：[已登记 HTTP 尝试统计](../../../decisions/cloud/model-access/20261016-recorded-http-attempt-statistics.md)（`approved`）。
 直接代码证据固定在 [Cloud PR #69](https://github.com/ora-space/cloud/pull/69) 的
 [`feae6e39f6cd9647784e6ff923778e65fa8f7f92`](https://github.com/ora-space/cloud/tree/feae6e39f6cd9647784e6ff923778e65fa8f7f92)。
+WorkflowRun 登记与 `0044` 的代码证据来自 [Cloud PR #93](https://github.com/ora-space/cloud/pull/93)，
+固定在合并提交 [`090bded8505cbf39fc3ec866eaae826cd6436c95`](https://github.com/ora-space/cloud/tree/090bded8505cbf39fc3ec866eaae826cd6436c95)。
 `Covered` 只证明该提交所列测试边界内的义务，不表示已合并或真实部署已验收。
 Gateway 故障注入使用替身持久化；Core 使用真实 PostgreSQL；贯通测试使用真实 PostgreSQL 和受控 TLS
 上游，不能代替真实供应商、Node 或浏览器验收。
@@ -20,6 +22,7 @@ Gateway 故障注入使用替身持久化；Core 使用真实 PostgreSQL；贯�
 | 义务 | 代表性直接证据 | 状态 |
 | --- | --- | --- |
 | 归属和模型来自持久绑定，重复相同意图幂等，撤销后拒绝新意图 | [Core 台账测试][core]：`TestModelAttemptsPersistFrozenScopeAndImmutableCompletion` | Covered |
+| WorkflowRun 绑定按 `workflow_run_id` 登记且 `run_id` 为空 | [WorkflowRun 台账测试][workflow-attempt]：`TestWorkflowModelAttemptRegistersUnderWorkflowRun`，真实 PostgreSQL 驱动冻结 grant/binding/execution 与最终收尾 | Covered |
 | 登记失败返回 503 且不发送、不泄漏诊断 | [Gateway 尝试测试][attempt]：`TestModelAttemptsPersistenceFencesAndIdempotentFinalization` 的失败登记分支；注入 Store 失败并计数真实 TLS 请求 | Covered |
 | 503 的精确公开错误码 | 上述测试断言 HTTP 状态和调用数，未直接断言 `model_metrics_unavailable` 字段 | Missing |
 | 真实提交先于 HTTP，发送期间释放数据库连接，每次请求独立计数 | [贯通测试][gateway-http]：`TestModelGatewayPersistsActualAttemptsThroughStatisticsHTTP`，两协议、单 SQL 连接、受控 TLS 上游 | Covered |
@@ -91,7 +94,8 @@ Gateway 故障注入使用替身持久化；Core 使用真实 PostgreSQL；贯�
 
 | 义务 | 代表性直接证据 | 状态 |
 | --- | --- | --- |
-| 全新与 0034 升级、重复迁移、空台账/三个范围外键/索引及既有身份保留 | [迁移测试][statistics-http]：`TestMigration0035ModelAttemptsFreshAndUpgradeWithoutBackfill`，真实 PostgreSQL | Covered |
+| 全新与 0034 升级、重复迁移、最终台账形状（两组所有者外键/两个所有者索引）及既有身份保留 | [迁移测试][statistics-http-93]：`TestMigration0035ModelAttemptsFreshAndUpgradeWithoutBackfill`，真实 PostgreSQL | Covered |
+| 0044 的全新与 0043 升级、重复迁移：`run_id` 可空、`workflow_run_id` 新增、恰有其一，运行与绑定各按所有者引用 | [迁移测试][migration-upgrade]：`TestMigration0044ModelAttemptWorkflowRunAppliesFreshAndUpgrades`，真实 PostgreSQL | Covered |
 | 旧会话 HTTP 与页面显示未采集 | [统计 HTTP 测试][statistics-http]：`TestSessionStatisticsHTTPUnknownHistoryAuthorizationAndQueries`；[统计组件测试][metrics-ui]：`shows a historical-session empty state without claiming zero consumption` | Covered |
 | 升级时历史 Run/Revision/Thread 全量保真 | 迁移测试保留一条身份，未在 0034 阶段植入完整历史 Run/Revision/Thread；旧会话测试也不是升级夹具 | Partial |
 | 真实部署的先迁移后启动及迁移身份隔离 | 迁移单测不证明实际发布顺序或身份配置；需部署验收 | Missing |
@@ -102,5 +106,8 @@ Gateway 故障注入使用替身持久化；Core 使用真实 PostgreSQL；贯�
 [gateway-http]: https://github.com/ora-space/cloud/blob/feae6e39f6cd9647784e6ff923778e65fa8f7f92/integration/model_attempt_gateway_test.go
 [usage]: https://github.com/ora-space/cloud/blob/feae6e39f6cd9647784e6ff923778e65fa8f7f92/internal/modelgateway/usage_test.go
 [statistics-http]: https://github.com/ora-space/cloud/blob/feae6e39f6cd9647784e6ff923778e65fa8f7f92/integration/session_statistics_test.go
+[statistics-http-93]: https://github.com/ora-space/cloud/blob/090bded8505cbf39fc3ec866eaae826cd6436c95/integration/session_statistics_test.go
+[migration-upgrade]: https://github.com/ora-space/cloud/blob/090bded8505cbf39fc3ec866eaae826cd6436c95/integration/migration_upgrade_path_test.go
+[workflow-attempt]: https://github.com/ora-space/cloud/blob/090bded8505cbf39fc3ec866eaae826cd6436c95/internal/core/model_attempt_workflow_db_test.go
 [metrics-ui]: https://github.com/ora-space/cloud/blob/feae6e39f6cd9647784e6ff923778e65fa8f7f92/frontend/src/features/session-metrics/session-metrics.test.tsx
 [metrics-page]: https://github.com/ora-space/cloud/blob/feae6e39f6cd9647784e6ff923778e65fa8f7f92/frontend/src/features/sessions/session-metrics-page.test.tsx

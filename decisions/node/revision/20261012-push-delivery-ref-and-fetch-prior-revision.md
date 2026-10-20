@@ -1,8 +1,10 @@
 ---
-status: proposed
+status: superseded
 ---
 
 # Node 交付把最终提交推送到 Git Server 的交付 ref（无改动也推），恢复从 Git Server 拉取前序交付 ref；Git 访问在 Node 私有传输仓库中进行，Cloud 模式必须配置 `git_access`
+
+> 已被取代：本决策由 [Node 交付推送交付 ref 并快进 Workspace 分支、续作从 Git Server 拉取（20261017）](20261017-push-delivery-ref-and-restore-from-git-server.md) 取代。原因：本决策写在 Git Server 只存交付 ref、Node 仍从外部仓库 clone 的设计上；Git Server 成为 Project 代码中心（[Git Server 根决策](../../cloud/git-server/0-project-code-hub-git-server-over-https.md)）后，owner 决定把本决策整体改为 `superseded`，按新设计重新写取代者，不在原文上续改。当前系统承诺以取代者为准。
 
 Node 交付时仍按根决策生成内部快照与本地 `refs/ora/revisions/<runId>`，但不再生成 bundle：无论有没有改动，都把
 最终提交推送到交付输入给出的 Git Server 仓库与 `refs/ora/deliveries/<deliveryWorkId>`，再照旧上传会话 JSONL。

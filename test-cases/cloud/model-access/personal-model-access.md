@@ -1,5 +1,8 @@
 # 个人模型访问：归属、冻结、撤销和密钥隔离
 
+后续[个人 Agent 配置用例](personal-agent-configurations.md)单独记录 Claude、插件配置及升级回归
+的新义务，当前均为 `Missing`；本文保留原 OpenCode/模型访问证据的适用范围。
+
 决策依据：[个人连接与运行代理](../../../decisions/cloud/model-access/0-personal-model-connections-and-run-scoped-proxy.md)。
 状态对应直接证据范围；生产 CLI 与真实上游的联调不能由下层替身测试代替。
 两协议的受控上游浏览器/API 证据见 [PR 检视与验证记录](https://github.com/ora-space/cluster/pull/15#issuecomment-6107672919)，实施阶段记录见 [Specs PR 归档](https://github.com/ora-space/specs/pull/76#issuecomment-6107673463)。

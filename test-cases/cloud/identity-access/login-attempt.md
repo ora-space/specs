@@ -50,6 +50,7 @@
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
 | 缺失 attempt Cookie、错误 `state`、重放均为统一 `401`，且不产生 session | `integration.TestGatewayLoginAttemptReplayStateAndConcurrentConsume` | `Covered` |
+| 数据库中的 attempt 已过期而浏览器 Cookie 仍有效时，callback 在兑换 provider code 前拒绝，清除 Cookie 且不创建 session | `integration.TestGatewayExpiredLoginAttemptRejectsCallbackBeforeProviderExchange` | `Covered` |
 | 失败 callback 清除 attempt Cookie 并使原 attempt 不再可用 | `integration.TestGatewayLoginAttemptReplayStateAndConcurrentConsume` | `Covered` |
 | 成功 callback 重定向到 attempt 保存的 `return_to`，attempt 被标记消费 | `integration.TestGatewayLoginProxyLogoutAndCredentialBoundaries` | `Covered` |
 | provider 允许 code 重用时，两个并发 callback 只有一个创建 session | `integration.TestGatewayLoginAttemptReplayStateAndConcurrentConsume` | `Covered` |
@@ -128,7 +129,7 @@
 | 表单流程登录输入的典型身份，伪造 code 统一 `401 login_failed` 且不产生 session | `integration.TestGatewayDevelopmentProviderSignsInTypedIdentity` | `Covered` |
 | `GET /auth/providers` 同时列出 `dev` 与外部 provider，`default` 为外部 provider，省略 provider 的 start 指向外部 provider | `integration.TestGatewayDevelopmentProviderSignsInTypedIdentity` | `Covered` |
 | `devlogin` 表单仅同源提交、code 由进程内密钥 HMAC 封装且过期/篡改拒绝 | `devlogin.TestAuthenticator`（表单、封印与校验） | `Partial` |
-| 生产 origin 上开启 `login.development_provider` 被配置校验拒绝，仅 loopback development origin 可开 | `gateway.TestConfigDefaultsAndSessionLifetimeBounds` | `Covered` |
+| 开启 `login.development_provider` 只允许显式 development 的 loopback HTTP；HTTPS（含 loopback）、非 loopback 与未开启 development 均在配置阶段拒绝 | `gateway.TestDevelopmentProviderRequiresExplicitLoopbackHTTPOrigin` | `Covered` |
 
 ## Huawei IDaaS Identity Is Keyed Only By Corporate UUID
 

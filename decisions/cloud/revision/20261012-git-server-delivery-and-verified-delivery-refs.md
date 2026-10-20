@@ -1,8 +1,10 @@
 ---
-status: proposed
+status: superseded
 ---
 
 # Revision 的代码改动只经 Git Server 交付：Cloud 写入仓库地址与交付 ref，经 ref 查询核验后登记；删除 bundle 与下载授权，proto `v1` 破例删字段
+
+> 已被取代：本决策由 [Revision 的代码改动只经 Git Server 交付（20261017）](20261017-git-native-delivery-refs-and-resume.md) 取代，契约形状由 [快照 clone 输入与执行授权决策](../controller-integration/20261016-snapshot-clone-input-and-execution-ref-grants.md) D9 承担。原因：本决策写在 Git Server 只存交付 ref、Node 仍从外部仓库 clone 的设计上；Git Server 成为 Project 代码中心（[Git Server 根决策](../git-server/0-project-code-hub-git-server-over-https.md)）后，owner 决定把本决策整体改为 `superseded`，按新设计重新写取代者，不在原文上续改。当前系统承诺以取代者为准。
 
 从本决策落地起，Agent 运行的交付只有一种形态：Node 把最终提交推送到 Git Server 上本次交付尝试专属的
 `refs/ora/deliveries/<deliveryWorkId>`，会话 JSONL 照旧上传对象存储。Cloud 在放出交付工作项时，把完整仓库地址

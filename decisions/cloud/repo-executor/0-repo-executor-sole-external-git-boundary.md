@@ -1,17 +1,17 @@
 ---
-status: approved
+status: implemented
 ---
 
-# Repo Executor 是唯一访问外部仓库的程序：按 Operation 一次性授权执行同步与发布，结果只经 Git Server 交接
+# Repo Executor 是 Project 外部仓库的唯一执行边界：按 Operation 一次性授权执行同步与发布，结果只经 Git Server 交接
 
-Ora 中只有一个程序访问外部 Git 仓库（GitHub、GitLab 等）：Repo Executor（下称“执行器”）。它是 Cloud 仓库中与 Git Server、
+Project 的外部 Git 仓库（GitHub、GitLab 等）只有一个执行边界：Repo Executor（下称“执行器”）。它是 Cloud 仓库中与 Git Server、
 model-gateway 并列的独立程序，无状态，不连 Cloud 数据库，不保存仓库。Cloud 为每个同步或发布 Operation 签发一份一次性授权，
 经 mTLS 主动调用执行器；执行器凭授权向 Credential Store 一次性兑换凭据，写入私有临时目录，只交给固定的 credential helper，
 在临时裸仓库里完成一次 Git 操作后销毁一切。同步的产出只经 Git Server 的服务仓库监听写入快照 ref 和跟踪 ref；发布只从 Git Server
 读取源提交，再以 expected old 推送到外部仓库，并以 `ls-remote` 前后核验。执行器只报告事实，Operation 的状态由 Cloud 决定。
 
-本 ADR 已经 owner 批准，处于 `approved`，是新建领域 `cloud/repo-executor` 的根决策；核心测试用例见
-[执行器边界用例](../../../test-cases/cloud/repo-executor/repo-executor-boundary.md)。实现落地并验收后才改为 `implemented`。
+本 ADR 处于 `implemented`：实现已由 cloud#76（`ceb39bc`）与 cluster#27（`033a4ea`）合入 main；是新建领域 `cloud/repo-executor` 的根决策；核心测试用例见
+[执行器边界用例](../../../test-cases/cloud/repo-executor/repo-executor-boundary.md)。
 它实现 [Git Server 代码中心契约](../git-server/20261016-project-repository-as-code-hub-and-ref-contract.md)（下称“契约”）中
 “执行器”一方的全部义务。涉及 Cloud 仓库新增的 `cmd/repo-executor`、Cloud 的 Operation worker、Credential Store，以及 cluster
 仓库的部署。业务流程分别由 [同步 ADR](../project/20261016-repository-binding-and-snapshot-sync.md) 与
@@ -23,7 +23,8 @@ model-gateway 并列的独立程序，无状态，不连 Cloud 数据库，不�
 
 - 早先未合并的凭据执行器实现与其部署（下称“旧实现”）一概不依赖，最多作参考：本文需要的基础件按“复用边界”一节新写，或参考其设计
   摘出后作为新代码连同测试评审，其余按本文重写。
-- 破坏性切换（契约范围边界）：不设过渡开关，不保留外部 clone 与 bundle 的旧路径，不做数据迁移。
+- 破坏性切换（契约范围边界）：不设过渡开关，不保留 bundle 的旧路径，不做数据迁移。Workspace 直接从外部仓库 clone 的旧路径
+  仍在，由内部线在接入快照 clone 时删除（D1）。
 - 本文不改变沙盒、Node 与 Git Server 的任何约定；执行器不接入沙盒网络。
 
 ## 现状与继承
@@ -37,14 +38,17 @@ model-gateway 并列的独立程序，无状态，不连 Cloud 数据库，不�
 | [仓库凭据连续性](../project/20260927-repository-credential-continuity.md) D4：执行端按引用选择凭据，不回退全局凭据；凭据临时提供，结束后回收，不进工作目录和日志 | 继承。执行端从 Controller/Node 改为本执行器，兑换与销毁的方式见 D3 |
 | [默认分支决策](../operation/20260926-require-concrete-default-branch.md)：Cloud 不向用户给出的地址发起请求 | 继承，不变。访问外部地址的只有执行器，并受出口策略约束（D4） |
 | 契约 D2“执行器出网”与不变量 15：执行器遵守[部署方共享出网决策](../model-access/20261017-deployment-owned-egress-and-explicit-resolution.md)（下称“共享出网决策”），本文不能放宽 | 继承，不变。执行器读取同一份 `deployment-egress.json`，复用共享出网决策的准入与解析实现，不另设仓库白名单（D4）；部署与配置更换见 D9 |
-| 共享出网决策 D7：调用方表只列模型转发与 Cloud 资产下载，其他调用方须另行明确 | 修改：在其调用方表追加 Repo Executor 一行，覆盖范围是 D1–D6 的全部规则，业务约束是本文的授权与凭据规则（落地顺序第 2 步） |
+| 共享出网决策 D7：调用方表只列模型转发与 Cloud 资产下载，其他调用方须另行明确 | 修改：在其调用方表追加 Repo Executor 一行，覆盖范围是 D1–D6 的全部规则，业务约束是本文的授权与凭据规则 |
 | 未合并的旧执行器实现：clone 执行器与 mirror 发布 | 不依赖，只作参考。不沿用其 clone、checkout 交付和直接写 Git Server 卷的 mirror 发布；基础件按“复用边界”新写或参考摘出 |
 
 ## 决策
 
 ### D1：程序边界
 
-- 执行器是 Ora 中**唯一**向外部 Git 仓库发起网络请求的程序。Cloud、Node、Workspace、Git Server 都不访问外部仓库。
+- 执行器是 Project 外部仓库的**唯一**执行边界：Project 的同步与发布只经执行器访问外部仓库，Cloud、Git Server 和沙盒都不直接访问
+  Project 的外部仓库。两个已存在的例外不在本文范围内：Cloud 的插件市场同步按固定目录（默认 `https://github.com/ora-space/marketplace`）
+  用 go-git 拉取目录快照，不涉及 Project 的 Binding；Workspace 的 clone 在内部线接入前仍由 Node 直接访问外部仓库地址，带凭据的
+  项目会以 `repository_credential_executor_unavailable` 拒绝新的远端工作，不走匿名回退。内部线改为从当前快照 clone 后，第二个例外消失。
 - **无状态**：不连接 Cloud 数据库，不保存仓库、凭据或任务队列。每个任务在私有临时目录里新建裸仓库，任务结束（成功、失败、
   超时、取消）后整体删除。进程启动时清扫上次遗留的临时目录。
 - **不做授权决定**：能不能做由 Cloud 在签发授权时决定，能写哪些 ref 由 Git Server 按契约判定。执行器只核对“收到的任务与授权
@@ -76,7 +80,7 @@ model-gateway 并列的独立程序，无状态，不连 Cloud 数据库，不�
 | --- | --- | --- |
 | `sync` | `operationId`、`tenantId`、`projectId`、`bindingId`、`repository`、`branch`、`expectedTrackingOid`，以及凭据 `credentialId` + `credentialVersion`（公开仓库为空） | D5 |
 | `publish` | `operationId`、`tenantId`、`projectId`、`bindingId`、`repository`、`sourceRef`、`sourceCommit`、`targetRef`、`expectedOldOid`、`credentialId` + `credentialVersion` | D6 |
-| `probe` | `operationId` 或 `verificationId`、`repository`、`targetRef?`、`service`（`upload-pack` 或 `receive-pack`）、`credentialId` + `credentialVersion` | D7：只读取 ref 广告，不传输对象、不写入 |
+| `probe` | `operationId` 或 `verificationId`、`tenantId`、`repository`、`targetRef?`、`service`（`upload-pack` 或 `receive-pack`）、`credentialId` + `credentialVersion` | D7：只读取 ref 广告，不传输对象、不写入 |
 
 公共字段：`authorizationId`、`executorIdentity`（必须等于 `spiffe://ora.local/repo-executor`）、`issuedAt`、`expiresAt`。
 `sync`、`publish`、`probe` 都禁止携带 Node 和运行时的围栏字段，`clone`、`mirror_prepare`、`push` 三个旧用途不再签发。
@@ -132,12 +136,14 @@ submodule.recurse=false  fetch.recurseSubmodules=false
 filter.lfs.smudge=  filter.lfs.process=  filter.lfs.required=false
 ```
 
-**大小**：Git 的 fetch 本身没有大小上限，执行器监控任务目录的占用，超过部署配置的上限（默认与 Git Server 的
-`receive.maxInputSize` 相同）立即杀死进程组，以 `too_large` 报告。Git Server 的 `receive.maxInputSize` 与仓库配额是第二道检查。
+**大小**：Git 的 fetch 本身没有大小上限，执行器监控任务目录的占用，超过部署配置的上限（`MAX_TASK_BYTES`，默认 2 GiB）立即杀死
+进程组，以 `repository_too_large` 报告。第一阶段 Git Server 没有配置 `receive.maxInputSize` 或仓库配额，执行器的目录上限是唯一的
+检查，`workdir.go` 注释里提到的第二道检查尚未实现。
 
 **出口**：执行器访问外部仓库属于平台出网，按共享出网决策执行（契约 D2“执行器出网”），自己不定义任何放行规则：
 
-- **同一份配置**：启动时读取只读挂载的 `deployment-egress.json`（路径只来自启动参数），复用共享出网决策的实现包
+- **同一份配置**：启动时读取只读挂载的 `deployment-egress.json`（路径来自 `-deployment-egress` 启动参数，默认取
+  `REPO_EXECUTOR_DEPLOYMENT_EGRESS_FILE`，再退回 `ORA_DEPLOYMENT_EGRESS_FILE`），复用共享出网决策的实现包
   `internal/egress` 做 URL 规范化、目标匹配、解析和地址准入，不另写一套检查。未配置时是公网模式，沿用部署的公网 DoH 配置；企业模式下只连接白名单中
   精确的 `host:port`，未命中的目标在 DNS 查询前拒绝（共享出网决策 D1、D2）。不设仓库专用的允许列表，Binding、凭据和任务
   请求都不能扩大许可。
@@ -152,8 +158,8 @@ filter.lfs.smudge=  filter.lfs.process=  filter.lfs.required=false
 - **`probe receive-pack` 用同一个拨号器**：读取 `info/refs?service=git-receive-pack` 由执行器自己的 HTTP 客户端发出，它的
   拨号器就是 `internal/egress` 的拨号器：每次新拨号重新解析并检查、只连已检查的数字地址、禁用环境代理、不跟随 3xx
   （共享出网决策 D5）。
-- **启动快照**：配置、拓扑和静态映射只在启动时加载一次；加载失败执行器不启动，不退回公网模式。更换配置时执行器与 Cloud、
-  model-gateway 一起停止和重启（D9）。
+- **启动快照**：配置、拓扑和静态映射只在启动时加载一次；加载失败执行器不启动，不退回公网模式。更换配置时执行器需要停止和重启；
+  第一阶段只有执行器挂载这份文件，Cloud 与 model-gateway 没有挂载，按空路径使用公网模式（D9）。
 - 访问 Git Server 和 Credential Store 用部署固定的内部地址和另一个拨号器，不经过出网准入，也不受用户输入影响；用户给出的
   仓库地址落在 cluster 网段时被上面的规则拒绝，到不了这两个内部服务。
 
@@ -164,7 +170,8 @@ filter.lfs.smudge=  filter.lfs.process=  filter.lfs.required=false
 
 为什么用 `http.curloptResolve`，不在执行器里另建出口代理：两者都能让 `git` 只连已检查的地址。`curloptResolve` 不需要再运行
 一个进程，也不需要让 `git` 信任代理的 CONNECT 语义；`git` 子进程的寿命是一次请求，每个子进程启动前重新解析，等同于共享出网
-决策 D5 的“每次新拨号重新解析”。代价是要求 `git` ≥ 2.37（支持 `http.curloptResolve`），执行器镜像固定这一版本。
+决策 D5 的“每次新拨号重新解析”。代价是要求 `git` ≥ 2.37（支持 `http.curloptResolve`）；镜像只保证这一点，基于 Alpine 3.22 的
+`git` 包，没有固定补丁版本。
 
 ### D5：sync 的执行步骤
 
@@ -213,8 +220,8 @@ filter.lfs.smudge=  filter.lfs.process=  filter.lfs.required=false
 
 1. 在任务目录 `git init --bare`。
 2. 带 `Ora-Git-Operation-Id` 从服务仓库监听 fetch `sourceRef`。源 ref 可能已经前进，但 Workspace 分支只能快进、交付 ref 不可变
-   （契约 D4），所以 `sourceCommit` 一定是取回的顶端或其祖先。以 `merge-base --is-ancestor <sourceCommit> FETCH_HEAD` 确认；
-   不成立报告 `source_unavailable`。
+   （契约 D4），所以 `sourceCommit` 一定是取回的顶端或其祖先。取回写入 `refs/ora-source/head`（`--no-write-fetch-head`，不写
+   `FETCH_HEAD`），以 `merge-base --is-ancestor <sourceCommit> refs/ora-source/head` 确认；不成立报告 `source_unavailable`。
 3. **只快进**：`expectedOldOid` 非全零时，确认它是 `sourceCommit` 的祖先（`merge-base --is-ancestor`）。判定只用第 2 步从
    Git Server 取回的对象：快进时 `expectedOldOid` 必在源提交的历史中；不在其中，说明不是快进，报告 `not_fast_forward`，
    不访问外部仓库。
@@ -244,8 +251,8 @@ filter.lfs.smudge=  filter.lfs.process=  filter.lfs.required=false
 - `service = receive-pack`：请求外部仓库 `git-receive-pack` 的 ref 广告（smart HTTP 的 `info/refs?service=git-receive-pack`），
   收到广告即断开，用于验证推送能力（identity-access 后续决策 D4）。请求由执行器的 HTTP 客户端发出，使用 D4 的出网拨号器。
 
-报告 `{refs | advertised, httpStatus 分类}`。各平台对“无写权限时请求 receive-pack 广告”的响应在落地时逐一验证（GitHub、GitLab
-至少各一），验证结果记录在实现的测试里。
+报告 `{refs | advertised, httpStatus 分类}`。平台以 `401`/`403` 拒绝 receive-pack 广告时报告 `push_denied`，其他失败报告
+`verification_failed`（identity-access 后续决策 D4）。
 
 ### D8：结果分类
 
@@ -253,12 +260,12 @@ filter.lfs.smudge=  filter.lfs.process=  filter.lfs.required=false
 
 | 分类 | 含义 | 是否可能已改变外部或 Git Server |
 | --- | --- | --- |
-| `applied` | 写入已确认：同步的原子推送成功或重放为空操作；发布的推送报告 `ok` | 是，已知 |
+| `applied` | 写入已确认：同步的原子推送成功或重放为空操作；发布的推送报告 `ok`；probe 收到 ref 广告 | 是，已知 |
 | `superseded` | 同步的 lease 以 `stale info` 失败，跟踪 ref 被别人推进 | 否 |
 | `conflict` | 发布的前置核验或 lease 发现外部 ref 不等于 `expectedOldOid` | 否 |
 | `rejected` | 外部平台明确拒绝了更新（保护分支、hook、无权限），后置核验确认目标仍是 `expectedOldOid` | 否 |
 | `not_fast_forward`、`source_unavailable` | 本地判定不满足前提，没有访问外部仓库的写入接口 | 否 |
-| `failed` | 确定没有写入的失败：授权不符、兑换失败、外部认证失败、fetch 失败、超时、超限、Git Server 的 `pre-receive` 拒绝 | 否 |
+| `failed` | 确定没有写入的失败：授权不符、兑换失败、外部认证失败、fetch 失败、超时、超限、Git Server 的 `pre-receive` 拒绝、probe 的 `push_denied` / `verification_failed` | 否 |
 | `uncertain` | 推送请求可能已经发出，但没有得到可解析的结果（连接中断、超时、报告缺失或被截断），或平台报告拒绝而后置核验读取失败；后置核验都无法给出结论 | 可能 |
 
 发布的推送报告与后置核验的组合：
@@ -283,10 +290,10 @@ filter.lfs.smudge=  filter.lfs.process=  filter.lfs.required=false
 
 | 组件 | 网络 | 出口 | 挂载 |
 | --- | --- | --- | --- |
-| 执行器 | `git-services`、`repo-egress` | 只经 `repo-egress` 出外网，并受 D4 的出网准入约束 | 只读：服务证书、Cloud 的授权验证公钥、`git-credential-ora`、`deployment-egress.json`；可写：tmpfs 任务目录 |
+| 执行器 | `git-services`、`repo-egress` | 只经 `repo-egress` 出外网，并受 D4 的出网准入约束 | 只读：服务证书、Cloud 的授权验证公钥、`deployment-egress.json`；可写：tmpfs 任务目录。`git-credential-ora` 打进镜像，不是挂载 |
 | Credential Store | `git-services`；浏览器入口经边缘反向代理 | 无 | 可写：凭据卷；只读：KEK、服务证书、Cloud 的授权验证公钥 |
 | Git Server 服务仓库监听 | `git-services`（别名 `ora-git-service`） | 无 | 契约 D2 |
-| Cloud | 默认网络与 `git-services` | 按共享出网决策 | 授权签名私钥只在 Cloud；`deployment-egress.json` 与 model-gateway 同一份 |
+| Cloud | 默认网络与 `git-services` | 按共享出网决策 | 授权签名私钥只在 Cloud；第一阶段未挂载 `deployment-egress.json`，使用默认公网策略 |
 
 - **网络名沿用 cluster 现有的 `git-services`**：它已经是 `internal: true`、没有外部出口、沙盒不加入的内部网络，服务仓库监听
   就在上面。执行器、Credential Store 和 Cloud 加入它，不另建同义的内部网络。`repo-egress` 是新增的网络，只有执行器加入，
@@ -294,13 +301,15 @@ filter.lfs.smudge=  filter.lfs.process=  filter.lfs.required=false
 - 执行器**不接入沙盒网络**，沙盒也不加入 `git-services`。这样持有外部凭据和外网出口的组件与工作负载之间没有直接路径
   （契约 D2）。
 - 执行器和 Credential Store 都不发布宿主机端口；Credential Store 的浏览器入口只经边缘反向代理暴露（identity-access 后续决策 D3）。
-- **出网配置**：执行器与 Cloud、model-gateway 只读挂载同一份 `deployment-egress.json`，配置路径由启动参数给出。部署入口按
-  共享出网决策 D3 采集拓扑时同样覆盖 `git-services` 与 `repo-egress` 的网段。
+- **出网配置**：执行器只读挂载 `deployment-egress.json`，路径由 `-deployment-egress` 启动参数给出，默认取
+  `REPO_EXECUTOR_DEPLOYMENT_EGRESS_FILE` 或 `ORA_DEPLOYMENT_EGRESS_FILE`。第一阶段 Cloud 与 model-gateway 没有挂载这份文件，
+  按空路径使用公网模式；只有部署把同一份文件也挂载给它们时，三者的配置才相同。部署入口按共享出网决策 D3 采集拓扑时覆盖
+  `git-services` 与 `repo-egress` 网段的检查尚未实现。
 - **更换配置**：按共享出网决策 D6 的顺序，部署入口先停止 Cloud、全部 model-gateway **和执行器**，确认都已退出，再替换文件，
   然后一起启动。停止执行器会中断运行中的同步与发布，它们按 Operation 的规则收尾：同步以 `failed(executor_unreachable)` 结束并
   自动重放（同步 ADR D3），发布进入 `uncertain` 并只读核验（发布 ADR D5）。
-- **摘要比对**：执行器在健康检查接口报告规范化配置的内容摘要和 schema，`ora verify` 把它与 Cloud、model-gateway 的摘要一起
-  比较，缺失或不一致时报错（共享出网决策 D6 第 4 步）。
+- **摘要比对**：执行器在健康检查接口报告规范化配置的内容摘要和 schema。当前实现由 `cluster/scripts/external-git-acceptance.sh`
+  比较执行器与 Cloud 的健康摘要；仓库中没有 `ora verify` 命令，model-gateway 没有参与比较。
 - 部署可以在 `repo-egress` 上再加出口代理，但它只是附加限制，不替代 D4 的出网准入。
 - 执行器以非 root 用户运行，任务目录是 tmpfs，容器重启即清空。
 - Cloud worker 的并发上限不超过执行器声明的并发槽位；执行器以“容量已满”拒绝时，任务没有开始，按 `failed(executor_busy)` 报告。
@@ -321,7 +330,7 @@ filter.lfs.smudge=  filter.lfs.process=  filter.lfs.required=false
 
 ## 不变量
 
-1. 只有执行器向外部 Git 仓库发起网络请求。
+1. Project 的同步与发布只经执行器访问外部 Git 仓库；插件市场同步和内部线接入前的 Workspace clone 是范围外的两个例外（D1）。
 2. 执行器不连接 Cloud 数据库，不跨任务保留仓库、凭据或任务状态。
 3. 每个任务都有一份与之逐字段一致的一次性授权；`probe` 授权不能用于推送。
 4. 明文凭据不出现在命令参数、环境变量、URL、Git 配置文件、日志、错误信息和返回值中；任务结束后材料目录不存在。
@@ -347,6 +356,21 @@ filter.lfs.smudge=  filter.lfs.process=  filter.lfs.required=false
 | 执行器内的出口代理把地址固定给 `git` | 与 `http.curloptResolve` 同样能关闭 DNS rebinding，也不依赖 `git` 版本；但多一个常驻组件和 CONNECT 处理，第一阶段不需要（D4） |
 | 把执行器并入 Git Server | 少一个进程，但 Git Server 会同时持有外网出口和外部凭据，与“Git Server 不接触外部凭据”（契约需求 3）冲突 |
 
+## 与批准版本的偏离
+
+对照 cloud `ceb39bc` 与 cluster `033a4ea`，最终实现与本文批准时相比有以下偏离，正文已按最终实现表述：
+
+| 批准时的决策 | 最终实现 | 原因 |
+| --- | --- | --- |
+| 执行器是 Ora 中唯一访问外部 Git 仓库的程序 | Project 的外部仓库只有一个执行边界；Cloud 的插件市场同步和内部线接入前的 Workspace clone 是两个范围外的例外 | 两条旧路径已经存在：插件市场按固定目录同步，不涉及 Project 的 Binding；Workspace clone 由内部线改为消费快照后消失 |
+| 破坏性切换不保留外部 clone 与 bundle 的旧路径 | 不保留 bundle 的旧路径；Workspace 直接从外部仓库 clone 的路径仍在 | 内部线尚未接入快照 clone |
+| 执行器的上限默认与 Git Server 的 `receive.maxInputSize` 相同，Git Server 的配额是第二道检查 | `MAX_TASK_BYTES` 默认 2 GiB；Git Server 没有配置 `receive.maxInputSize` 或配额，第二道检查未实现 | 第一阶段只部署了执行器的目录上限 |
+| 执行器、Cloud、model-gateway 挂载同一份 `deployment-egress.json` 并比对摘要，`ora verify` 执行比较 | 只有执行器挂载；Cloud 与 model-gateway 按空路径使用公网模式；仓库没有 `ora verify`，由 `cluster/scripts/external-git-acceptance.sh` 比较执行器与 Cloud 的健康摘要 | 部署只给执行器挂了文件；摘要比对工具尚未实现 |
+| 部署入口采集 `git-services` 与 `repo-egress` 网段的拓扑 | 尚未实现 | 没有记录原因 |
+| 执行器镜像固定 `git` 版本 | 基于 Alpine 3.22 的 `git` 包，只保证 ≥ 2.37 | 镜像没有固定补丁版本 |
+| `probe` 任务字段不含 `tenantId` | 包含 `tenantId` | 执行器按任务携带租户上下文，与同步、发布一致 |
+| 发布步骤以 `FETCH_HEAD` 判定源提交是取回顶端或其祖先 | 取回写入 `refs/ora-source/head`（`--no-write-fetch-head`，不写 `FETCH_HEAD`），以该 ref 判定 | 显式 ref 在后续步骤中稳定可读，不依赖 fetch 的隐含文件 |
+
 ## 本决策未解决的问题
 
 - **SSH 地址与 GitHub App 身份**：第一阶段只支持 `https://` 加 token。App 身份需要执行器向平台换取安装 token，留给后续决策。
@@ -354,57 +378,3 @@ filter.lfs.smudge=  filter.lfs.process=  filter.lfs.required=false
 - **LFS 与 submodule**：执行器禁用二者，真正支持见同步 ADR 的未决项。
 - **纵深安全加固**（契约“本决策未解决的问题”，第一阶段以跑通与正确为目标）：
   - 大仓库的任务目录：第一阶段是 tmpfs，大仓库会占用大量内存，改用有配额的磁盘卷留给后续决策。
-
-## 落地顺序
-
-1. **基础件**：`cloneauth`、`credentialmaterial`、`git-credential-ora`、`processgroup`、`capture` 参考旧实现摘出或新写，连同测试
-   作为新代码单独提交，不接入任何流程；不以旧实现合并为前提。完成条件：测试通过。这一步不依赖底座，可以最先做。
-2. **执行器骨架**：`cmd/repo-executor`、mTLS 任务接口、授权校验、凭据兑换、进程与资源边界、接入共享出网（复用 `internal/egress`，
-   把检查过的地址交给 `git`）；同时在共享出网决策 D7 的调用方表追加 Repo Executor 一行（契约落地顺序第 2 步）。依赖共享出网的
-   实现先合入。完成条件：对本地 fixture 的 `probe` 可以运行；秘密扫描通过。
-3. **sync**：依赖底座和服务仓库监听（契约落地顺序第 1、2 步）。完成条件：同步 ADR 的独立验收。
-4. **publish 与核验**：完成条件：发布 ADR 的独立验收。
-5. **部署**：cluster 的 Compose 加入执行器和 Credential Store，接入 `git-services`，新增 `repo-egress`；执行器只读挂载
-   `deployment-egress.json`，加入配置更换时的停止与重启和 `ora verify` 的摘要比对（D9）。
-
-保持不变：沙盒、Node 与 Git Server 之间的一切。从第 3 步开始改变：外部仓库的内容由执行器带入 Git Server。
-
-## 外部线的独立验收
-
-不依赖内部线和 Node，不启动沙盒。
-
-**起栈**：Cloud、Git Server（服务仓库监听与 ref 查询监听）、Credential Store、执行器，以及参照旧部署实现的两个本地 Git 托管
-fixture：
-
-- `private-git-fixture`：带 TLS、要 token 才能读；
-- `push-git-fixture`：smart HTTP 可写，可切换 `normal`、`refuse`、`moved`、`slow-post`、`drop` 等模式。
-
-**fixture 的放行**：fixture 是 Compose 容器，地址在 cluster 网段里。共享出网决策 D3 规定这类地址始终拒绝，企业模式的
-`allowPrivate` 也放不开，所以验收不使用企业配置，也不设仓库允许列表，只使用
-[model-access 根决策](../model-access/0-personal-model-connections-and-run-scoped-proxy.md) D5 的“隔离测试栈精确测试 host
-例外”：执行器以显式的开发模式启动，列出 fixture 的精确主机名，只在公网模式下生效；与企业配置同时出现时启动失败
-（共享出网决策 D1）。生产部署不开启开发模式。**替身**：底座的预置工具在 Git Server 的 `refs/heads/workspaces/...` 下写一个提交，作为
-发布的源；同步的产出用底座的共享契约断言检查（契约落地顺序第 1 步）。
-
-| 场景 | 必须成立 |
-| --- | --- |
-| 授权与任务不一致（任一绑定字段被改） | 执行器拒绝，不兑换凭据 |
-| 同一授权使用两次 | 第二次兑换被 Credential Store 拒绝 |
-| `probe` 授权提交发布任务 | 执行器拒绝 |
-| 授权过期 | 执行器拒绝 |
-| 同步：公开、私有、重放、外部 force-push | 见同步 ADR 的独立验收；执行器的报告与 Git Server 一致 |
-| 发布：成功、`conflict`、`rejected`、`not_fast_forward` | 见发布 ADR 的独立验收 |
-| `docker pause` 外部 fixture 后发布 | 执行器在超时后报告 `uncertain`；不重推；进程组被回收 |
-| `drop` 模式发布 | 推送生效但响应丢失，后置核验确认，报告 `applied` |
-| 身份边界 | 执行器用服务证书写 `refs/heads/workspaces/**` 和 `refs/ora/deliveries/**` 被拒；用发布 Operation 的 ID 推送任何 ref 都被拒 |
-| lease 与 `+` | 预置工具先把跟踪 ref 写成另一个提交，再让同步以旧的 `expectedTrackingOid` 推送：以 `stale info` 失败、报告 `superseded`，跟踪 ref 不变；Operation 结束后用同一 ID 推送：以 `hook declined` 失败、报告 `failed(git_server_rejected)` |
-| 长任务 | 同步一个需要数分钟的大仓库：兑换后授权过期不影响任务，任务期间租约持续续约，同步成功 |
-| 出口 | 不在例外中的回环、私有地址、cluster 网段地址或内部服务名（`ora-git-service`、Credential Store）作为仓库地址时被拒绝，没有发出 Git 请求；外部地址 302 到内部地址时不跟随 |
-| 地址固定 | 测试 resolver 对 fixture 主机名第一次返回允许的地址、之后返回 cluster 地址：`git` 仍只连第一次检查过的地址；下一次子进程启动时重新解析，得到 cluster 地址即拒绝 |
-| 出网配置 | 同时给出企业配置与开发例外时执行器不启动；配置文件不合法时不启动；执行器、Cloud、model-gateway 的配置摘要不一致时 `ora verify` 报错 |
-| 超限 | 任务目录超过上限时进程组被杀，报告 `too_large`，没有新的 ref |
-| 进程回收 | 任务超时后任务目录与材料目录都不存在，没有遗留的 Git 进程 |
-| 秘密扫描 | 参照旧部署实现中的 `log-secret-scan-acceptance.py`：每轮生成 canary token，按字面、base64、base64url（含不补齐）、百分号编码和共享前缀等形式，扫描所有容器日志、Git Server 仓库（包括对象和 reflog）、Cloud 数据库导出、执行器任务目录；先用阳性对照证明扫描器能找到 |
-
-**最终验收**：用 owner 提供的 GitHub 私有测试仓库，以真实 token 完成同步、`probe receive-pack`、发布和一次断网造成的 `uncertain`
-核验。

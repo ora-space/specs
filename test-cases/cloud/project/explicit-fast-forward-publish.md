@@ -1,27 +1,35 @@
 # 显式快进发布
 
-依据已批准的 [发布 ADR](../../../decisions/cloud/project/20261017-explicit-fast-forward-publish.md)。下文的 D 编号与不变量
+依据 [发布 ADR](../../../decisions/cloud/project/20261017-explicit-fast-forward-publish.md)（`implemented`）。下文的 D 编号与不变量
 编号都指这篇 ADR。执行器一侧的推送与分类见 [执行器边界用例](../repo-executor/repo-executor-boundary.md)。发布的 API、
-审批、状态机与 reconciler 尚未合入 cloud 的 main，下列义务都是 **Missing**。
+审批、状态机与 reconciler 已随 cloud#76（`ceb39bc`）合入 cloud 的 main，下列义务按该提交的直接测试登记；
+没有直接测试的义务保持 **Missing**。
 
 ## Only Approved Publish Operations Write The External Repository
 
 - 风险：Workspace 推送触达外部仓库；未经批准或审批人不对的发布被派发；管理员以他人的个人凭据写入外部仓库。
 - 前置状态：团队、个人、未知三类凭据；发起人是否有 Project 发布权限、是否为个人凭据的所有者。
 - 触发：创建发布；管理员批准使用他人的个人凭据；批准后凭据轮换；批准过期；没有发布权限也不是凭据所有者的成员发起。
-- 必须成立：发起人是有 Project 发布权限的人或所用个人凭据的所有者；发起人即审批人时创建即批准，否则 `awaiting_approval`；批准绑定全部字段与凭据版本；凭据换版本以 `cancelled(credential_changed)`、超过 24 小时以 `cancelled(approval_expired)` 结束；未知归属的凭据不能发布。
+- 必须成立：发起人是有 Project 发布权限的人或所用个人凭据的所有者；发起人即审批人时创建即批准，否则 `awaiting_approval`；批准绑定全部字段与凭据版本；凭据换版本以 `cancelled(credential_changed)` 结束；待批准请求创建后超过 24 小时、或批准（自批准从创建时计）后超过 24 小时仍未派发，以 `cancelled(approval_expired)` 结束；未知归属的凭据不能发布。
 - 禁止结果：管理员批准使用他人的个人凭据；批准后改动字段仍派发；无权成员发起成功。
-- 验证义务与证据：**Missing**。
+- 验证义务与证据：**Partial** — `integration/repository_publish_external_test.go` 的
+  `TestRepositoryPublishPersonalApprovalMatrixAndIdempotency`、`TestRepositoryPublishApprovalExpiresAndRotationCancelsOldVersion`。
+  已覆盖：管理员不能批准他人的个人凭据；所有者批准与发起人即审批人；改动字段被拒；未验证能力的凭据不能创建发布；
+  `approval_expired` 与 `credential_changed`。仍缺：未断言 `awaiting_approval` 的 Operation 从不被派发、也不写入外部；
+  没有既无发布权限也非凭据所有者的成员发起的测试；没有断言人工批准把有效期重置为批准后 24 小时、自批准从创建时刻计时
+  （现有测试直接改写时间戳，只证明到期取消）。
 - 决策依据：D1、D2，不变量 1、2、3。
 
 ## Publish Sources Are Any Workspace Branch Or Delivery Ref Of The Project
 
-- 风险：发布源按 Workspace 创建者校验，与契约放宽后的共享读取不一致；`revisionId` 发布用了未核验的提交。
+- 风险：发布源按 Workspace 创建者校验，与契约放宽后的共享读取不一致；`revisionId` 发布指向逻辑 ref 而不是交付 ref。
 - 前置状态：同一 Project 内多个 Workspace 的分支和交付 ref；已登记的 Revision。
 - 触发：以他人 Workspace 的分支作为源；以交付 ref 作为源；只给 `revisionId`；源 ref 不存在；`expectedOldOid` 等于 `sourceCommit`。
-- 必须成立：本 Project 任意 Workspace 分支或交付 ref 都可作源，Cloud 经 ref 查询确认存在；`revisionId` 取 Revision 登记的交付 ref 与最终提交；`expectedOldOid` 等于源提交时 `400 nothing_to_publish`。
-- 禁止结果：按创建者拒绝合法的源；跨 Project 的 ref 被接受；`revisionId` 与 `sourceRef` 同时给出时被接受。
-- 验证义务与证据：**Missing**。
+- 必须成立：本 Project 任意 Workspace 分支或交付 ref 都可作源，Cloud 经 ref 查询确认存在；带 `revisionId` 的发布以 `409 revision_not_publishable` 结束，不访问外部写入（Revision 记录保存的是逻辑 ref，见发布 ADR D1 的偏离）；`expectedOldOid` 等于源提交时 `400 nothing_to_publish`。
+- 禁止结果：按创建者拒绝合法的源；跨 Project 的 ref 被接受；`revisionId` 与 `sourceRef` 同时给出时被接受；`revisionId` 发布被当作可发布源。
+- 验证义务与证据：**Partial** — `integration/repository_publish_external_test.go` 的
+  `TestRepositoryPublishPersonalApprovalMatrixAndIdempotency` 覆盖交付 ref 作为源、创建前经 Cloud ref 查询确认。仍缺：
+  他人的 Workspace 分支作源、跨 Project ref 拒绝、`revisionId` 返回 `409 revision_not_publishable`、`400 nothing_to_publish`。
 - 决策依据：D1，不变量 5。
 
 ## Publish States Follow The Executor Classification And Running Happens Once
@@ -31,7 +39,11 @@
 - 触发：执行器返回 `applied`、`conflict`、`rejected`、`not_fast_forward`、`source_unavailable`、`failed`、`uncertain`；`running` 中杀掉 worker；同一 `(bindingId, targetBranch)` 两个发布同时被领取。
 - 必须成立：分类按 D3 的表映射到状态；`running` 中失去租约或连接进入 `uncertain`；同一 `(bindingId, targetBranch)` 至多一个 `leased` 或 `running`；只有 `running` 之前可以取消。
 - 禁止结果：同一发布第二次进入 `running`；`uncertain` 占用目标分支；`running` 中被取消。
-- 验证义务与证据：**Missing**。
+- 验证义务与证据：**Partial** — `integration/repository_publish_external_test.go` 的
+  `TestRepositoryPublishLeaseMutualExclusionAndRecovery`；`internal/repoworker/operation_test.go` 的
+  `TestPublishVerdictCarriesTheWholeClassification`、`TestLosingTheLeaseCancelsTheRunningTask`。已覆盖：同一
+  `(bindingId, targetBranch)` 至多一个 `leased`/`running`；失去租约进入 `uncertain` 并释放目标分支；worker 原样转发分类。
+  仍缺：分类到状态的完整映射没有在存储或 core 层的直接断言；`running` 之前才可取消没有测试。
 - 决策依据：D3、D4，不变量 4、6、8。
 
 ## Uncertain Publishes Are Reconciled Read-Only Within A Bounded Number Of Checks
@@ -41,7 +53,12 @@
 - 触发：外部目标分支等于 `sourceCommit`、等于 `expectedOldOid`、等于其他值；读取持续失败。
 - 必须成立：第一次核验不早于执行器任务的截止时间；核验只用 `probe` 授权读取；三种观察值分别得到 `succeeded`、`failed(not_applied)`、`conflict(moved_after_uncertain)`；读取失败按指数退避（最长间隔 1 小时）重试，最多 20 次（约 16 小时），用尽后 `failed(outcome_unknown)`。
 - 禁止结果：任何核验路径发出更新命令；`uncertain` 没有上限；核验早于执行器的截止时间。
-- 验证义务与证据：**Missing**。
+- 验证义务与证据：**Partial** — `integration/repository_publish_external_test.go` 的
+  `TestRepositoryPublishLeaseMutualExclusionAndRecovery`；`integration/external_git_test.go` 的
+  `TestRepositoryPublishUncertainFinalClaimCrashStillTerminates`；`internal/repoworker/checks_test.go` 的
+  `TestCheckReadsTheTargetOnceWithAProbe`。已覆盖：第一次核验不早于任务截止时间；核验使用 `probe` 授权的只读任务；20 次用尽后
+  `failed(outcome_unknown)` 且不再派发；观察到 `sourceCommit` 判为成功。仍缺：`failed(not_applied)` 与
+  `conflict(moved_after_uncertain)` 没有测试，退避间隔未断言，也没有“核验没有发出更新命令”的直接断言。
 - 决策依据：D5，不变量 7。
 
 ## A Successful Publish To The Binding Branch Leads To A Sync That Includes It
@@ -49,9 +66,12 @@
 - 风险：发布成功后当前快照永远不包含发布的提交；复用了在发布生效前就 fetch 完的同步；建不了同步时让发布的终态事务回滚。
 - 前置状态：发布的目标分支等于 Binding 的分支；Binding 没有同步、有 `pending`/`leased` 的同步、有 `running` 的同步；凭据可以被冻结。
 - 触发：发布以 `succeeded` 结束（包括核验确认）。
-- 必须成立：没有未结束的同步时新建 `after_publish`；`pending`/`leased` 时复用；`running` 时置补同步标记，由它的终态事务按同步 ADR D3 至多新建一个后继；建不了时把原因记入发布的 `result.successorSkipped`，发布照常 `succeeded`。
+- 必须成立：没有未结束的同步时新建 `after_publish`；`pending`/`leased` 时复用；`running` 时置补同步标记，由它的终态事务按同步 ADR D3 至多新建一个后继；建不了时把原因记入发布的 `result.resyncSkipped`（凭据不可用时为错误码原文；Project 不是 `active` 时不记录），发布照常 `succeeded`。
 - 禁止结果：复用 `running` 的同步；发布直接改写当前快照；自动同步失败改变发布的结果。
-- 验证义务与证据：**Missing**。
+- 验证义务与证据：**Partial** — `integration/repository_publish_external_test.go` 的
+  `TestRepositoryPublishSuccessSchedulesExactlyOneSyncAfterRunningSync`、`TestRepositoryPublishLeaseMutualExclusionAndRecovery`。
+  已覆盖：`running` 的同步被置上补同步标记，并在它结束后恰好新建一个 `after_publish`；尚未开始的同步被复用。仍缺：没有独立的
+  “没有未结束同步时新建 `after_publish`”测试，也没有发布 `result.resyncSkipped`（含 Project 非 `active` 时不记录）的测试。
 - 决策依据：D6，不变量 9；同步 ADR D3。
 
 ## Publish Audit Keeps Facts Without Secrets
@@ -61,5 +81,8 @@
 - 触发：发起、批准、拒绝、取消、推送、核验。
 - 必须成立：每个事件追加记录，包括字段、凭据版本、前后 `ls-remote` 观察值、分类与错误码、每次核验；平台原因先脱敏再截断到 2 KiB。
 - 禁止结果：审计中出现 canary token、完整原始输出或 Workspace 文件内容；历史记录被改写。
-- 验证义务与证据：**Missing**。
+- 验证义务与证据：**Partial** — `internal/repoexec/classify_test.go` 的 `TestRedact`；
+  `integration/migration_upgrade_path_test.go` 的 `TestMigration0043ExternalGitLineAppliesFreshAndUpgrades`。已覆盖：平台原因按字面、
+  base64 与 URL 用户信息脱敏后再截断到 2 KiB；`repository_operation_events` 拒绝 UPDATE 与 DELETE。仍缺：没有断言每个发布事件
+  都追加字段、凭据版本、前后观察值、分类、错误码与核验次数，也没有审计行的秘密扫描。
 - 决策依据：D7，不变量 10。

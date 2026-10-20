@@ -45,8 +45,8 @@
 
 ## Git 凭据存储用例
 
-依据 [Git 凭据存储决策](../../../decisions/cloud/identity-access/20261016-git-credentials-in-independent-credential-store.md)，
-实现尚未合入，证据均为 `Missing`。
+依据 [Git 凭据存储决策](../../../decisions/cloud/identity-access/20261016-git-credentials-in-independent-credential-store.md)
+（`implemented`），实现已随 cloud#76（`ceb39bc`）合入 cloud 的 main，证据按该提交的直接测试逐项登记。
 
 - [Git Tokens Reach Only The Browser And The Credential Store](git-credential-store.md#git-tokens-reach-only-the-browser-and-the-credential-store)
 - [Submission And Execution Authorizations Are Distinct And Single-Use](git-credential-store.md#submission-and-execution-authorizations-are-distinct-and-single-use)
@@ -54,3 +54,15 @@
 - [Capabilities Hold For One Store Version And Are Proven, Not Declared](git-credential-store.md#capabilities-hold-for-one-store-version-and-are-proven-not-declared)
 - [Administrators Cannot Use Another Member's Personal Credential](git-credential-store.md#administrators-cannot-use-another-members-personal-credential)
 - [Revocation Stops New Authorizations And Destroys Ciphertext](git-credential-store.md#revocation-stops-new-authorizations-and-destroys-ciphertext)
+
+## Desktop 原生会话用例
+
+依据 [部署绑定 Desktop 会话 ADR](../../../decisions/cloud/identity-access/20261019-deployment-bound-desktop-sessions.md)，
+新增会话尚未实现，全部直接证据为 `Missing`；既有浏览器用例继续约束原浏览器语义。
+
+- [部署发现与身份挑战](desktop-sessions.md#challenges-prove-one-deployment-without-old-credentials)
+- [浏览器交接至多创建一个会话](desktop-sessions.md#a-browser-approved-handoff-creates-at-most-one-native-session)
+- [PG 时间与当前策略控制期限](desktop-sessions.md#database-time-and-current-policy-govern-native-expiry)
+- [有限幂等轮换恢复](desktop-sessions.md#rotation-recovery-is-finite-idempotent-and-revocation-aware)
+- [在线撤销与停用时限](desktop-sessions.md#revocation-and-disable-stop-native-use-within-the-online-bound)
+- [分阶段交付不削弱安全与本地独立](desktop-sessions.md#every-stage-preserves-local-independence-and-trust)

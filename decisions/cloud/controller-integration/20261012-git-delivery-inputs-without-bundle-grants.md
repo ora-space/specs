@@ -1,8 +1,10 @@
 ---
-status: proposed
+status: superseded
 ---
 
 # 交付与会话输入改为携带 Git Server 仓库地址与交付 ref，Controller 原样转交；删除 bundle 对象键与下载授权（修改说明）
+
+> 已被取代：本决策由 [快照 clone 输入与执行授权决策](20261016-snapshot-clone-input-and-execution-ref-grants.md)（D9 承担交付与会话输入去 bundle、删除下载授权与 Controller 的交付核对）取代，业务语义见 [Revision 的代码改动只经 Git Server 交付（20261017）](../revision/20261017-git-native-delivery-refs-and-resume.md)。原因：本决策是写在 Git Server 只存交付 ref 的设计上的修改说明；Git Server 成为 Project 代码中心（[Git Server 根决策](../git-server/0-project-code-hub-git-server-over-https.md)）后，owner 决定把本决策整体改为 `superseded`，按新设计重新写取代者，不在原文上续改。当前系统承诺以取代者为准。
 
 本文是简短的修改说明：Internal Control 契约随
 [Cloud Revision 后续决策](../revision/20261012-git-server-delivery-and-verified-delivery-refs.md)（主 ADR）改为只支持 Git

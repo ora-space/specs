@@ -1,5 +1,8 @@
 # Node 个人模型会话：临时授权与终止
 
+后续[插件模型 adapter 用例](plugin-model-adapters.md)覆盖新上下文、进程/缓存隔离与扩展能力，
+新义务均为 `Missing`，不以本文已有模型代理证据替代。
+
 决策依据：[运行模型代理](../../../decisions/node/agent-runtime/20261010-run-scoped-model-proxy.md)。
 
 ## Model sessions must acquire scoped access without persisting tokens

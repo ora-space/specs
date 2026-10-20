@@ -1,5 +1,8 @@
 # 插件市场:选择状态、fan-out 与 effect 证据
 
+新增静态 Agent 声明分发见[配置元数据用例](agent-configuration-metadata.md)，新义务为 `Missing`，
+不以既有目录或安装成功证明个人配置与实际包的一致性。
+
 决策依据:[插件市场:cloud 权威选择状态、目录快照与自闭合 effect 载荷](../../../decisions/cloud/plugin-marketplace/0-plugin-marketplace.md)。
 以下用例通过真实 PostgreSQL 集成测试(`integration/plugins_*.go`)验证。
 

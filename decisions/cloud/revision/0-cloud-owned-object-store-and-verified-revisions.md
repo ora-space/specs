@@ -112,9 +112,9 @@ Node 报告交付结果（`delivered{finalCommit, baseCommit, ref, bundle{key, s
 实际决策与偏离：原决策按“与输入矛盾 / 形状不合法”分别返回 `CONFLICT` 与 `INVALID_INPUT`。实现按声明字段
 归类：会话记录键与会话记录形状都返回 `INVALID_INPUT`，bundle 键与 bundle 形状都返回 `CONFLICT`。两种错误码
 都在接管前拒绝、都不留记录，Controller 对二者的处理相同，系统承诺（不变量 3a）不受影响。bundle 路线不再
-为此改代码：Git Server 交付删除 bundle 字段后，bundle 一侧的归类随之作废；剩下的 `history.key` 与输入矛盾
-返回 `INVALID_INPUT` 一处，由
-[Git Server 交付](20261012-git-server-delivery-and-verified-delivery-refs.md) D3 统一为按性质分类。
+为此改代码：Git Server 交付删除 bundle 字段后，bundle 一侧的归类随之作废；剩下的 `history` 键与形状返回
+`INVALID_INPUT`，其余矛盾返回 `CONFLICT`，由
+[Git 交付决策](20261017-git-native-delivery-refs-and-resume.md) D3 沿用。
 
 `revisions` 表：`id`、`tenant_id`、`run_id`（每个运行至多一行）、`execution_id`（对应的验证结论）、`workspace_id`、
 `project_id`、`repository_url`、`base_commit`、`final_commit`、`revision_ref`、`bundle_key/bundle_size/bundle_sha256`

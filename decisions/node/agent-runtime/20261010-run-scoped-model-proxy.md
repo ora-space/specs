@@ -4,6 +4,9 @@ status: implemented
 
 # Node 通过专用模型身份领取临时授权，OpenCode 经平台代理调用冻结的模型
 
+> 后续决策：[插件拥有模型 adapter](20261017-plugin-owned-model-adapters.md) 已批准将 CLI 配置
+> 转换从通用授权模块交给插件，并增加冻结上下文与能力检查；尚待实现，本文既有证据不自动扩大。
+
 本决策继承 [共享运行时根决策](0-shared-agent-runtime-crate-hosted-by-node.md)，将 D5 的部署共享凭据/默认模型改为用户的冻结连接与平台代理。
 真实上游 Key 保留在平台；Node 只取得当前运行的临时授权。状态 `implemented`；证据与缺口见核心用例。
 

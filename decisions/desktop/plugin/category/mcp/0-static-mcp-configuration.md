@@ -4,6 +4,10 @@ status: implemented
 
 # MCP 插件：以静态配置包声明可解析的 Server 配置
 
+> 后续决策：[Agent 配置声明](../../manifest/20261017-agent-configuration-declarations.md)已批准在
+> `assets/config.json` 的封闭集合中新增第四种 Agent shape（专有顶层成员、独立声明版本、仅
+> `kind = "agent"` 可携带），其规则由该决策拥有；本文对 MCP 的识别、互斥与封闭要求不变。
+
 Ora 的 MCP 插件是一个不启动插件进程的静态配置包。插件用 `orax.toml` 声明
 `kind = "mcp"`，并在唯一的 `assets/config.json` 中声明一个 `stdio` 或 Streamable HTTP
 transport，以及可选的用户 Settings。宿主在发现阶段编译并整包验证该声明；只有配置完整的已安装

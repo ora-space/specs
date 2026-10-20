@@ -4,6 +4,9 @@ status: implemented
 
 # 插件市场:cloud 权威选择状态、目录快照与自闭合 effect 载荷
 
+> 后续决策：[Agent 配置元数据](20261017-agent-configuration-metadata.md) 已批准增加静态声明的
+> 目录分发与安装一致性验证，尚待实现。配置读取仍不出网、不启动插件，旧安装证据不覆盖该扩展。
+
 > 后续已实现决策：[管理员选择与空闲维护](20260927-admin-selection-and-idle-maintenance.md)限制空间插件修改并让实例维护持久等待独占资格；[Node 插件执行](20260928-node-executes-plugin-installs.md)拥有实际执行和新实例补装，两者均为 `implemented`。完整联合故障验收仍按其核心用例保留缺口；本文保留原实现状态。
 
 cloud 自己维护插件市场目录快照(每 5 分钟 git fetch + 扫描 `registry/**/orax.toml`,单事务整源

@@ -1,5 +1,5 @@
 ---
-status: approved
+status: implemented
 ---
 
 # Project 经 Repository Binding 同步外部仓库：Repo Executor 写快照，Cloud 核验后推进当前快照
@@ -11,7 +11,7 @@ Cloud 经 ref 查询核验两个 ref 都指向报告的提交之后，才在事�
 没有当前快照时，Workspace 的 clone 步骤只能等待，不回退为访问外部仓库，公开仓库也要先同步一次。本文保证首次同步不会悄无声息地
 停下：要么核验成功、写入当前快照，要么以 `failed` 终态落库，内部线据此结束等待（D9）。
 
-本 ADR 已经 owner 批准，处于 `approved`（核心测试用例见[仓库同步用例](../../../test-cases/cloud/project/repository-binding-and-snapshot-sync.md)），是 `cloud/project` 领域在[仓库凭据连续性](20260927-repository-credential-continuity.md)之后的后续决策，
+本 ADR 处于 `implemented`：实现已由 cloud#76（`ceb39bc`）与 cluster#27（`033a4ea`）合入 main；核心测试用例见[仓库同步用例](../../../test-cases/cloud/project/repository-binding-and-snapshot-sync.md)，是 `cloud/project` 领域在[仓库凭据连续性](20260927-repository-credential-continuity.md)之后的后续决策，
 遵守 [Git Server 代码中心契约](../git-server/20261016-project-repository-as-code-hub-and-ref-contract.md)（下称“契约”）的 D4、D5、D6。
 涉及 Cloud（Binding、同步 Operation、ref 查询的调用方、公开 API 与前端）、Repo Executor 和 Credential Store。
 发布（Publish）由[后续 ADR](20261017-explicit-fast-forward-publish.md) 承担；凭据的保管与能力验证由
@@ -79,7 +79,7 @@ Binding 是 Project 与一个外部仓库分支的绑定：
 
 ### D2：同步 Operation
 
-同步记录为 `repository_operations` 中 `kind = repository_sync` 的一行。这张表的 ID、类型、Binding、状态和状态枚举由底座建立
+同步记录为 `repository_operations` 中 `type = repository_sync` 的一行。这张表的 ID、类型、Binding、状态和状态枚举由底座建立
 （契约落地顺序第 1 步），本文增加下表其余字段，不增删状态。发布 Operation 共用这张表（见发布 ADR），因为 Git Server 按
 `Ora-Git-Operation-Id` 解析上下文时只需查一张表。
 
@@ -93,7 +93,7 @@ Binding 是 Project 与一个外部仓库分支的绑定：
 | `expectedTrackingOid` | `leased → running` 之前经 ref 查询读到的跟踪 ref 值，不存在时为全零 |
 | `state` | 见下表 |
 | `leaseOwner`、`leaseGeneration`、`leaseExpiresAt` | 租约 |
-| `result` | 成功时的 `commitOid`、`forced`（是否非快进）、核验时间；失败时的错误码 |
+| `result` | 成功时的 `commitOid`、`forced`（是否非快进）；失败原因在独立的 `error_code` 列（公开为 `errorCode`），不在 `result` 中 |
 
 状态：
 
@@ -179,11 +179,12 @@ pending ──lease──▶ leased ──issue authorization──▶ running �
   候选引用、成功后仍切换（D5）。代价是候选引用的重放若最终失败，发布后的补同步不再单独进行；界面显示最近的同步失败，用户手动
   同步即可。
 - **系统触发的后继建不了时只记录原因，不回滚**。系统触发指自动重放和补同步，以及发布成功后新建的 `after_publish`（发布 ADR D6）。
-  新建前按 D7 检查凭据引用，并检查 Project 不在 `deleting`。条件不满足时不新建、照常清除标记，并把原因
-  （`credential_frozen`、`credential_unavailable`、`project_deleting`）记入触发它的那个 Operation 的 `result.successorSkipped`。
-  触发它的是正在登记终态的同步或发布。所在事务照常提交。D7 的 `409` 只用于用户经 API 发起的同步：用户可以修正后重试，
-  而系统触发发生在另一个 Operation 的终态事务里，回滚会让那个 Operation 停在未结束的状态。凭据恢复后由用户手动同步，界面在
-  代码来源区块显示跳过的原因（D8）。
+  新建前按 D7 检查凭据引用，并检查 Project 不在 `deleting`。条件不满足时不新建、照常清除标记，并把原因记入触发它的那个
+  Operation：由同步触发时写入 `result.successorSkipped`，值为 `credential_frozen`、`credential_unavailable` 或
+  `project_deleting`；由发布触发时写入 `result.resyncSkipped`，值为凭据检查返回的错误码原文（如
+  `repository_credential_frozen`），Project 不是 `active` 时不记录（与批准版本的偏离，见“与批准版本的偏离”）。所在事务照常提交。
+  D7 的 `409` 只用于用户经 API 发起的同步：用户可以修正后重试，而系统触发发生在另一个 Operation 的终态事务里，回滚会让那个
+  Operation 停在未结束的状态。凭据恢复后由用户手动同步；界面只显示 Binding 的 `resyncRequested`，不显示跳过的原因（D8）。
 
 ### D4：公开仓库
 
@@ -220,9 +221,9 @@ pending ──lease──▶ leased ──issue authorization──▶ running �
 | 分支 | 只同步 Binding 的一个分支 | 契约 D5 第 1 项只需要一个快照；多分支留在 namespace 中（`heads/<branch>`） |
 | Tag | 不同步（`--no-tags`） | Workspace 的输入不依赖 tag；tag 可被外部改写，引入另一套不可变性问题 |
 | 历史 | 完整历史，不做 shallow | shallow 快照会让 Workspace 的 `git log`、`blame`、merge-base 失效，发布时也无法在本地判定快进（发布 ADR D4） |
-| LFS | 不下载 LFS 对象，仓库中的指针文件按普通文件同步 | 执行器的 fetch 禁用 LFS 过滤器；LFS 对象需要另一套存储与配额。同步成功，界面在检测到 `filter=lfs` 时提示“LFS 文件只有指针” |
+| LFS | 不下载 LFS 对象，仓库中的指针文件按普通文件同步 | 执行器的 fetch 禁用 LFS 过滤器；LFS 对象需要另一套存储与配额。同步成功，界面不区分指针文件（与批准版本的偏离，见“与批准版本的偏离”） |
 | submodule | 不递归；gitlink 按提交指针保留 | 子模块是另一个外部仓库，需要自己的 Binding 和凭据；递归 fetch 会让一个 Binding 的凭据访问别的仓库 |
-| 大小 | 单次 fetch 的数据量、对象数和耗时都有上限，取值与 Git Server 的 `receive.maxInputSize` 和仓库配额一致（契约 D7） | 超限以 `failed(repository_too_large)` 或 `failed(timeout)` 结束，不留半个快照：推送是原子的 |
+| 大小 | 执行器对任务目录设字节上限（`REPO_EXECUTOR_MAX_TASK_BYTES`，默认 2 GiB），并有任务超时；没有对象数上限，也不读取 Git Server 的 `receive.maxInputSize` 或仓库配额 | 超限以 `failed(repository_too_large)` 或 `failed(timeout)` 结束，不留半个快照：推送是原子的 |
 
 **外部 force-push**：外部分支被改写时，下一次同步照常写入新的快照 ref；跟踪 ref 按 tracking-cas 允许非快进；当前快照更新为
 新提交。执行器在推送前判定新提交是否是 `expectedTrackingOid` 的后代，结果写入 `forced`，界面据此提示“外部分支被改写”。
@@ -238,6 +239,8 @@ pending ──lease──▶ leased ──issue authorization──▶ running �
   （凭据连续性 D2）。用户经 API 发起时不可用返回 `409 repository_credential_unavailable` 或 `409 repository_credential_frozen`；
   系统触发的后继不可用时不新建、只记录原因，不返回错误也不回滚（D3）。已创建的 Operation 在签发前发现不可用，以
   `failed(credential_unavailable)` 结束。
+- **删除回滚补回的同步**（D2 的 `deletion_aborted`）在创建时不检查引用：底座在恢复准入的事务里直接建立 `pending` 行，worker 在
+  签发授权前发现不可用时以 `failed(credential_unavailable)` 结束（与批准版本的偏离，见“与批准版本的偏离”）。
 - 引用被撤销后，新的同步一律拒绝。已经进入 `running` 的同步已兑换过凭据，按凭据连续性 D2 允许收尾。
 - 同步只使用 Binding 当前的引用。个人引用被所有者绑定到 Binding，等于所有者同意该 Project 用它读取；读取不需要逐次批准，
   发布需要（发布 ADR D2）。
@@ -259,22 +262,23 @@ Operation 状态变化后，沿用 [Space 事件流](../api-boundary/0-space-api
 
 界面（Project 详情页的“代码来源”区块）：
 
-- 显示外部仓库地址、分支、凭据名称与类型（团队、个人、未知）、凭据的读取和发布能力是否已验证。
-- 显示当前快照：短 OID、来源同步的完成时间；`forced` 时提示外部分支被改写。
-- 显示最近一次同步的状态；系统触发的后继同步被跳过时（D3），显示跳过的原因和“立即同步”入口。失败时把错误码映射为可操作的说明，例如：
+- 显示外部仓库地址、分支和凭据名称（匿名仓库显示“匿名读取”）；不显示凭据归属和读取、发布能力的验证状态（与批准版本的偏离，
+  见“与批准版本的偏离”）。
+- 显示当前快照的完整 `commitOid`；`forced` 时提示外部历史已改写、旧快照仍保留。不显示快照的来源同步完成时间。
+- 显示最近一次同步的状态和错误码，按下表映射；未列出的错误码原样显示。系统触发的后继同步被跳过时（D3），界面只显示 Binding 的
+  `resyncRequested`（“发布后的补同步已安排”），不显示 `result.successorSkipped` 的原因（与批准版本的偏离，见文末）。
 
   | 错误码 | 界面说明 |
   | --- | --- |
-  | `repository_requires_credential` | 这个仓库需要凭据，请绑定一个凭据 |
-  | `credential_rejected` | 外部仓库拒绝了凭据，请更新凭据 |
-  | `repository_credential_frozen` | 凭据的所有者已离开，请管理员绑定团队凭据 |
-  | `upstream_branch_missing` | 外部仓库里找不到分支 `<branch>` |
-  | `repository_too_large` | 仓库超过同步上限 |
+  | `repository_requires_credential` | 私有仓库需要凭据 |
+  | `credential_rejected` | 凭据被外部平台拒绝，请轮换 |
+  | `credential_unavailable` | 凭据不可用，请检查或更换 |
+  | `upstream_branch_missing` | 外部分支不存在 |
+  | `repository_too_large` | 仓库超过大小限制 |
 
-- “立即同步”按钮：有修改权限的成员可见；已有未结束的同步时显示进度并禁用；凭据不可用时禁用并说明原因。
-- 没有当前快照、但有同步在进行时，等待中的 Workspace 显示“等待首次同步”；没有当前快照、最近的同步已经失败时，Workspace 的
-  创建入口禁用，并说明“需要先完成一次同步”。
-- 等待中的 operation 因同步失败而结束时（D9），Workspace 的失败说明沿用上表，并给出“立即同步”的入口。
+- “立即同步”按钮对能查看代码来源的成员可见，只在请求进行中禁用；不检查 Project 修改权限、未结束的同步或凭据状态
+  （与批准版本的偏离，见文末）。
+- 没有当前快照时，Workspace 的创建入口和提示由内部线的消费方负责（见兼容性边界）；本文不实现这部分界面。
 
 ### D9：外部线对等待快照的 operation 的保证
 
@@ -290,7 +294,7 @@ Operation 状态变化后，沿用 [Space 事件流](../api-boundary/0-space-api
    等待恢复，不另设超时。
 3. **会重放的失败不会被误读为最终失败**：自动重放（D3）与原 Operation 的终态在同一事务里创建，所以内部线看到的“最近的同步”
    要么还未结束，要么是不会再重放的终态。
-4. **最终失败带着原因落库**：首次同步永久失败时，Operation 以 `failed` 终态落库，`result` 中有错误码（例如 `credential_rejected`、
+4. **最终失败带着原因落库**：首次同步永久失败时，Operation 以 `failed` 终态落库，`error_code` 列中有错误码（公开为 `errorCode`，例如 `credential_rejected`、
    `upstream_branch_missing`、`repository_requires_credential`），内部线和界面据此说明原因。`superseded` 在用完一次重放后同样
    是不会产生快照的终态。
 
@@ -332,6 +336,20 @@ Operation 状态变化后，沿用 [Space 事件流](../api-boundary/0-space-api
 | `snapshot_not_ready` 设固定的等待上限 | 实现简单，不依赖同步的状态；但上限无法同时适应大仓库和立即可知的失败（D9） |
 | 同步失败后让等待者继续等，直到用户手动同步成功 | 修好凭据后不用重新创建 Workspace；但等待期间 Project 的操作槽一直被占，其他操作都返回 busy，而用户可能根本不知道要去修 |
 
+## 与批准版本的偏离
+
+对照 cloud `ceb39bc` 与 cluster `033a4ea`，最终实现与本文批准时相比有以下偏离，正文已按最终实现表述：
+
+| 批准时的决策 | 最终实现 | 原因 |
+| --- | --- | --- |
+| `result` 同时承载成功字段、失败错误码和核验时间 | 成功字段在 `result`；错误码在 `error_code`（公开为 `errorCode`）；核验时间不在 `result`，由 Operation 的 `finishedAt` 和快照的 `recorded_at` 表示 | 错误码作为独立列，便于查询与状态的 `CHECK` 约束；核验时间由记录的时间戳表示，不重复存储 |
+| 发布触发的后继同步跳过原因写入 `result.successorSkipped`，取值 `credential_frozen`、`credential_unavailable`、`project_deleting` | 发布触发时写入 `result.resyncSkipped`，值为凭据检查的错误码原文；Project 不是 `active` 时不记录 | 同步与发布两条触发路径分别实现，未统一键名和错误码；没有测试覆盖这条路径 |
+| 单次 fetch 的数据量、对象数和耗时上限与 Git Server 的 `receive.maxInputSize` 和仓库配额一致 | 只有任务目录字节上限（默认 2 GiB）和任务超时；没有对象数上限，也不读取 Git Server 配置 | 代码注释把 Git Server 的上限列为第二道检查，但没有实现联动 |
+| 界面在检测到 `filter=lfs` 时提示“LFS 文件只有指针” | 不提示，指针文件与普通文件没有区别 | 界面未实现该项，没有记录原因 |
+| `deletion_aborted` 同步在创建前检查凭据 | 创建时不检查，签发授权前检查，失败以 `failed(credential_unavailable)` 结束 | 补回同步的底座路径直接插入 `pending` 行，可用性检查放在 worker 启动时 |
+| 界面显示凭据类型与能力、短 OID 与同步完成时间、后继跳过原因、`repository_credential_frozen` 的说明，并按权限、未结束同步和凭据状态控制“立即同步” | 界面只显示凭据名称、完整 OID、状态和映射后的错误码；“立即同步”只在请求进行中禁用；`repository_credential_frozen` 原样显示 | 本阶段只实现了读取与操作入口，未实现这些展示和禁用规则；没有记录原因 |
+| 等待中的 Workspace 显示“等待首次同步”，或禁用创建入口并说明“需要先完成一次同步” | cloud 与 cluster 都没有这些提示和禁用逻辑 | 等待由内部线的消费方负责，内部线尚未实现（见兼容性边界） |
+
 ## 本决策未解决的问题
 
 - **多 Binding、多分支、tag**：namespace 已经允许，模型与界面留给后续决策。
@@ -339,50 +357,3 @@ Operation 状态变化后，沿用 [Space 事件流](../api-boundary/0-space-api
 - **SSH 地址和 GitHub App 身份**：第一阶段只有 `https://` 加 token。凭据类型的扩展见 identity-access 后续决策。
 - **LFS 与 submodule 的真正支持**：需要对象存储配额与子仓库的 Binding。
 - **快照回收**：与契约一致，第一阶段全部保留。
-
-## 落地顺序
-
-1. **同步 Operation**：在底座建立的 Binding、当前快照和 `repository_operations` 最小存储之上，增加租约与结果字段、租约 worker、
-   Git Server 上同步 Operation 的上下文来源；Binding 增加 `version`，删除 `repository_credential_ref_id` 列与公开 API 的
-   `repositoryCredentialRefId`，读取方改读 `credential_ref_id`（`projects` 的四个仓库列底座已经删除）。完成条件：Git Server
-   对同步 Operation 的授权符合契约 D5 第 3 项；后继同步的四种组合与“建不了只记录原因”有测试；有真实 `git` 客户端的集成测试。
-2. **执行器接入**：Cloud 调用执行器完成同步，核验并推进当前快照；公开仓库和私有仓库都打通。完成条件：下面的独立验收全部通过。
-3. **界面**：代码来源区块、同步按钮、错误说明，Workspace 创建入口的禁用条件。
-4. **全链路验收**（契约落地顺序第 3 步）：两条线都合并后，用真实外部仓库从同步跑到 Workspace。
-
-保持不变：Project 的成员授权、默认分支规则、Revision 交付。从第 2 步开始改变：Project 的代码来源由同步得到。
-
-## 外部线的独立验收
-
-不依赖内部线和 Node，不启动沙盒。
-
-**起栈**：Cloud、Git Server（服务仓库监听和 ref 查询监听）、Credential Store、Repo Executor，加两个本地 Git 托管 fixture：
-一个带 TLS、要 token 才能读的私有仓库 fixture，一个公开读取的 fixture。fixture 在 cluster 网段里，共享出网规则始终拒绝这类
-地址，所以执行器以开发模式启动、只用精确测试 host 例外放行这两个 fixture，不使用企业配置（执行器根决策“外部线的独立验收”）。
-
-**判定**：每个场景的同步结果都必须通过底座的共享契约断言（契约落地顺序第 1 步）：Git Server 上的快照 ref、跟踪 ref 与 Cloud 的
-当前快照记录符合契约 D5。
-
-| 场景 | 必须成立 |
-| --- | --- |
-| 公开仓库首次同步 | `succeeded`；快照 ref 与跟踪 ref 指向外部分支的提交；当前快照被写入；没有任何凭据兑换记录 |
-| 私有仓库首次同步 | 同上；Credential Store 有且只有一次兑换；凭据引用的读取能力被标为已验证 |
-| 私有仓库匿名同步 | `failed(repository_requires_credential)`；没有快照 ref |
-| 重复同步同一提交 | 第二次 `succeeded`，Git Server 上 ref 数量不变，当前快照指向同一提交 |
-| 并发触发 | 两次手动触发返回同一个 Operation |
-| 外部 force-push 后同步 | 新快照写入，`forced = true`；旧快照 ref 仍然存在且指向原提交；当前快照指向新提交 |
-| 外部分支删除后同步 | `failed(upstream_branch_missing)`；当前快照不变 |
-| 撤销凭据后同步 | 创建返回 `409`，没有新的 Operation 和兑换 |
-| 成员离开后个人凭据的同步 | 创建返回 `409 repository_credential_frozen` |
-| worker 在 `running` 中被杀 | Operation 以 `failed(lease_lost)` 结束；之后用旧 Operation ID 访问服务仓库监听被拒绝；新 Operation 重放后 `succeeded` |
-| 预置的跟踪 ref 被改动（模拟失联的旧执行器） | 第一个 Operation 以 `stale info` 失败、`superseded`，同一事务里有一个重放；重放重新读取跟踪 ref 后 `succeeded` |
-| 超过大小上限 | `failed(repository_too_large)`；Git Server 上没有新的 ref |
-| 首次同步永久失败 | 用错误的 token 经公开 API 建 Project：底座建立的那一行同步 Operation 以 `failed`、`result` 带 `credential_rejected` 落库；该 Binding 没有新的未结束同步，也没有当前快照 |
-| 重放与终态同事务 | 在 `running` 中杀掉 worker：`failed(lease_lost)` 与重放的 `pending` Operation 在同一事务中出现，期间任何时刻读到的“最近的同步”都不是一个会被重放的终态；重放成功后当前快照写入 |
-| 重放与补同步同时需要 | 发布成功时同步正在 `running`（置上补同步标记），随后杀掉 worker：终态事务只新建一个后继，`trigger` 沿用原值，标记被清除；后继成功后当前快照包含发布的提交 |
-| 系统触发的后继建不了 | 置上补同步标记后冻结 Binding 的凭据，再让 `running` 的同步结束：原 Operation 正常落到终态，没有新建同步，`result.successorSkipped = credential_frozen`，标记被清除 |
-| 删除回滚补回同步 | 有 `pending` 的同步时发起删除：同步被取消、标记被清除；Node 拒绝 quiesce 后，同一事务出现一行 `deletion_aborted` 的 `pending` 同步，worker 领取后 `succeeded` |
-| 建 Project 的形状 | 经公开 API 建 Project：同一事务里有 Binding 和一行 `pending` 的同步 Operation，worker 领取并执行它；`projects` 没有仓库列，Binding 没有 `repository_credential_ref_id` 列；读取 Project 时 `defaultBranch` 等于 `Binding.branch` |
-| 秘密扫描 | 用 canary token 跑完以上场景后，Cloud 与执行器日志、Git Server 仓库、Cloud 数据库、执行器临时目录中都找不到 canary |
-
-**最终验收**：用 owner 提供的 GitHub 私有测试仓库，以真实 token 完成首次同步、外部推送后的再次同步、外部 force-push 后的同步。
