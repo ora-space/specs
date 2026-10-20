@@ -1,5 +1,5 @@
 ---
-status: approved
+status: implemented
 ---
 
 # Cloud 持久结算确定性派发拒绝，并让不可推进的 Operation 让出领取机会
@@ -8,12 +8,14 @@ Cloud 对尚未登记新执行的 Workspace 操作重新核验派发条件：确
 清空重试时间；暂时不可用保留原操作并延后。拒绝一次 RPC 不等于结算操作，Controller 也不能从一个
 通用 `ABORTED` 推断业务失败。领取排序同时记住已经给予的机会，避免一个一直失败的旧操作挡住其他项目。
 
-本文为 `approved`。owner 已按原文采纳下面的 D1–D4，Cloud 的另行实现（领取事务内结算与
-`last_claimed_at` 轮转）已与本文对齐，因此状态不再停留在 `proposed`；对应的验证义务见
+本文为 `implemented`。Cloud 的领取事务内结算与 `last_claimed_at` 轮转按下面的 D1–D4 实现，实现提交为
+[cloud#74](https://github.com/ora-space/cloud/pull/74)（`ee712e1`）；对应的验证义务与直接证据见
 [确定性领取拒绝与轮转](../../../test-cases/cloud/operation/deterministic-claim-refusals.md)。
 范围只含 Cloud 的 Operation 领取、派发前拒绝及 Controller 的对应行为。
-Agent 工作项的持久延后、退役和调度版本围栏不在本文内，尚未批准，也不是本文的落地前置。
-PostgreSQL 操作、执行、effect、资源与提交身份必须保留；本次不改变 Node 真实结果或自动放弃未知外部执行。
+Agent 工作项的持久延后、退役和调度版本围栏不在本文内，由另行决策承接。
+PostgreSQL 操作、执行、effect、资源与提交身份保留；不改变 Node 真实结果，也不自动放弃未知外部执行。
+真实 Rust Controller 的联合矩阵仍按 ora-space/circus#108 记为未覆盖，Go 模拟 Controller 的成功不能
+替代它。
 
 ## 背景
 
@@ -119,18 +121,16 @@ Cloud 在领取候选、准备交回其 clone 步骤前核验 D1；`RecordDispat
 | 在 Controller 维护排除列表 | 无需数据库字段，但重启丢失、多个进程看法不一致，Cloud 仍显示 running |
 | 在派发拒绝后无条件物理删除 Workspace | 释放快，但已有 effect/未知执行可能仍持有存储，破坏安全停止契约 |
 
-## 兼容性、风险与落地
+## 兼容性、验收与风险
 
-迁移只增加 nullable `last_claimed_at` 与合适索引，已有迁移不改写。存量 null 以 created_at 参与首次轮转，
-不伪造过去的领取时间。旧 running 操作不批量标失败；下一次在 Cloud 当前状态下逐项核验。失败结算后
-回滚程序版本不能重开终态，也不能删除留存的外部身份。
+迁移 `0050_operation_last_claimed_at.sql` 只增加 nullable `last_claimed_at` 与部分索引，已有迁移不改写。
+存量 null 以 created_at 参与首次轮转，不伪造过去的领取时间。旧 running 操作不批量标失败；下一次在
+Cloud 当前状态下逐项核验。失败结算是持久业务终态，回滚程序版本不能重开它，也不能删除留存的外部身份。
 
-落地顺序：D1–D4 的条文按原文获批，Cloud 已实现领取事务内结算与 `last_claimed_at` 轮转，状态转为
-`approved` 并登记[核心用例](../../../test-cases/cloud/operation/deterministic-claim-refusals.md)；
-实现合并后再由落地运行把本 ADR 改为 `implemented`。之后固定 Cloud/Controller/Node 版本完成实际联合
-验收。
-核心用例逐项覆盖凭据守卫拒绝后其他项目推进、失败钩子回滚、旧版本/旧 epoch、领取后授权变化、未知执行
-保护、重启与 clone 次数保持。实际 Rust Controller 的证据不能由 Go 模拟 Controller 的成功替代。
+[核心用例](../../../test-cases/cloud/operation/deterministic-claim-refusals.md)逐项登记凭据守卫拒绝后
+其他项目推进、失败钩子回滚、旧版本/旧 epoch、领取后授权变化、未知执行保护、重启与 clone 次数保持的
+验证义务与直接证据。实际 Rust Controller 的联合矩阵仍由 ora-space/circus#108 承接，Go 模拟 Controller
+的成功不能替代它。
 
 ## 本决策未解决的问题
 
