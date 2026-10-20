@@ -1,12 +1,13 @@
 # 确定性领取拒绝与轮转
 
-依据[已批准的 operation 后续决策](../../../decisions/cloud/operation/20261014-settle-deterministic-dispatch-refusals.md)。
+决策依据：[Operation 领取结算决策](../../../decisions/cloud/operation/20261014-settle-deterministic-dispatch-refusals.md)（`implemented`）。
 本文件登记 Cloud 在同一个领取事务里结算确定性仓库凭据拒绝、按最近一次领取机会轮转候选，以及两者与
 已登记执行、旧快照和 clone 预算的边界。
 
-直接证据来自 cloud#74 的 `internal/core` 与 `integration` 包：全部用例在真实、隔离的 PostgreSQL schema 上经
-`Store.Control` 的 `claim` 动作驱动，与 Controller 的生产路径一致，断言不直接改写操作状态。真实 Rust
-Controller 的联合矩阵仍按 #108 记为未覆盖；Go 模拟 Controller 的成功不能替代它。
+直接证据来自 [cloud#74](https://github.com/ora-space/cloud/pull/74)（`ee712e1`）的 `internal/core` 与
+`integration` 包：全部用例在真实、隔离的 PostgreSQL schema 上经 `Store.Control` 的 `claim` 动作驱动，
+与 Controller 的生产路径一致，断言不直接改写操作状态。`Covered`、`Partial` 只证明该提交所列测试边界内
+的义务；真实 Rust Controller 的联合矩阵仍按 #108 记为未覆盖，Go 模拟 Controller 的成功不能替代它。
 
 ## Deterministic Repository Refusals Settle Inside The Claim Transaction
 
