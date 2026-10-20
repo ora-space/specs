@@ -43,7 +43,7 @@ Controller 调用 `claim`；候选的仓库凭据不存在、已冻结、与仓�
 | 四类确定性拒绝各自结算 | `TestClaimSettlesEachDeterministicRefusalCode`：冻结、软删、范围不匹配、执行边界关闭分别得到 `failed` + 对应错误码 + `retry_at=NULL` + version 2，Workspace `unavailable` 且准入关闭 | Covered |
 | 运行 Workspace 同事务结算并归还维护 | `TestClaimRefusalSettlesRunWorkspaceInSameTransaction`：IssueRun 走到 `releasing/failed/workspace_unavailable`，运行时维护不再由该操作持有 | Covered |
 | 钩子失败整笔回滚 | `TestClaimRefusalRollsBackWhenTheRunSettlementHookFails`：claim 返回错误，操作仍是 `queued`/v1、Workspace 仍 `provisioning`、维护仍由该操作持有 | Covered |
-| 阶段、请求与已登记执行保留 | `TestClaimSettlesRetryWaitCandidateAfterSettledCloneFailure`：已结算的 `clone_failed` 执行行保留，操作按新的确定性拒绝结算，不追加执行 | Partial（结算 SQL 不改写请求/effect，但没有逐字节断言这些列） |
+| 阶段、请求与已登记执行保留 | `TestClaimSettlesRetryWaitCandidateAfterSettledCloneFailure`：操作带着一条已结算的 `clone_failed` 执行行，领取后按新的确定性拒绝结算为 `failed`；测试只读 `state`/`error_code`/`retry_at`，不查询 `clone_executions`，也不逐字节断言 `step`/`request`/effect 列 | Partial（执行行是否保留、执行计数和阶段/请求列都没有直接断言） |
 
 ### 决策依据
 
@@ -187,7 +187,7 @@ D1、D2 第 1 步、D4。
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 领取的版本栅栏 | `TestClaimSettlesEachDeterministicRefusalCode`：结算使 version 从 1 变为 2，旧快照不再匹配 | Covered |
+| 结算递增版本 | `TestClaimSettlesEachDeterministicRefusalCode`：结算使 version 从 1 变为 2 | Covered |
 | 旧 epoch / 旧 version 被拒 | `TestControlGRPCLeaseHolderAndFencing`（过期 epoch 的续租与释放被拒）；`TestGRPCControllerDrivesWorkspaceThroughNodeAndClone`（旧 epoch 上报 Node、旧 version 推进操作分别得到 `STALE_CONTROLLER` / `CONFLICT`） | Covered |
 | 领取后授权变化 | `TestClaimSettlesCredentialFreezeBetweenClaimAndDispatch`：claim 返回后绑定并冻结凭据，下一轮把 `running` 候选结算为 `failed`，没有登记 clone 执行 | Covered |
 | 派发时再核验 | `TestCredentialedCloneRefusesMissingExecutorAndAnonymousFallback`：已领取的凭据项目在派发时被拒绝，未登记执行、未改写所有权与凭据引用 | Covered |
@@ -227,7 +227,7 @@ D1 最后一行、D2 末段、D3。
 | 持久失败预算 | `TestCloneFailureExhaustsItsDurableBudget`：三次失败后操作 `failed`，次数来自持久执行而非内存状态 | Covered |
 | 重试是新执行且保留历史 | `TestCloneFailureRetriesAsNewExecutionAndUnknownBlocks`：失败执行保留，显式 retry 成功为第二次执行 | Covered |
 | 重启不再 clone | `TestRestartIsOneDurableIntentAndNeverClonesAgain`：重启保留 `baseCommitId`、只保留一条 clone 执行，重启操作成功结束 | Covered |
-| 轮转/结算不重置计数 | `TestClaimSettlesRetryWaitCandidateAfterSettledCloneFailure`：已结算的失败执行仍在，下一次领取按拒绝结算且不追加执行 | Partial（没有直接断言计数在轮转前后的相等） |
+| 轮转/结算不重置计数 | `TestClaimSettlesRetryWaitCandidateAfterSettledCloneFailure`：操作带着一条已结算的 `clone_failed` 执行行，下一次领取按确定性拒绝结算；测试不查询 `clone_executions`，没有断言该执行行仍在或轮转前后的计数相等 | Partial（持久执行计数不因轮转或结算改变没有直接断言） |
 
 ### 决策依据
 
