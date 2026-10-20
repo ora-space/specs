@@ -6,7 +6,7 @@ status: approved
 
 本文是[工作流执行根决策](0-cloud-side-scheduler-owns-workflow-execution.md)（`approved`）的后续决策，只固定
 「单回合工作流会话何时结束、由谁结束」这一接缝。结论：WorkflowRun 的 agent 会话结束由 Cloud 调度器决定——
-调度器在重算时读取该会话执行最近一条事件回执，成功的 `turnEnded`（`stopReason != cancelled`）即说明初始
+调度器在重算时读取该会话执行最近一条事件回执，成功的 `turnEnded`（记录字段 `stop_reason` 不是 `cancelled`）即说明初始
 回合已结束；调度器按既有控制面的「判别列 + 恰好一个归属」模式把 `thread_commands` 扩展到 WorkflowRun，
 放出既有 Controller `EndSession` 中继（`reason = idle_timeout`），Node 结束会话并上报终态，节点仍只按
 `node_executions.result` 推进。结束命令放出后超过确认窗口仍无会话终态时，节点以
@@ -43,10 +43,12 @@ IssueRun 扩展为两个归属列恰有其一；存量行全部带 `run_id`，�
 不可能再产生用户轮次。因此初始回合的 `turnEnded` 回执就是「会话可以结束了」的证据，不需要再等一个
 空闲窗口。
 
-判据是**该会话执行在 `node_event_receipts` 中最近一条回执**：记录类型为 `turnEnded`，且 `stopReason`
+判据是**该会话执行在 `node_event_receipts` 中最近一条回执**：记录类型为 `turnEnded`，且 `stop_reason`
 不是 `cancelled`。只读最近一条而不是扫描任意历史回合——回合之后又出现其他记录时，对话并没有停在回合
 边界；`cancelled` 的回合也不构成空闲证据，取消由会话终态结算。这与 Thread D4 的空闲判据同源，Cloud
-仍然不解释记录的业务字段，只使用接管校验已经依赖的类型判别与 `stopReason`。
+仍然不解释记录的业务字段，只使用接管校验已经依赖的类型判别与 `stop_reason`。字段名按 `ora-history`
+实际序列化的形状书写：serde 的容器级 `rename_all = "camelCase"` 只改枚举变体名（`turnEnded`），
+变体字段保持 snake_case（`stop_reason`）。
 
 **非 `cancelled` 的其他停止原因也按回合结束处理，这是有意的**：`max_tokens`、`refusal` 等同样意味着
 本轮不会再产出更多内容，单回合会话不可能再有下一轮。调度器在这里只判断「本轮是否已经结束、还会不会

@@ -16,8 +16,8 @@
 - 前置状态：运行已派发一个 agent 节点，`node_executions.result` 为空；会话回执里最近一条是 `turnEnded`。
   运行可以先后执行多个 agent 节点。
 - 触发：调度器按 10 秒周期重算，同一节点被连续重算；同一运行的两个 agent 节点先后进入执行；回执的
-  `stopReason` 为 `end_turn`、`max_tokens`、`refusal` 或 `cancelled`。
-- 必须成立：最近一条回执是成功 `turnEnded`（`stopReason != cancelled`）后，Cloud 放出**恰好一条**
+  `stop_reason` 为 `end_turn`、`max_tokens`、`refusal` 或 `cancelled`。
+- 必须成立：最近一条回执是成功 `turnEnded`（`stop_reason != cancelled`）后，Cloud 放出**恰好一条**
   `end_session{idle_timeout}`；命令归属该工作流运行，并限定在发起请求的图节点上；重复重算返回同一条命令，
   不新增、不重置计时；`cancelled` 的回执不放出命令。
 - 禁止结果：成功回合后没有命令；同一节点出现第二条 `end_session`；命令被投递给同一运行的另一个节点的
@@ -28,7 +28,7 @@
 | --- | --- | --- |
 | 成功回合后恰好一条 `end_session{idle_timeout}`，重复重算幂等 | 真实 PostgreSQL：驱动调度重算，检查命令数、kind/body 与重复 tick 后的行不变 | Missing |
 | 命令按图节点限定，跨节点投递被拒绝 | 真实 PostgreSQL：两个 agent 节点的运行，检查命令的节点归属与跨节点投递的 `dispatch_conflict` | Missing |
-| `cancelled` 的 `turnEnded` 不放出命令 | 真实 PostgreSQL：`stopReason = cancelled` 的回执后检查命令为 0 条 | Missing |
+| `cancelled` 的 `turnEnded` 不放出命令 | 真实 PostgreSQL：`stop_reason = cancelled` 的回执后检查命令为 0 条 | Missing |
 
 - 决策依据：D1（触发判据与触发器位置）、D2（复用 `idle_timeout`）、D3（归属与节点限定、每节点唯一索引），
   不变量 1、2、6。
