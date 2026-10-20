@@ -64,7 +64,17 @@ JSON 再验签。JWK 形状依据 [RFC 8037](https://www.rfc-editor.org/rfc/rfc8
 
 header 不接受远程 `jku/x5u`、嵌入取键扩展、未知 `crit`、非编码载荷或非受保护 header。
 header/载荷 JSON 均拒绝重复键、未知必需语义、无效 UTF-8 和额外 JSON 值；JWS 整体最多
-32 KiB，普通原生 JSON 请求最多 4 KiB，base URL/回调 URI 最多 1024 字节。
+32 KiB；除 D5 的 `POST /login/start` 外，普通原生 JSON 请求最多 4 KiB。
+base URL/回调 URI 各自最多 1024 字节。KiB 为 1024 字节；请求上限按实际传输的
+UTF-8 JSON body 字节数计算，包含字段名、引号、转义和分隔符，不按解码后的字段长度计算。
+原生端点不接受压缩请求体，避免压缩前后预算歧义。
+
+部署发布配置前必须以最长合法 nonce、时间、修订及该配置的全部端点、SPKI、能力和版本
+字段检查序列化、base64url 编码和签名后的完整 JWS 不超过 32 KiB，并检查 D5 的 start
+组合预算；不满足时拒绝发布该配置，不能发布后再截断字段或删减已声明能力。生成挑战
+响应时再次检查实际 JWS 大小，超限返回有界配置故障，不签发不可用证明。宿主在信任确认
+和准备登录材料前检查发现证明及 start 的可编码性，超限作为不兼容配置停止，不先接受
+信任再进入必然失败的 start。
 
 | 已签载荷 | 含义 |
 | --- | --- |
@@ -142,6 +152,25 @@ query/Cookie/日志/Cloud；浏览器入场与一次性交接码的短时 URL �
 | POST /login/status | L、managementSecret；只返回事务阶段、期限和预分配 ID，不授予会话或返回代码/秘密 |
 | POST /login/cancel | L、managementSecret；D8 的受限终结操作，不需要网页/Cloud/provider 继续可用 |
 | POST /login/complete | 当前bearer与L；D8的完成确认，终结M权限，不续期/计活动 |
+
+`POST /login/start` 使用独立的 **48 KiB** JSON body 上限，不能继承普通请求的 4 KiB
+限制；Gateway 与部署 ingress 的该路由均须允许此上限。完整 JWS 放在唯一 `proof`
+字符串字段中，其 ASCII 内容最多 32 KiB，逐字传送、不转义或重编码签名输入。
+删除 `proof` 成员后，其余对象按 UTF-8 紧凑 JSON（无无意义空白、仅必要转义）序列化
+最多 **8 KiB**；这一组合预算包含 L、配置修订、完整端点/身份绑定、callbackURI、
+clientChannel 和所有 digest/challenge，而不只是各字段值之和。
+
+v1 编码器须能在该预算内同时容纳两个各 1024 字节的 base URL、1024 字节 callbackURI、
+UUID/部署公钥、uint64 最大修订、正式/development 通道及全部固定长度 digest/challenge；
+每入口 4 个 SPKI 和全部已声明能力计入完整证明预算。部署发布检查须使用上述最长组合，
+不得只用常见短地址测算；任何新增绑定字段或能力扩展也必须满足同一组合预算，否则另经
+协议演进。宿主使用该紧凑编码：32 KiB proof 加 8 KiB 其余对象及 `proof` 成员的 JSON
+包装最多 40971 字节，小于 48 KiB，因而所有满足字段与组合预算的配置都可发送。
+服务端仍按收到的完整 body 执行 48 KiB 硬上限，并在解码后复核 proof 与其余对象预算；
+额外空白或转义不能绕过上限。总 body 超限在解析前拒绝，字段/组合超限在严格解码后、
+写入事务前拒绝；两者均不分配 S、不创建 attempt。
+不得通过截断证明、去掉绑定或分批发送来适配。宿主发请求前也检查完整 body，重试沿用
+同一材料及预算，不为缩小请求替换证明。
 
 start同时绑定已登记的clientChannel，回调路径和本地Pending命名按通道隔离；改变通道
 属于不同绑定。clientChannel既不能开启dev provider，也不能替代正式包/回调所有权验证。
@@ -314,3 +343,7 @@ owner需选择签名/SPKI方案、新的60秒/10分钟时限及初始秘密预�
 HTTP各自最终结论有出入时先纠偏。批准后转approved并维护核心用例，再做Gateway/宿主/
 正式包实现；最终implemented须覆盖TLS代理转发、证书/配置轮换、账号切换、浏览器入场
 丢响应、双窗口、换票/取消/完成竞争、崩溃/重启、重复回调及已有网页回归的直接证据。
+批准后核心用例还须覆盖请求预算：最长端点对/回调、每入口 4 个 SPKI 与必需能力的合法
+组合可完成 start；32 KiB proof 加 8 KiB 其余对象的边界可发送；JWS、其余对象或总 body
+分别超限，以及空白/转义造成编码后超限时均拒绝且不写事务；部署配置发布与发现阶段
+提前拒绝不可编码组合，不能让宿主完成信任确认后才发现合法配置无法 start。
