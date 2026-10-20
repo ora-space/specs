@@ -163,7 +163,7 @@ D6 的后续实现有两条不改变本文归属与触发判据的路径：会�
 
 ## 落地顺序
 
-- 阶段 1（Cloud 实现，运行 ora-space/circus#293）：新增迁移 `0045`、调度器触发与有界等待，带成功回合、
+- 阶段 1（Cloud 实现，运行 ora-space/circus#293）：新增 `thread_commands` 的 WorkflowRun 归属迁移、调度器触发与有界等待，带成功回合、
   `cancelled` 回合、按节点隔离、超时失败四组数据库测试。完成条件是四组测试与既有 workflow/thread 测试
   全绿；本阶段不改变 IssueRun 的 Thread 路径与任何 Controller 契约。
 - 阶段 2（状态同步）：实现合并后由落地运行把本文改为 `implemented`，按最终实现精简正文、核对偏离，
