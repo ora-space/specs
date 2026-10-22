@@ -29,6 +29,9 @@ Cloud 的领域与协议边界划分，不预先决定 Go package、数据库表
 | `workflow` | 工作流图 schema、执行器槽位、发布与运行的门禁和执行契约 |
 | `scheduled-task` | 定时任务：持久定义、服务端调度、幂等触发、无人值守授权与任务历史 |
 
+定时运行的业务结论与文件产物见
+[Cloud verdict 与对象产物提案](scheduled-task/20261022-run-verdict-and-object-artifacts.md)（`proposed`，待批准）。
+
 Controller 的调度与恢复策略放在 `specs/decisions/controller/`，Node 的 Git、文件、进程、Agent、
 Plugin 和本地执行职责放在 `specs/decisions/node/`。跨层决策放在拥有业务不变量的一侧，并从其他
 层引用，不复制成多份权威规则。
