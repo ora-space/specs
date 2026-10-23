@@ -22,18 +22,20 @@
 
 真实端到端证据采用 cluster Compose 或等价真实部署链路，遵守 minicloud 与 Controller 过渡监听退役。核心用例使用英文二级标题作为稳定代码引用，实施时按义务逐项补充直接测试和对应仓库提交。
 
-## 已批准的工作流执行决策
+## 工作流执行决策
 
-[工作流执行根决策](../../decisions/cloud/workflow/0-cloud-side-scheduler-owns-workflow-execution.md)与它的三份后续决策
+[工作流执行根决策](../../decisions/cloud/workflow/0-cloud-side-scheduler-owns-workflow-execution.md)与它的后续决策
 [执行器槽位决策](../../decisions/cloud/workflow/20261015-executor-slots-replace-agent-model-ids.md)、
 [个人槽位映射与按槽位绑定决策](../../decisions/cloud/model-access/20261015-executor-slot-mappings-and-per-slot-run-bindings.md)、
-[工作流会话结束决策](../../decisions/cloud/workflow/20261019-workflow-session-end-after-initial-turn.md)
-于 2026-10-16 与 2026-10-20 经 owner 批准，为 `approved`，本领域核心用例同批建立。[节点重试与恢复契约](../../decisions/cloud/workflow/20261021-node-retry-and-resume-contract.md)
+[工作流会话结束决策](../../decisions/cloud/workflow/20261019-workflow-session-end-after-initial-turn.md)与
+[插件资产导入决策](../../decisions/cloud/workflow/20261016-asset-import-and-published-snapshots.md)
+的核心用例同批建立；根决策、会话结束与插件资产导入已 `implemented`，执行器槽位与个人槽位映射仍为 `approved`。
+[节点重试与恢复契约](../../decisions/cloud/workflow/20261021-node-retry-and-resume-contract.md)
 于 2026-10-21 经 owner 批准，核心用例同批建立，义务全部为 `Missing`。[人工节点运行级输入契约](../../decisions/cloud/workflow/20261021-human-node-run-input.md)
 于 2026-10-22 经 owner 批准，核心用例同批建立，义务全部为 `Missing`（产品实现尚未开始，发布门禁继续
-拒绝 `human` 与 `interactive: true`）。Cloud 至今没有工作流执行者：生产里的
-运行停在 `pending`，唯一写节点状态的是开发夹具，而根决策已把模拟 trace 排除在验收之外，所以执行类义务在
-cloud 侧全部为 `Missing`；main 也还没有个人槽位映射。门禁类义务（图校验、启动门禁、槽位解析）的实现在
+拒绝 `human` 与 `interactive: true`）。Cloud 侧调度器已随根决策落地：运行从 `pending` 进入真实执行，节点状态由
+调度器与真实会话写入，模拟 trace 按根决策排除在验收之外；执行类义务的直接证据登记在各用例里，两个副本同时推进
+同一个 run 的竞争与部分真实执行侧路径仍为 `Partial`。门禁类义务（图校验、启动门禁、槽位解析）的实现在
 [cloud#65](https://github.com/ora-space/cloud/pull/65) 上，已随合并提交
 [`df507f0`](https://github.com/ora-space/cloud/commit/df507f0) 落到 main，按逐条核对该提交的实现与测试后得到的证据
 状态登记（`Covered` / `Partial`），不再按"未合并"整体降级。
