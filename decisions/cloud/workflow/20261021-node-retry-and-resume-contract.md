@@ -4,7 +4,7 @@ status: approved
 
 # 工作流节点重试与恢复契约：继承 desktop 的重试策略，恢复首期在接口上明确不可用
 
-本文是[工作流执行根决策](0-cloud-side-scheduler-owns-workflow-execution.md)（`approved`）的后续决策，承接
+本文是[工作流执行根决策](0-cloud-side-scheduler-owns-workflow-execution.md)（`implemented`）的后续决策，承接
 [ora-space/circus#448](https://github.com/ora-space/circus/issues/448) 的 owner 结论（2026-10-21 选 A：继续在
 Cloud Go 调度器里移植，首期只实现 retry；resume 只定契约，实现另开决策），把根决策 D1 条件①的硬触发落到
 retry 与 resume 两项上。结论：

@@ -4,7 +4,7 @@ status: approved
 
 # 人工节点以运行级结构化输入继续：有界等待、追加式输入行，与 agent 会话解耦
 
-本文是[工作流执行根决策](0-cloud-side-scheduler-owns-workflow-execution.md)（`approved`）的后续决策，
+本文是[工作流执行根决策](0-cloud-side-scheduler-owns-workflow-execution.md)（`implemented`）的后续决策，
 承接其 D4 留下的「后续的交互式运行控制决策」。本文只固定首期 HITL 中 **`human` 节点**的契约：
 运行进入 `awaiting_input` 后，由发起人或租户管理员通过运行级输入接口提交一份结构化输入；输入先追加
 落库，调度器在下一次重算中消费它、把该节点结算为 `succeeded`，运行回到 `running` 继续推进。

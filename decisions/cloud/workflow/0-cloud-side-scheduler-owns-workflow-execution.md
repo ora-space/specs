@@ -1,5 +1,5 @@
 ---
-status: approved
+status: implemented
 ---
 
 # 工作流由 Cloud 侧调度器执行：WorkflowRun 是执行聚合，服务端首期只做 start / agent / condition / output
@@ -10,17 +10,17 @@ Cloud 侧新增一个工作流调度器，复用既有控制面（`execution_wor
 唯一来源，desktop 是参考实现**；服务端首期只执行 `start` / `agent` / `condition` / `output` 四个节点，
 Controller 契约不变，不建 `controller/workflow`。
 
-本决策于 2026-10-16 经 owner 批准，状态为 `approved`，首期实现与真实边界验收尚未完成（Cloud 至今没有
-工作流执行者）。核心用例见[执行身份与调用绑定](../../../test-cases/cloud/workflow/execution-identity-and-invocation.md)、
+本决策于 2026-10-16 经 owner 批准，首期实现已在 cloud 落地并取得直接证据，状态为 `implemented`；落地的 cloud
+PR 与真实栈验收登记在核心用例里。核心用例见[执行身份与调用绑定](../../../test-cases/cloud/workflow/execution-identity-and-invocation.md)、
 [调度串行与恢复](../../../test-cases/cloud/workflow/scheduler-serialism-and-recovery.md)、
 [发布与启动门禁](../../../test-cases/cloud/workflow/publish-and-start-admission.md)与
-[Start 输入 kickoff 取值](../../../test-cases/cloud/workflow/start-input-kickoff.md)，新保障的直接证据按核心用例
-逐项登记为 `Partial` / `Missing`。涉及 cloud 的规范图 schema、运行身份模型、调度与执行契约、发布与启动门禁；
-涉及 specs 的规范图 schema 与首期核心用例（见「落地顺序」）；涉及 desktop 只作为参考实现，**本决策不修改任何
-desktop 决策**。参考实现的证据基线：desktop `8909f07`（引擎模块非测试代码约 9.3 千行、测试约 8.2 千行，
-`WorkflowRunEngineRepository` 31 个方法，覆盖 loop / iteration / region / retry / aggregator / resume /
-snapshot switch），cloud 现状 `a307027`（本文起草时；批准时 main 已推进到 `7704089`，下述现状在它上面仍成立：
-生产里 `workflow_runs` 只能是 `pending`，`executor_type='workflow'` 的 IssueRun 永远停在 `queued`）。
+[Start 输入 kickoff 取值](../../../test-cases/cloud/workflow/start-input-kickoff.md)，各义务的直接证据按核心用例
+逐项登记；仍登记为 `Partial` / `Missing` 的是尚未取得直接证据的缺口，如实保留。涉及 cloud 的规范图 schema、
+运行身份模型、调度与执行契约、发布与启动门禁；涉及 specs 的规范图 schema 与首期核心用例（见「落地顺序」）；
+涉及 desktop 只作为参考实现，**本决策不修改任何 desktop 决策**。参考实现的证据基线：desktop `8909f07`（引擎模块
+非测试代码约 9.3 千行、测试约 8.2 千行，`WorkflowRunEngineRepository` 31 个方法，覆盖 loop / iteration / region /
+retry / aggregator / resume / snapshot switch）。cloud 的起草基线是 `a307027`：当时生产里 `workflow_runs` 只能
+停在 `pending`，`executor_type='workflow'` 的 IssueRun 永远停在 `queued`；本决策消除的正是这个状态。
 
 **非目标**：iteration、loop、HITL、retry、resume、snapshot switch 首期一律不做（理由与去向见 D1 与 D4）；
 私有仓库的凭据与克隆（D5）；成果交付（D7）；按工作流覆盖个人槽位映射（属 ora-space/circus#118 的后续扩展）。
@@ -77,8 +77,8 @@ desktop 的 Rust 引擎核心为共享组件"。** 这是硬触发条件，不�
 - **每次推进都从 Cloud 已提交状态重算就绪集合**：调度器不缓存图状态，崩溃后不需要恢复内部状态，只从
   `workflow_runs` / 节点结果重算。这对应 desktop 的 `resume`（`engine.rs:328-330`："Recomputes the ready set
   from persisted state"）。
-- **单 run 串行用排他的数据库事务权实现**：延续 Cloud 既有的做法（`store.go:328` 在每次控制事务开头取事务级
-  咨询锁），把作用域从全局收窄到单个 run（按 run id 取排他咨询锁）。任何副本拿到该 run 的排他权才能推进它。
+- **单 run 串行用排他的数据库事务权实现**：沿用 Cloud 既有的全局事务级咨询锁（WorkflowRun 事务以共享模式取），
+  在其之上按 run id 取排他的事务级咨询锁。任何副本拿到该 run 的排他权才能推进它，取不到就退出本次 tick。
 - **节点结果提交是状态比较交换**：提交必须带 from→to 的当前状态，重复或迟到的回调是幂等的空操作（对应
   desktop 的 `transition_node_run_status` 与 `AdvanceWorkflowRunResult::NotRunning`，`ports.rs:193-196`）。
 - **回调带派发时的执行代（epoch）**：复用控制面既有的代机制（`node_executions.dispatched_epoch`、
@@ -96,10 +96,10 @@ desktop 的 Rust 引擎核心为共享组件"。** 这是硬触发条件，不�
 
 #### 条件③：对拍用例与批准同时就位
 
-首期子集的核心用例与本决策的 `approved` 状态同批建立在 `test-cases/cloud/workflow/`（见开头链接的三份文档），
-它们就是首期实现的验收清单，desktop 与 cloud 两侧都要以直接证据逐项填满。这是"语义单一来源"唯一能落地的约束。
-desktop 参考实现（`8909f07`）的直接证据按用例逐项登记。**`approved` 不表示实现已通过验收**：用例里登记为
-`Missing` / `Partial` 的义务（cloud 侧今天还没有工作流执行者）仍待完成，逐项取得直接证据后首期才算落地。
+首期子集的核心用例与本决策同批建立在 `test-cases/cloud/workflow/`（见开头链接的用例），它们就是首期实现的验收
+清单，desktop 与 cloud 两侧都要以直接证据逐项填满。这是"语义单一来源"唯一能落地的约束。desktop 参考实现
+（`8909f07`）的直接证据按用例逐项登记。**实现完成不等于用例里每项义务都已取得直接证据**：仍登记为 `Missing` /
+`Partial` 的义务如实保留，不用间接测试或别的路径的结论填补，取得直接证据后逐项更新。
 
 #### 条件④：调度器边界按 desktop 端口的形状定义
 
@@ -326,7 +326,10 @@ agent 运行侧同样缺取消的写入者（G-026），**一并补上**，因�
 
 ### D7：首期只保证资源释放，成果交付延后
 
-首期保证运行的资源收尾：运行 Workspace 等资源按既有契约释放，不能因为工作流运行而泄漏沙盒。
+首期保证运行的资源收尾：运行 Workspace 等资源按既有契约释放，不能因为工作流运行而泄漏沙盒。释放是单向终态：
+只有删除完成的回执才把释放记为 `released`，释放时刻与 Workspace 的 `deleted_at` 在同一事务提交；Node 不可达时
+按有界窗口放弃为 `abandoned`；Workspace 已被另一条路径删除时，释放以该 Workspace 自己的删除时刻补记为
+`released`，且不再声明调度器自己的删除。
 **成果交付明确延后**：首期不把节点产出登记为 Revision、不做交付后的保存与重试（issue-run D4 / D5 的
 交付语义不适用于工作流运行）。去向：由后续决策给出工作流的成果契约。节点产出在首期落在运行的节点状态里，
 供运行详情展示。
@@ -388,9 +391,11 @@ agent 运行侧同样缺取消的写入者（G-026），**一并补上**，因�
 
 ## 落地顺序
 
+首期五个阶段均已完成，第 6 项是长期有效的触发条件。
+
 1. **核心用例就位**：首期子集的核心用例随本决策 `approved` 落入 `test-cases/cloud/workflow/`，desktop 与 cloud
-   两侧的证据按义务逐项登记（cloud 侧执行类义务今天仍是 `Missing`，实现完成后才逐项填满）。这是条件③；
-   **本步完成不等于第 2、3 步的验收已经通过。**
+   两侧的证据按义务逐项登记（cloud 侧执行类义务随实现逐项取得直接证据，仍为 `Missing` / `Partial` 的如实保留）。
+   这是条件③；**本步完成不等于第 2、3 步的验收已经通过。**
 2. **统一启动与发布门禁**（ora-space/circus#69）：三种入口共用一个启动函数；发布门禁按首期可执行子集明确拒绝并给出原因；
    `version` → `snapshotId` 改名。完成条件：引用未声明槽位、含首期不支持节点或配置的图被拒绝且原因可定位；
    合法草稿仍可保存；manual workflow IssueRun 不能再用任意 UUID 绕过校验。
@@ -403,3 +408,17 @@ agent 运行侧同样缺取消的写入者（G-026），**一并补上**，因�
    补上工作流与 agent 两侧的取消写入者（G-026）。
 6. **触发条件**：服务端引入 loop / iteration / retry / resume / snapshot switch 中任意一项之前，先执行
    D1 条件①的重新决策。
+
+## 实现与 `approved` 方案的差异
+
+最终实现只有一处偏离批准稿，正文已按实际行为表述，其余部分按批准稿落地。
+
+**排他执行权的锁作用域：run 锁叠加在全局锁之上，而不是把全局锁收窄成 run 锁。** 批准稿要求"把作用域从全局
+收窄到单个 run（按 run id 取排他咨询锁）"。实现保留既有的全局事务级 advisory lock——WorkflowRun 事务以共享模式
+取它，因此仍与所有普通 core 事务互斥——在它之上再用 `pg_try_advisory_xact_lock` 按 run 尽力取排他权，取不到就
+退出本次 tick、不形成决策、不写、不发提示，下一次 tick 再试。原因：全局锁承载的是"普通 core 事务彼此串行、
+锁顺序单一可审计"这项本决策之外的既有承诺，把它拆成按 run 划分会动摇其他领域的不变量；单 run 串行只需要那把
+run 锁，它随事务提交、回滚或连接断开由 PostgreSQL 释放，没有续期和过期窗口，也不依赖进程内状态。跨 run 的
+不变量另取各自的锁：关联 IssueRun 的 run 写 Timeline 前取该 Issue 的锁（`issue_comments` / `issue_activities`
+的 `seq` 按 Issue 取 `MAX+1`），创建与声明删除 run Workspace 时取 Project 的锁（"一个 Project 至多一个存活
+operation"）。锁顺序固定为全局 → run → Issue → Project，不会成环。

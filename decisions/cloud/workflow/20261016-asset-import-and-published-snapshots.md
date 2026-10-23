@@ -4,7 +4,7 @@ status: implemented
 
 # 插件资产导入产出已发布快照：资产生命周期不改写快照，运行只冻结 snapshotId
 
-本文是[工作流执行根决策](0-cloud-side-scheduler-owns-workflow-execution.md)（`approved`）的后续
+本文是[工作流执行根决策](0-cloud-side-scheduler-owns-workflow-execution.md)（`implemented`）的后续
 决策，只固定「插件资产导入」与既有运行契约之间的接缝，不改写根决策的任何一条 D：导入产出的是一份
 普通 workflow 加一个**已发布**快照，运行侧仍然只认 `snapshot_id`；导入、包升级、卸载与来源消失
 都不改写既有快照，也不影响已冻结的运行身份。来源不进入运行契约——运行不关心一份工作流是用户写的

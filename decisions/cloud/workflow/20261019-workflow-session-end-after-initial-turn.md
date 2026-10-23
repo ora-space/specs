@@ -4,7 +4,7 @@ status: implemented
 
 # 工作流会话在初始回合结束后由 Cloud 调度器结束：复用 EndSession 中继，有界等待后以命名原因失败
 
-本文是[工作流执行根决策](0-cloud-side-scheduler-owns-workflow-execution.md)（`approved`）的后续决策，只固定
+本文是[工作流执行根决策](0-cloud-side-scheduler-owns-workflow-execution.md)（`implemented`）的后续决策，只固定
 「单回合工作流会话何时结束、由谁结束」这一接缝。结论：WorkflowRun 的 agent 会话结束由 Cloud 调度器决定——
 调度器在重算时读取该会话执行最近一条事件回执，成功的 `turnEnded`（记录字段 `stop_reason` 不是
 `cancelled`）即说明初始回合已结束；调度器按既有控制面的「判别列 + 恰好一个归属」模式把
