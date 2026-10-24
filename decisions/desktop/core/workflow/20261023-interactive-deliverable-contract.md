@@ -101,11 +101,11 @@ v1 不实现 `criteria` 的模型判定，也不实现运行时验收清单：
 
 ### D8：Cloud 发布门禁拒绝，规范 schema 记为 desktop-only
 
-- Cloud 首期的可执行子集不含 interactive 完成语义，`agentConfig.completion` 在 Cloud 没有对应判定。发布门禁**拒绝任何非 null 的 `completion`**，拒绝原因指出节点与字段（`agentConfig.completion`），不静默剥离。
-- `agentConfig.schemaVersion` 4 同样拒绝：Cloud 只接受 3。这样带声明的图无法绕过门禁，也不会在 Cloud 上「没有检查就完成」。
+- Cloud 首期的可执行子集不含 interactive 完成语义，`agentConfig.completion` 在 Cloud 没有对应判定。发布门禁**拒绝任何非 null 的 `completion`**，拒绝原因指出节点与字段（`completion`，JSON 路径 `agentConfig.completion`），不静默剥离。
+- `agentConfig.schemaVersion` 4 及任何非 `3` 的值同样拒绝：Cloud 只执行 `3`。这样带声明的图无法绕过门禁，也不会在 Cloud 上「没有检查就完成」。
 - 规范 schema（由 specs 拥有，见 cloud 调度根决策 D2）在 agent 配置字段去向里记录：`completion` 是 desktop-only 字段，与 `schemaVersion: 4` 绑定；Cloud 若要支持，需要自己的后续决策并同步门禁与字段表。
 - 这是对 Cloud 调度根决策 D2 字段去向的修改，记录在本文「继承与修改」，根决策标题下以历史决策注明；根决策正文与状态不变。
-- Cloud 现行门禁忽略未知的 agentConfig 字段、不校验 `agentConfig.schemaVersion`，因此本条需要 Cloud 实现；在它上线前，desktop 不得发布可写 `completion` 的编辑器（见落地顺序）。
+- Cloud 侧已由 cloud#169 实现（合并提交 `e35b23c`）：发布门禁与 workflow-asset 导入都拒绝 `completion` 与非 `3` 的 `schemaVersion`。desktop 编辑器仍需在门禁上线后开放 `completion`（见落地顺序）。
 
 ## 不变量
 
