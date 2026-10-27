@@ -393,8 +393,7 @@ agent 运行侧同样缺取消的写入者（G-026），**一并补上**，因�
 
 ## 落地顺序
 
-首期已交付下列执行框架；第 3 项的节点真实输出与 prompt 模板仍有实现缺口，见下节，由
-[ora-space/circus#673](https://github.com/ora-space/circus/issues/673) 承接。第 6 项是长期有效的触发条件。
+首期已交付下列执行框架；第 6 项是长期有效的触发条件。Agent 输出与模板的证据见[核心用例](../../../test-cases/cloud/workflow/agent-output-and-prompt.md)。
 
 1. **核心用例就位**：首期子集的核心用例随本决策 `approved` 落入 `test-cases/cloud/workflow/`，desktop 与 cloud
    两侧的证据按义务逐项登记（cloud 侧执行类义务随实现逐项取得直接证据，仍为 `Missing` / `Partial` 的如实保留）。
@@ -414,8 +413,7 @@ agent 运行侧同样缺取消的写入者（G-026），**一并补上**，因�
 
 ## 实现与 `approved` 方案的差异
 
-排他执行权采用下述与批准稿不同的锁作用域；另有两处尚未兑现的 Agent 节点契约，不能据 `implemented`
-状态或运行终态 `succeeded` 将它们视为已经通过真实输出验收。
+排他执行权采用下述与批准稿不同的锁作用域。
 
 **排他执行权的锁作用域：run 锁叠加在全局锁之上，而不是把全局锁收窄成 run 锁。** 批准稿要求"把作用域从全局
 收窄到单个 run（按 run id 取排他咨询锁）"。实现保留既有的全局事务级 advisory lock——WorkflowRun 事务以共享模式
@@ -426,14 +424,3 @@ run 锁，它随事务提交、回滚或连接断开由 PostgreSQL 释放，没�
 不变量另取各自的锁：关联 IssueRun 的 run 写 Timeline 前取该 Issue 的锁（`issue_comments` / `issue_activities`
 的 `seq` 按 Issue 取 `MAX+1`），创建与声明删除 run Workspace 时取 Project 的锁（"一个 Project 至多一个存活
 operation"）。锁顺序固定为全局 → run → Issue → Project，不会成环。
-
-**Agent 回答与 prompt 模板仍有实现缺口。** 由
-[ora-space/circus#673](https://github.com/ora-space/circus/issues/673) 负责修复及真实重跑：
-
-- Agent 的最终可见回答没有写入节点声明的 `output` 根，节点状态只保留会话结束原因；下游 Output 节点为空，
-  Issue Timeline 缺少 `run.message` 与输出摘要。会话回执中的 `visibleText` 只能证明模型回答，不能替代节点输出。
-- Agent prompt 中的 `{{#…#}}` 没有按已提交变量池渲染，模板会原样派发，因此 Start 输入未被 Agent 按模板消费。
-
-这两项属于既有变量根、节点产出和参考实现语义尚未兑现，不属于 D7 延后的 Revision 登记、成果保存与重试，
-也不等待成果交付契约。验收维持真实 Start → Agent → Output 的原口径；修复落地并完成真实输出重跑后，
-由 #673 的落地工作移除此处缺口说明。
