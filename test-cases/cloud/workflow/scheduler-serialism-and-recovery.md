@@ -14,13 +14,16 @@ Cloud 侧调度器已在 [cloud#67](https://github.com/ora-space/cloud/pull/67)�
 [cloud#119](https://github.com/ora-space/cloud/pull/119)（WorkflowRun 的 Workspace 释放终态与有界放弃，merge `df9799c5`）、
 [cloud#120](https://github.com/ora-space/cloud/pull/120)（工作流取消的真实 HTTP 边界与 G-026 并发顺序证据，merge `eb5ae5b`）、
 [cloud#140](https://github.com/ora-space/cloud/pull/140)（每 run 的排他事务权、过期 Controller 代的拒绝、一条 run 的 Workspace
-归属唯一，merge `f837c454`）的堆叠里落地，下表因此不再全是 `Missing`。**多副本**现有控制面证据：cloud#140 用独立连接池的
-第二个 `Store` 在同一个数据库上持有同一个 run 的排他权，锁被持有时推进放弃该 run、不写、不建 Workspace；部署级的一半由
-运行 #507 补上：两个 Controller 接到同一个 store、在它们的窗口里取消运行，删除操作恰好一条、完成代等于完成时生效的租约代。
-两个副本同时推进**同一个 run** 的部署级竞争还没有观察过，它不在下表第 1 行的「所需直接证据」之内（该栏要求的是多副本真实
-PostgreSQL），因此只作补充缺口，不改变该行的 `Covered`。**崩溃接手**中重启后的同一副本接手已由 cloud#113 的 DB 用例
-与运行 #377 的真实重启验收覆盖，由另一副本接手仍缺部署级证据；其余要求"真实执行侧"而尚未覆盖的路径继续记 `Partial`。
-这些部署级与真实执行侧缺口由承接事项 [ora-space/circus#665](https://github.com/ora-space/circus/issues/665) 承接。
+归属唯一，merge `f837c454`）的堆叠里落地。下表把控制面规则、真实执行侧路径与部署级竞争分别登记，
+不以单一派发者或单一终态写入者代替两个副本同步竞争取锁的直接证据。
+
+本次补充证据固定到 cloud `1dc2a46afe20adcc6428316dd9959435599cbfa9`、desktop
+`d91344097ac9a2d0f079585cb1d8fbffa8dd78f7`、cluster `28bac762bd42753a82bb142039dfca976c71fe5b`。
+Phase A 工具已随 [cluster#51](https://github.com/ora-space/cluster/pull/51) 合入 main
+[`562351d`](https://github.com/ora-space/cluster/commit/562351d)；Phase B 工具见
+[cluster#54](https://github.com/ora-space/cluster/pull/54)（head [`2e7dbe3`](https://github.com/ora-space/cluster/commit/2e7dbe3)）。下文按报告 basename 与 WorkflowRun ID
+定位既有报告结论，不把报告读取时界当作数据库提交时钟。剩余部署级竞争与真实执行侧缺口继续由
+[ora-space/circus#665](https://github.com/ora-space/circus/issues/665) 承接。
 
 ## At Most One Serial Executor Advances A Workflow Run
 
@@ -33,28 +36,25 @@ PostgreSQL），因此只作补充缺口，不改变该行的 `Covered`。**崩�
 
 | 义务 | 所需直接证据 | cloud 侧状态 |
 | --- | --- | --- |
-| 多副本下同一运行只有一个串行执行者 | 多副本真实 PostgreSQL：同步竞争的推进请求，检查只有一个副本派发、另一个要么等待要么幂等退出 | Covered |
-| 同一运行内的多个 agent 节点串行且共用同一 Workspace | 真实执行侧：一个运行内两个 agent 节点的派发与回调顺序，Workspace 归属唯一 | Partial |
+| 多副本下同一运行只有一个串行执行者 | 多副本真实 PostgreSQL：同步竞争的推进请求，检查只有一个副本派发、另一个要么等待要么幂等退出 | Partial |
+| 同一运行内的多个 agent 节点串行且共用同一 Workspace | 真实执行侧：一个运行内两个 agent 节点的派发与回调顺序，Workspace 归属唯一 | Covered |
 
 - 决策依据：D1 条件②（无状态调度、单 run 串行、多副本与租约），D4（同 run 内 agent 节点首期串行），不变量 3。
 - desktop 参考实现（`8909f07`）一侧：**Partial** — 同一 run 只有一个推进者有直接证据：per-run 排他锁是 backend composition 里的 `KeyedResourceLocks`（[`crates/backend/src/git_cleanup/keyed_locks.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/git_cleanup/keyed_locks.rs) 的 `exclusive_waits_for_shared_holders`），[`crates/backend/src/workflow/run/operations/tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/operations/tests.rs) 的 `concurrent_resume_from_failure_reruns_the_failed_node_once`（两线程各持排他权，结果恰为 (resumed, refused)=(1,1)）与 `concurrent_cancel_and_complete_report_the_committed_outcome`。**但"同一 run 内多个 agent 节点串行"与参考实现相反**：desktop 在同一次调度 pass 里并行派发 sibling agent，并允许它们同时 in-flight（[`crates/application/src/workflow_run/engine/aggregator_tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/application/src/workflow_run/engine/aggregator_tests.rs) 的 `parallel_fan_in_uses_the_declared_priority`、`d2_tests.rs` 的 `failed_run_binds_in_flight_sibling_and_does_not_dispatch_join`），其文档也写明并行 agent 共用 Workspace 只提供时间窗 diff、不提供改动归属。首期串行是本决策相对参考实现的**偏离**，没有 desktop 证据可依托，只能靠 Cloud 自己的测试证明。
-- 本次直接证据：**第 1 行 Covered，第 2 行 Partial** — 第 1 行由 [cloud#140](https://github.com/ora-space/cloud/pull/140)
-  （merge `f837c454`）落地：WorkflowRun 事务先以共享模式取全局事务锁，再对 run 取 `pg_try_advisory_xact_lock`，
-  取不到就退出本次 tick、不形成决策、不写、不发提示。`TestWorkflowAdvanceSkipsARunHeldByAnotherReplica` 让第二个
-  `Store`（独立连接池、同一数据库）持有 run 排他权，断言推进放弃该 run、运行行与版本不变、不建 Workspace，锁释放后
-  下一 tick 正常认领并建出恰好一个 Workspace；`TestWorkflowAdvanceAdvancesAnotherRunWhileOneRunIsHeld` 断言锁按 run
-  而不是全局划分（另一个 run 在同一次推进里照常结算）；`TestWorkflowRunRightIsReleasedWhenTheTransactionAborts`
-  断言事务回滚就释放排他权，不靠心跳。运行 #507 的 `controller-replica` 场景补上部署层面的单一完成者：两个 Controller
-  同时接到同一个 store，取消窗口里的删除操作只有一条、完成代等于完成时生效的租约代（它证明的是操作完成者唯一，
-  不是两个副本竞争推进同一个 run）。第 2 行仍为 `Partial`：
-  [cloud#72](https://github.com/ora-space/cloud/pull/72) 的 `TestWorkflowSessionRunsTwoAgentNodesInOrder` 在真实
-  PostgreSQL schema 上跑完同一运行内的两个 agent 节点，断言 a1 结算后 a2 才派发、a2 在途时运行保持 `running` 且下游
-  `output` 不跑、两个节点各拿自己的执行与自己的结果（a2 的 `reason` 不是 a1 的）、每个 agent 节点恰好一条注册会话；
-  cloud#140 在同一次运行里补上"两个节点落在同一个 Workspace"的断言（两次执行的 `workspace_id` 相等，`workspaces`
-  恰好一行）。两者都在控制面接缝上，真实栈还没有一条让同一运行的两个 agent 节点真实执行的验收。
-- 仍缺：同一运行两个 agent 节点的真实执行侧证据（控制面已断言两节点共用同一个 Workspace 行，运行 #507 的真实栈只跑过
-  单 agent 节点）；排他权没有续租与失效窗口（锁就是事务本身），具体参数由实现给出；两个副本同时推进**同一个 run** 的
-  竞争仍没有部署级证据，属补充缺口，由 [ora-space/circus#665](https://github.com/ora-space/circus/issues/665) 承接。
+- 本次直接证据：**第 1 行 Partial，第 2 行 Covered**。控制面代表性证据保留：
+  [`TestWorkflowAdvanceSkipsARunHeldByAnotherReplica`](https://github.com/ora-space/cloud/blob/1dc2a46afe20adcc6428316dd9959435599cbfa9/internal/core/workflow_run_exclusivity_db_test.go#L215)
+  用独立连接池持有同一 run 的排他权，推进放弃该 run、不写、不建 Workspace，释放后正常推进；
+  [`TestWorkflowAdvanceAdvancesAnotherRunWhileOneRunIsHeld`](https://github.com/ora-space/cloud/blob/1dc2a46afe20adcc6428316dd9959435599cbfa9/internal/core/workflow_run_exclusivity_db_test.go#L255)
+  证明另一个 run 仍可推进；
+  [`TestWorkflowRunRightIsReleasedWhenTheTransactionAborts`](https://github.com/ora-space/cloud/blob/1dc2a46afe20adcc6428316dd9959435599cbfa9/internal/core/workflow_run_exclusivity_db_test.go#L329)
+  证明事务回滚释放排他权。这里引用的是既有隔离 PostgreSQL 通过结果，本次没有重跑。
+  部署场景 a（run `ccf3c0a2-3d5d-419a-bda1-738b9f1974a8`；`workflow-phase-a.json`、
+  `cloud-race-postgres-proof-v2.json`、`statement-v2-analysis.json`）观察到恰好一次派发、单一终态写入者及两个副本的受保护读取，
+  但未观察到两个副本同步争抢同一 run 时的 `pg_try_advisory_xact_lock = false`，故第 1 行仍为 `Partial`。
+  第 2 行由 run `80280628-cb66-43f7-9223-7b4ddaf05a2d` 的 `workflow-phase-b.json` 与
+  `phase-b-timeline-summary.json` 直接覆盖：Agent1 的结果提交后才派发 Agent2；两个 agent 各有不同的 execution、各为 attempt 1 且只派发一次，
+  共用唯一 Workspace `900367a9-ab30-4e6a-92a1-07daa60e7223`、generation 1，运行最终 `succeeded` 且 `released`。
+- 仍缺：部署级同步竞争的失败取锁分支；单一派发及受保护读取不能替代该分支的直接观察。
 
 ## A Node Result Commit Is A Compare And Swap And Late Callbacks Are No-ops
 
@@ -67,24 +67,28 @@ PostgreSQL），因此只作补充缺口，不改变该行的 `Covered`。**崩�
 
 | 义务 | 所需直接证据 | cloud 侧状态 |
 | --- | --- | --- |
-| 结果提交是比较交换，重复与迟到回调为空操作 | 真实 PostgreSQL：并发与重复提交的允许结果集合，检查状态只前进一次 | Partial |
+| 结果提交是比较交换，顺序重复提交为空操作 | 真实 PostgreSQL + 执行侧：先完成首次提交，再重放同一执行结果，检查状态只前进一次 | Covered |
+| 真正并发提交同一节点结果只前进一次 | 真实 PostgreSQL：重叠提交的允许结果集合，检查只有一次状态迁移与后继派发 | Partial |
 | 回调受派发代约束，过期代被拒绝且无副作用 | 真实执行侧：延迟到过期代之后的回调被拒，节点状态与派发记录都不变 | Partial |
 
 - 决策依据：D1 条件②（节点结果提交是状态比较交换、回调带执行代），不变量 3。
 - desktop 参考实现（`8909f07`）一侧：**Covered** — 重复完成是空操作（[`crates/backend/src/workflow/run/engine.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/engine.rs) 的 `duplicate_completion_reports_are_idempotent_no_ops`）；被替换 attempt 的迟到回调与重复唤醒不改变状态、不派发（[`crates/backend/src/workflow/run/retry_tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/retry_tests.rs) 的 `late_callbacks_and_repeated_wakes_are_no_ops_and_concurrent_waits_fire_independently`）；非 Running 节点完成返回 `NotRunning` 且不会派发 join（[`crates/application/src/workflow_run/engine/d2_tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/application/src/workflow_run/engine/d2_tests.rs) 的 `failed_run_binds_in_flight_sibling_and_does_not_dispatch_join`）。契约写在 [`crates/application/src/workflow_run/engine/ports.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/application/src/workflow_run/engine/ports.rs) 的 `transition_node_run_status` 注释里（仅当当前状态恰为 `from` 才转移）。仍缺：DB 层没有"from 不匹配则不改变"的直接测试，行为证据在引擎与集成层。
-- 本次直接证据：**Partial** — 第 1 行已部分就位：[cloud#67](https://github.com/ora-space/cloud/pull/67) 的
-  `TestWorkflowAdvanceIsIdempotent` 连跑三次推进，断言已结算的运行不被二次认领、版本不漂移；[cloud#72](https://github.com/ora-space/cloud/pull/72)
-  的 `TestWorkflowSessionLateReceiptIsANoOp` 重放同一个终态回执，断言运行状态、节点状态与版本逐字节不变，`TestWorkflowSessionDispatchIsNotRepeatable`
-  断言同一节点的工作项被派发消耗掉后重放派发是同一个事实而不是第二次会话；[cloud#91](https://github.com/ora-space/cloud/pull/91)（merge
-  `068d6718`）的 `TestWorkflowSessionResultAfterTheNodeSettledIsKept` 覆盖另一种迟到回调：节点已被 Cloud 按 Node 不可达结算、
-  运行已终态后，真实会话结果到达仍不改写运行状态、错误与版本，只保留在执行行的 `result` 上。第 2 行现为 **Partial**：
-  [cloud#140](https://github.com/ora-space/cloud/pull/140)（merge `f837c454`）的
-  `TestWorkflowSessionResultFromAnExpiredControllerEpochIsRejected` 在真实 PostgreSQL 上把执行派发在 epoch 1，让租约
-  过期并由替换 Controller 取得 epoch 2，再用旧代提交同一执行的结果：请求以 409 `stale_controller` 被拒，执行没有写入
-  结果、事件回执与提交记录都是 0 条、`last_event_sequence` 仍为 0，运行行逐字段不变；随后用当前代提交同一个执行身份
-  被接受并正常结算，因为结算按执行身份（`operation_id` + `execution_id`）而不是按派发时的代。这条证据走控制面的 lease
-  与 result 入口，不是真实 Controller→Node 的往返，因此记 `Partial`。
-- 仍缺：两个回调**并发**提交同一节点结果的允许结果集合；过期代回调在真实执行侧（真实 Node 经 Controller 上报）被拒的用例。
+- 本次直接证据：**顺序重复 Covered，真正并发 Partial，真实执行侧过期代 Partial**。
+  顺序重复由 run `0fb3b602-dbf9-4fe6-ac3f-4fdd86a4e548` 的 `workflow-phase-b.json` 与
+  `duplicate-offline-verdict.json` 覆盖：重放同一 execution、sequence 5 与 submission 后，结果、receipts、sequence、
+  `updated_at` 不变，仍只有一条工作项与一条 execution。首次上游成功在 05:16:04.629982，重试转发在
+  05:16:14.875602，二者不重叠，因此不作为真正并发证据。原 CLI 因旧动作名误报 `inconclusive`，修正动作名后的
+  离线判定为 `succeeded`，不改变这条顺序边界。
+  [cloud#72](https://github.com/ora-space/cloud/pull/72) 的 `TestWorkflowSessionLateReceiptIsANoOp` 与
+  `TestWorkflowSessionDispatchIsNotRepeatable` 保留为控制面重复回执及重复派发证据。
+  [cloud#91](https://github.com/ora-space/cloud/pull/91) 的 `TestWorkflowSessionResultAfterTheNodeSettledIsKept`
+  证明节点已按 Node 不可达结算后，晚到会话结果可以保留在 execution 的 `result`，同时不改写运行状态、错误与版本；
+  这不是“所有行拒绝写入”，也不代表本次真实栈已经观察到晚到结果。
+  过期代的控制面规则由 [cloud#140](https://github.com/ora-space/cloud/pull/140) 的
+  `TestWorkflowSessionResultFromAnExpiredControllerEpochIsRejected` 直接证明：旧代请求以 409 `stale_controller`
+  被拒且没有结果、回执或提交记录，运行不变；当前代仍可按相同 execution 身份提交并结算。它没有覆盖真实
+  Controller→Node 往返中的旧代回调。
+- 仍缺：真正并发提交同一节点结果的直接证据；真实执行侧旧代回调未触发，当前没有不修改产品或 SQL 的公开 trigger 入口。
 
 ## Recovery Recomputes The Ready Set From Committed State
 
@@ -98,26 +102,23 @@ PostgreSQL），因此只作补充缺口，不改变该行的 `Covered`。**崩�
 | 义务 | 所需直接证据 | cloud 侧状态 |
 | --- | --- | --- |
 | 就绪集合只从已提交状态重算 | 真实 PostgreSQL：以任意中间状态作为起点（等价于崩溃后接手），重算结果与线性推进一致 | Covered |
-| 崩溃接手不重跑已提交节点、不丢进度 | 真实执行侧：推进中途杀死调度副本后由另一副本接手，检查派发集合与最终结果 | Partial |
+| 崩溃接手不重跑已提交节点、不丢进度 | 真实执行侧：推进中途杀死调度副本后由另一副本接手，检查派发集合与最终结果 | Covered |
 
 - 决策依据：D1 条件②（每次推进从已提交状态重算、恢复接手不等于中断），D4（崩溃恢复只依据已提交的节点结果），不变量 4。
 - desktop 参考实现（`8909f07`）一侧：**Covered** — 分支激活与就绪集合只从持久化行推导（[`crates/application/src/workflow_run/engine/branch_projection.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/application/src/workflow_run/engine/branch_projection.rs) 的 `selected_branch_activates_only_the_matching_successor`、`fan_in_with_an_inactive_branch_still_becomes_ready`、`unresolved_condition_leaves_successors_unreached` 等），并且经编码 → 真实 SQLite 重载 → 再解析后执行仍成立（[`crates/backend/src/workflow/run/aggregator_persistence_tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/aggregator_persistence_tests.rs) 的 `persisted_branch_outputs_reach_downstream`、`persisted_false_value_reaches_downstream`）；崩溃后只重做失败节点与其后继、已成功 sibling 保留（[`crates/backend/src/workflow/run/resume_tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/resume_tests.rs) 的 `resume_from_failure_after_orphaned_crash_recovery`、`resume_from_failure_redoes_failed_join_and_finishes`）。说明：desktop 的串行执行者是进程内的，跨进程多副本不适用，这一条的多副本部分在参考实现里没有对应证据。
-- 本次直接证据：**Partial** — 第 1 行 `Covered`，由两部分构成：就绪集合是纯函数，[cloud#67](https://github.com/ora-space/cloud/pull/67) 的
-  `TestWorkflowProjectionLinearGraph`、`TestWorkflowProjectionPendingUpstreamWaits`、`TestWorkflowProjectionRootlessNodeIsInactive`、
-  `TestWorkflowProjectionUnlabeledEdgeIsElse` 覆盖它的四类结果，`TestWorkflowAdvanceSucceedsLinearRun` 与
-  `TestWorkflowAdvanceIsIdempotent` 证明推进每次都从行上的已提交状态重算、不缓存图状态（参考语义为 desktop 的
-  `resume`，`engine.rs:328-330`："Recomputes the ready set from persisted state"）；[cloud#113](https://github.com/ora-space/cloud/pull/113)
-  （merge `9814cacd`）的 `TestWorkflowAdvanceResumesFromCommittedStateAfterRestart` 再以崩溃留下的已提交中点为起点，
-  用第二个 `Store`（同一配置、同一数据库，等价于重启后的新进程）推进：分支条件读到的是已提交的启动输出而不是重跑会
-  产生的值，已提交节点没有被重跑，运行正常收尾，重复推进不再改动终态行。第 2 行 `Partial`：重启后的同一副本接手由
-  cloud#113 的 `TestWorkflowAdvanceResumesAnInFlightSessionFromItsOwnResult`、`TestWorkflowAdvanceHoldsAProductionSessionAcrossRestart`
-  与运行 #377 的 `restart-takeover` 场景共同覆盖，义务要求的"由另一副本接手"没有直接证据：崩溃留下已注册但无结果的执行与未登记工作项，接手者不发明结果、
-  不重派、运行与节点保持 `running`、下游不提交，未登记工作项仍可领取，会话自己的结果到达后由下一轮结算并推进；
-  生产形态的用例保留真实 Workspace 绑定与心跳中的 Node。#377 在真实栈上让真实 bash 工具阻塞回合后重启 Cloud 容器，
-  15 秒后仍只有一条执行、`executionId` 与 `dispatchedEpoch` 与重启前相同、执行无结果、运行保持 `running`，
-  阻塞解除后由原执行的结果结算为 `succeeded` 并按 S5 释放 Workspace。
-- 仍缺：多副本同时推进与**另一个副本接管**仍没有部署级证据，属多副本验收；运行 #377 覆盖的是重启后的同一副本
-  接手，这一条由 [ora-space/circus#665](https://github.com/ora-space/circus/issues/665) 承接。
+- 本次直接证据：**两行均 Covered**。就绪集合的既有代表性证据为
+  [cloud#67](https://github.com/ora-space/cloud/pull/67) 的 `TestWorkflowProjectionLinearGraph`、
+  `TestWorkflowAdvanceSucceedsLinearRun` 与 `TestWorkflowAdvanceIsIdempotent`；
+  [cloud#113](https://github.com/ora-space/cloud/pull/113) 的 `TestWorkflowAdvanceResumesFromCommittedStateAfterRestart`
+  从已提交中点以第二个 `Store` 推进，保留已提交分支输出、不重跑已提交节点并正常收尾。
+  另一副本的真实接手由场景 c 覆盖（run `a44dd496-bd7f-4911-a0e1-7604a3673709`；`workflow-phase-a.json`、
+  `c-analysis.json`、`dispatch-statement-supplement.json`）：推进副本被 SIGKILL 后，幸存副本的归因直接来自
+  `source=postgres-commit`，保留同一 execution 身份，从已提交进度继续推进且不重派已提交节点，
+  不依赖隔离窗口的空白推断谁接手。
+  在途会话保留由 cloud#113 的 `TestWorkflowAdvanceResumesAnInFlightSessionFromItsOwnResult`、
+  `TestWorkflowAdvanceHoldsAProductionSessionAcrossRestart` 与运行 #377 的 `restart-takeover` 覆盖：
+  没有结果时保持运行、不重派，原执行自己的结果到达后才结算。
+- 仍缺：两个副本同步竞争取锁的部署级证据另列于串行执行者义务，不降低已经有直接提交归因的接手义务。
 
 ## A Node With No Committed Result Is Never Recorded Successful
 
@@ -130,41 +131,29 @@ PostgreSQL），因此只作补充缺口，不改变该行的 `Covered`。**崩�
 
 | 义务 | 所需直接证据 | cloud 侧状态 |
 | --- | --- | --- |
-| 无已提交结果的节点不进入成功状态 | 真实 PostgreSQL + 执行侧：丢弃回调、超时与中断后的节点状态与运行终态 | Partial |
-| 运行终态不早于最后一个节点的结果提交 | 真实执行侧：运行进入终态的时点与节点结果提交顺序 | Partial |
+| 无已提交结果的节点不进入成功状态，且不执行下游 Output | 真实 PostgreSQL + 执行侧：丢弃回调、超时与中断后的节点状态、运行终态与 Output 派发集合 | Covered |
+| 运行终态不早于最后一个节点的结果提交 | 真实执行侧：运行进入终态的时点与节点结果提交顺序 | Covered |
+| 无结果失败后真实迟到结果不改写节点与运行终态 | 真实执行侧：恢复回调传输后观察真实迟到结果及节点、运行与 execution 的变化 | Missing |
 
 - 决策依据：D1 条件②（在途未提交结果的节点由这次执行自己的结果结算，Node 失联或超过回合窗口时结算为失败、绝不记为成功），D4（崩溃恢复），D7（首期节点产出落在节点状态里），不变量 5。
 - desktop 参考实现（`8909f07`）一侧：**Covered** — 恢复把在途节点结算为 `interrupted_by_restart` 并让运行失败，已成功的节点保持成功（[`crates/backend/src/workflow/run/operations/tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/operations/tests.rs) 的 `recovery_fails_interrupted_turns_and_resumes_stalled_runs`、[`crates/backend/src/workflow/run/recovery.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/recovery.rs) 的 `an_interrupted_outer_row_still_fails_the_run` 与 `a_crashed_round_inside_a_fail_iteration_fails_the_node_and_the_run`、[`crates/backend/src/workflow/run/resume_gap_tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/resume_gap_tests.rs) 的 `boot_sweep_interrupted_node_resumes_as_attempt_two`）。说明：desktop 的串行执行者与进程同生死，进程崩溃就是执行中断，所以参考实现把在途节点结算为中断失败；Cloud 是无状态调度器，重启不打断已派发的会话，在途节点按这次执行的 Node 失联（`node_unavailable`）或回合窗口（`session_turn_deadline_exceeded`）结算为失败，两者都不把未知记为成功。
-- 本次直接证据：**Partial** — 第 1 行已部分就位：[cloud#72](https://github.com/ora-space/cloud/pull/72) 的
-  `TestWorkflowAdvanceFailsRunOnProjectlessAgentNode`（#67 时代的 `TestWorkflowAdvanceFailsRunOnUnwiredAgentNode` 随真实会话接线改名）
-  断言缺 Project 的 agent 节点以 `workflow_run_project_required` 结算为失败、既不进成功状态也不让下游提交状态；
-  同 PR 的 `TestWorkflowSessionRunsTwoAgentNodesInOrder` 断言在途无结果的
-  节点保持 `running` 而不被记成功、`TestWorkflowSessionStartDeadlineFailsNode` 与 `TestWorkflowSessionFailureFailsRun`
-  断言超时与失败的节点连同运行一起进入失败终态。[cloud#91](https://github.com/ora-space/cloud/pull/91)（merge `068d6718`）的
-  `TestWorkflowSessionNodeGoneSettlesTheNodeFailed` 用两种 Node 消失形态（心跳超过 `delivery_unreachable_after`、强制停止把沙箱
-  与其中未完成的执行一起终止）断言已派发而无结果的节点以 `node_unavailable` 失败、运行随之进入失败终态并声明 Workspace 删除；
-  `TestWorkflowSessionNodeSilenceWithinWindowHolds` 与 `TestWorkflowSessionUnconfiguredWindowHoldsTheNode` 断言窗口内或窗口
-  未配置时会话保持 `running`，不把沉默记成成功；`TestWorkflowSessionResultAfterTheNodeSettledIsKept` 断言结算后到达的真实结果
-  留在执行行，不改写节点与运行的终态。[cloud#108](https://github.com/ora-space/cloud/pull/108)（merge `a4a13e8`，ora-space/circus#299
-  选项 A）补上已派发而既无结果也无成功 `turnEnded` 的会话：`TestWorkflowSessionTurnDeadlineFailsNode` 断言执行行注册时刻超过
-  `workflow.session_turn_timeout`（默认 2 小时）时，节点与运行以 Cloud 自己的 `session_turn_deadline_exceeded` 进入失败终态并
-  声明 Workspace 删除，重复推进不再扫描终态运行；`TestWorkflowSessionTurnDeadlineHoldsWithinWindow` 与
-  `TestWorkflowSessionTurnDeadlineUsesTheConfiguredWindow` 断言窗口内、以及部署配置的窗口值下会话保持 `running`，不把沉默记成
-  成功；`TestWorkflowSessionTurnDeadlineDoesNotOverrideSuccessfulTurn` 与 `TestWorkflowSessionTurnDeadlineDoesNotOverrideAResult`
-  断言成功 `turnEnded` 与已提交结果分别优先于超窗结算（判定顺序为结果 → Node 不可达 → 回合窗口）；
-  `TestWorkflowSessionTurnDeadlineResultAfterTheNodeSettledIsKept` 断言超窗结算后到达的真实结果留在执行行、不改写节点与运行的
-  终态；`TestWorkflowSessionTurnDeadlineIsPerExecution` 断言窗口按执行行计时，重试的新执行行重新计时。
-  重启接手同样不改变这一点：[cloud#113](https://github.com/ora-space/cloud/pull/113)（merge `9814cacd`）的
-  `TestWorkflowAdvanceHoldsAProductionSessionAcrossRestart` 保留真实 Workspace 绑定与心跳中的 Node，用第二个 `Store`
-  接手后断言在途节点仍为 `running`、运行不进入终态、下游不提交、原执行没有被重派；会话自己的结果到达后才由下一轮
-  结算为 `succeeded` 并推进下游。运行 #377 的 `restart-takeover` 在真实栈上于回合阻塞期间重启 Cloud 容器，15 秒后
-  仍只有一条无结果的执行、运行保持 `running`，回合解除后由同一执行的身份结算为 `succeeded`。
-  第 2 行已部分就位：同 PR 的 `TestWorkflowRunningCarriesNoFinishedAt`
-  断言运行仍在执行时不带 `finishedAt`。唯一会写 `node_states` 成功的 `MockWorkflowRunSimulator` 在没有真实结果的
-  情况下直接产出成功状态，根决策已把这类模拟 trace 排除在验收之外。
-- 仍缺：显式断言"终态写入发生在最后一个节点的结果提交之后"（现有用例只覆盖运行中不带 `finishedAt`）；回调丢失或
-  中断后重试仍不成功的用例；Node 不可达与回合窗口仍只在控制面接缝上验证，真实执行侧的失败结算与终态时点验证由
-  [ora-space/circus#665](https://github.com/ora-space/circus/issues/665) 承接。
+- 本次直接证据：**无结果不成功且不执行 Output、终态时序均 Covered；真实迟到结果 Missing**。
+  run `319004d6-d1b1-44e7-8366-900a7a25c1cc` 的 `workflow-phase-b.json` 与 `lost-offline-verdict.json`
+  覆盖无结果失败路径：Controller 暂停时 `result` 为 NULL、只有 4 条 receipt，EndSession 排队；原有 300 秒
+  end-confirm 窗口到期后节点与运行 `failed`，下游 Output 未执行。报告整体 `inconclusive` 仅因没有真实迟到结果，
+  不抹去已直接观察到的非成功与 noOutput 结果。恢复后 181 秒内没有出现迟到终态 receipt，因此不能声称迟到结果
+  已被拒绝，也不能声称没有任何副作用。
+  终态顺序见 `phase-a-terminal-timelines.json` 与 `phase-b-timeline-summary.json`；这些报告的读取时界不是 COMMIT
+  时钟，需结合固定 cloud 提交的
+  [`internal/core/workflow_scheduler.go:679–682`](https://github.com/ora-space/cloud/blob/1dc2a46afe20adcc6428316dd9959435599cbfa9/internal/core/workflow_scheduler.go#L679-L682)：
+  Output 与 run 终态在同一次 CAS 中原子写入。读取到最终节点结果及随后终态的真实轨迹与该提交路径共同支持第 2 行，
+  不把轮询先后当作精确提交时间差。
+  控制面代表性证据保留：`TestWorkflowSessionNodeGoneSettlesTheNodeFailed`、
+  `TestWorkflowSessionTurnDeadlineFailsNode`、`TestWorkflowAdvanceHoldsAProductionSessionAcrossRestart` 分别覆盖
+  Node 失联、回合超窗与恢复后无结果仍持有；`TestWorkflowSessionResultAfterTheNodeSettledIsKept` 与
+  `TestWorkflowSessionTurnDeadlineResultAfterTheNodeSettledIsKept` 允许晚到结果保留在 execution，
+  同时不改写节点与运行终态。它们是 PostgreSQL 接缝证据，不是本次真实栈的迟到结果观察。
+- 仍缺：真实执行侧迟到结果的观察（本次 `not observed`）；该独立缺口不降低已经覆盖的无结果失败、noOutput 与终态时序义务。
 
 ## Cancellation Is A Recorded Request With A Bounded Terminal State
 
@@ -179,10 +168,11 @@ PostgreSQL），因此只作补充缺口，不改变该行的 `Covered`。**崩�
 | --- | --- | --- |
 | 取消是请求加有界终态，终态在清理后写入 | 真实 PostgreSQL + 执行侧：取消与清理、回调的并发顺序与最终行状态 | Covered |
 | 工作流与 agent 两侧都有取消写入者 | 真实 HTTP 入口：两侧的取消请求都落到持久状态并走同一条收尾路径 | Covered |
+| 两个副本同步竞争推进同一正在取消的运行 | 部署级真实 PostgreSQL：同窗推进及失败取锁分支，只有一个终态写入者且另一副本安全退出 | Partial |
 
 - 决策依据：D4（取消是请求加有界终态），D6（取消写入者纳入首期，agent 侧一并补上），不变量 3；继承 [issue-run 根决策](../../../decisions/cloud/issue-run/0-agent-run-in-disposable-isolated-workspace.md) D6。
 - desktop 参考实现（`8909f07`）一侧：**Covered** — 取消是有界终态而非即时终态：清理失败时仍提交 `Cancelled`（[`crates/backend/src/workflow/run/operations/tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/operations/tests.rs) 的 `cancellation_commits_even_when_session_cleanup_fails`）、取消与完成并发时以已提交结果为准（同文件的 `concurrent_cancel_and_complete_report_the_committed_outcome`）、取消后迟到唤醒是空操作（[`crates/backend/src/workflow/run/retry_tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/retry_tests.rs) 的 `cancel_during_the_wait_cancels_immediately_and_the_late_wake_is_a_no_op`）、已取消运行不能被清理复活（[`crates/backend/src/workflow/run/loop_exit_tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/loop_exit_tests.rs) 的 `loop_exit_cleanup_cannot_revive_a_cancelled_run`）。desktop 侧缺的是入口本身：取消由本地界面/命令触发，Cloud 需要的 HTTP 写入者没有参考实现。
-- 本次直接证据：**两行均 Covered** — 第 2 行的 agent 侧已就位：[cloud#100](https://github.com/ora-space/cloud/pull/100)（merge `f405823e`）落地
+- 本次直接证据：**前两行 Covered，第 3 行 Partial** — 第 2 行的 agent 侧已就位：[cloud#100](https://github.com/ora-space/cloud/pull/100)（merge `f405823e`）落地
   `POST /tenants/:tid/issues/:iid/runs/:rid/cancel`。真实 HTTP + PostgreSQL 的 `TestCancelRunRecordsTheRequest` 断言请求只记录
   `issue_runs.cancel_requested_at`、返回 202 与记录时刻，运行的 phase、status、Thread 状态与 Workspace 都不动；
   `TestCancelRunIsIdempotentUnderTheSameKey` 与 `TestCancelRunKeepsTheFirstInstantAcrossFreshKeys` 断言重复请求返回同一时刻且不再写入；
@@ -212,10 +202,11 @@ PostgreSQL），因此只作补充缺口，不改变该行的 `Covered`。**崩�
   节点保留 `cancelled` 结果、已提交节点的输出仍在，运行以 `cancelled` 结束，Workspace 的释放记为 `released` 且释放时刻
   等于 Workspace 自己的 `deleted_at`。这条证据采自 cluster PR #42 合并前（merge `d75b92e`）的工具版本，run id 为
   `4050b211`；合并后的工具版本复跑了同组其余场景，这一场没有再次取到相同结论（细节见运行 #507）。
-- 仍缺：取消、清理与真实执行侧回调的同窗竞争已有直接证据（第 1 行据此记 `Covered`），但两个副本同时推进**同一个**正在
-  取消的 run 仍没有部署级证据：运行 #507 的 `controller-replica` 场景只证明两个 Controller 的窗口里删除操作只有一个完成者，
-  没有让两个副本竞争推进同一个 run。它是多副本的补充缺口，不影响第 1 行的状态，由
-  [ora-space/circus#665](https://github.com/ora-space/circus/issues/665) 承接。
+- 部署竞争补充证据：场景 b（run `8c0982cc-001d-4fbb-b28f-6e7cff0db0f3`；`workflow-phase-a.json`、
+  `b-analysis.json`、`dispatch-statement-supplement.json`）观察到恰好一次派发、单一终态写入者及两个副本的受保护读取，取消约 10 秒收敛，
+  但没有观察到两个副本同步竞争同一 run 时 `pg_try_advisory_xact_lock = false`。因此新增的第 3 行为 `Partial`，
+  不以单一终态写入者替代锁竞争证据，也不降低既有取消入口及取消/清理/回调顺序两项 `Covered`。
+- 仍缺：第 3 行的部署级同步竞争失败取锁分支，由 [ora-space/circus#665](https://github.com/ora-space/circus/issues/665) 承接。
 
 ## The Workspace Release Is A Terminal Fact With A Bounded Give-Up
 
@@ -232,6 +223,7 @@ PostgreSQL），因此只作补充缺口，不改变该行的 `Covered`。**崩�
 | 只有删除完成回执才写 `released` 与释放时刻，且与 Workspace 删除同事务 | 真实 PostgreSQL：删除操作结算事务里释放行与 Workspace 删除时刻一致 | Covered |
 | Node 不可达的放弃有界；窗口内、未配置与已终止沙箱都不放弃，且保留仍存活 Workspace 的归属 | 真实 PostgreSQL：窗口内外、无窗口、终止沙箱与重复推进后的释放状态 | Covered |
 | 真实栈上的端到端释放与放弃 | 真实执行侧：普通成功与取消后的释放、Node 失联后的 `abandoned` 与删除操作失败、另一条路径删除后的补记，以及多 Controller 下删除操作只有一个完成者 | Partial |
+| 端到端补记（单列待定） | 登记措辞待 owner 决定；已有控制面测试与入口拒绝观察不替代端到端补记 | TODO(owner) |
 
 - 决策依据：D7（首期保证资源释放，不能泄漏沙箱），D3（运行 Workspace 归属在创建时冻结），D4（取消进入有界收尾、实际终态在清理后写入），不变量 2；[issue-run 根决策](../../../decisions/cloud/issue-run/0-agent-run-in-disposable-isolated-workspace.md) D4 的交付后释放语义对工作流首期不适用，只保留资源释放。
 - desktop 参考实现（`8909f07`）一侧：没有等价的持久释放事实。desktop 的 Workspace 是本地资源，运行终态的清理只覆盖会话与本地目录，相关失败语义见 [`crates/backend/src/workflow/run/operations/tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/operations/tests.rs) 的 `cancellation_commits_even_when_session_cleanup_fails` 与 [`crates/backend/src/workflow/run/loop_exit_tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/loop_exit_tests.rs) 的 `loop_exit_cleanup_failure_fails_closed`；它没有 Cloud 删除操作契约下的"释放终态 + 有界放弃"，不能为这张表提供证据。
@@ -262,8 +254,9 @@ PostgreSQL），因此只作补充缺口，不改变该行的 `Covered`。**崩�
   （8）等于完成时生效的租约代（8）。`healed` 场景（run `1549e8ab-01a0-4662-91f0-37033daf4bc7`）证实补记分支在真实栈上
   没有公开入口：脚本从 Workspace 行出现起每 0.25 秒重试 `DELETE /projects/:id` 直到运行自己释放，每一次都被拒（345 次：
   `409 runtime_control_held` 169 次、`409 operation_in_progress` 176 次），运行随后按调度器自己的删除结算为 `released`，
-  没有发生补记。因此补记按「控制面单测 + 真实栈证明无公开入口、项目删除在运行持有期间被拒并记拒绝码」的口径登记：补记本身
-  由 `TestWorkflowRunReleaseHealsAWorkspaceDeletedByAnotherPath` 在控制面层面直接证明，端到端补记在真实栈上没有入口。
+  没有发生补记。`TestWorkflowRunReleaseHealsAWorkspaceDeletedByAnotherPath` 直接证明控制面补记，
+  该真实栈场景仅观察到公开删除入口被拒；端到端补记的登记措辞仍待 owner 决定。
 - 仍缺："另一条路径已删除 Workspace"的端到端补记没有公开入口（项目删除在运行持有期间被拒并记下 `409 runtime_control_held` /
-  `409 operation_in_progress`），补记只由控制面单测直接证明，第 4 行因此仍按 `Partial` 记；两个副本同时推进同一个 run 的
-  部署级竞争仍缺，属补充缺口。两者都由 [ora-space/circus#665](https://github.com/ora-space/circus/issues/665) 承接。
+  `409 operation_in_progress`），补记只由控制面单测直接证明。第 4 行保留原有汇总状态，端到端补记单列为
+  **TODO(owner)**，登记措辞由 owner 决定，承接事项为
+  [ora-space/circus#665](https://github.com/ora-space/circus/issues/665)；不改变前 3 项已覆盖的释放义务。
