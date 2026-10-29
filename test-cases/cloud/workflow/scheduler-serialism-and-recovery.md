@@ -21,9 +21,36 @@ Cloud 侧调度器已在 [cloud#67](https://github.com/ora-space/cloud/pull/67)�
 `d91344097ac9a2d0f079585cb1d8fbffa8dd78f7`、cluster `28bac762bd42753a82bb142039dfca976c71fe5b`。
 Phase A 工具已随 [cluster#51](https://github.com/ora-space/cluster/pull/51) 合入 main
 [`562351d`](https://github.com/ora-space/cluster/commit/562351d)；Phase B 工具见
-[cluster#54](https://github.com/ora-space/cluster/pull/54)（head [`e4a0882`](https://github.com/ora-space/cluster/commit/e4a0882)）。下文按报告 basename 与 WorkflowRun ID
-定位既有报告结论，不把报告读取时界当作数据库提交时钟。剩余部署级竞争与真实执行侧缺口继续由
+[cluster#54](https://github.com/ora-space/cluster/pull/54)（head [`1a74e71`](https://github.com/ora-space/cluster/commit/1a74e71)，合入后改为合并提交）。下文的报告 basename 与 WorkflowRun ID
+由以下证据位置表定位到完整文件名。文件保存在作者本地 cluster checkout 的忽略目录，未提交，尚无长期共享访问位置；
+表中 SHA-256 对应已保存报告的原字节副本。不把报告读取时界当作数据库提交时钟。
+剩余部署级竞争与真实执行侧缺口继续由
 [ora-space/circus#665](https://github.com/ora-space/circus/issues/665) 承接。
+
+### 已保存证据的位置
+
+所有文件名均相对 cluster 仓库根目录；同名文件按场景与 WorkflowRun ID 区分。`terminal-timelines` 汇总表中三个 Phase A run，
+`backfill-design` 是启动前停止的设计分析，没有新 run，不构成端到端补记证据。
+
+| 场景 / WorkflowRun ID | cluster 仓库相对文件名 | SHA-256 |
+| --- | --- | --- |
+| `phase-a-race` / `ccf3c0a2-3d5d-419a-bda1-738b9f1974a8` | `.acceptance/run672-registration/phase-a-race/workflow-phase-a.json` | `fbbc9da5e6f73bc80a956d4fe4389e29452110036dd5e1fad1e275e10de1e4ce` |
+| `phase-a-race` / `ccf3c0a2-3d5d-419a-bda1-738b9f1974a8` | `.acceptance/run672-registration/phase-a-race/cloud-race-postgres-proof-v2.json` | `e7314ef6e71726307639a7180f8a4980f6d850438815f52631a66e3393e2b74b` |
+| `phase-a-race` / `ccf3c0a2-3d5d-419a-bda1-738b9f1974a8` | `.acceptance/run672-registration/phase-a-race/statement-v2-analysis.json` | `9e73a4ba8eaea015e70c051d510ecc9d22be4cb4f05763a7e135779f61f438a7` |
+| `phase-a-cancel` / `8c0982cc-001d-4fbb-b28f-6e7cff0db0f3` | `.acceptance/run672-registration/phase-a-cancel/workflow-phase-a.json` | `b13e4134ff99c7e8d94e9ee91bb7568a0a1e0a07f5185dc06abd0d19774ef9bb` |
+| `phase-a-cancel` / `8c0982cc-001d-4fbb-b28f-6e7cff0db0f3` | `.acceptance/run672-registration/phase-a-cancel/b-analysis.json` | `b47f6e52bd4949a28de67368b8f9a0ce0e2150001d67a6b82c8904fce0f427b1` |
+| `phase-a-cancel` / `8c0982cc-001d-4fbb-b28f-6e7cff0db0f3` | `.acceptance/run672-registration/phase-a-cancel/dispatch-statement-supplement.json` | `d6f9377fc80bb6a2ee9b5646e6b8de7a1a79fa47d01448e63447b0c6343ef207` |
+| `phase-a-takeover` / `a44dd496-bd7f-4911-a0e1-7604a3673709` | `.acceptance/run672-registration/phase-a-takeover/workflow-phase-a.json` | `06fccaee4063afa46e85a0ebfb8f0d09ddf244d695b5224301baa9043109ad84` |
+| `phase-a-takeover` / `a44dd496-bd7f-4911-a0e1-7604a3673709` | `.acceptance/run672-registration/phase-a-takeover/c-analysis.json` | `8272d2937148a1b3f8f7dbbf7b13e0257969ed323768718d588b534f2998d670` |
+| `phase-a-takeover` / `a44dd496-bd7f-4911-a0e1-7604a3673709` | `.acceptance/run672-registration/phase-a-takeover/dispatch-statement-supplement.json` | `6ea934b8ad3c86fb782650f4976b93b111d33cd8c21a59e8ab2e7892b5fa558d` |
+| `phase-b-dual-agent` / `80280628-cb66-43f7-9223-7b4ddaf05a2d` | `.acceptance/run672-registration/phase-b-dual-agent/workflow-phase-b.json` | `5da0535264db05ddcdd4ab398c0eb7d4f84d0538aff62b7dc9c7cb84b92ee727` |
+| `phase-b-dual-agent` / `80280628-cb66-43f7-9223-7b4ddaf05a2d` | `.acceptance/run672-registration/phase-b-dual-agent/phase-b-timeline-summary.json` | `ce1426cc5f323c5f987026a11c75177794d2dff8a6f840343935bf282c9788e2` |
+| `phase-b-duplicate` / `0fb3b602-dbf9-4fe6-ac3f-4fdd86a4e548` | `.acceptance/run672-registration/phase-b-duplicate/workflow-phase-b.json` | `3c68fa5b5235c2f67e53d55433312fd174034c67131cb9d7c94f2dd5d4fb96a5` |
+| `phase-b-duplicate` / `0fb3b602-dbf9-4fe6-ac3f-4fdd86a4e548` | `.acceptance/run672-registration/phase-b-duplicate/duplicate-offline-verdict.json` | `8a56b46891c4e02a729c6bcbe8236c72e363124ec911c0f1916c4bf663e01b42` |
+| `phase-b-lost-callback` / `319004d6-d1b1-44e7-8366-900a7a25c1cc` | `.acceptance/run672-registration/phase-b-lost-callback/workflow-phase-b.json` | `7cdf0781bcba34c088c43b9cf0c5f2d2b64533acaff91adb9d56047171b6d48d` |
+| `phase-b-lost-callback` / `319004d6-d1b1-44e7-8366-900a7a25c1cc` | `.acceptance/run672-registration/phase-b-lost-callback/lost-offline-verdict.json` | `01ecc6f4cb9801ffdb8a2bdac4bf3d0895af8ffdf1d95c5425aefdbc09210cc1` |
+| `terminal-timelines` / 上述三个 Phase A run | `.acceptance/run672-registration/terminal-timelines/phase-a-terminal-timelines.json` | `29e67efbc03e0c55b32a60af08015826967bce215a4e1c33c62e2e712d97022e` |
+| `backfill-design` / 无新 run（启动前停止） | `.acceptance/run672-registration/backfill-design/backfill-drill-report.md` | `fff3caf867520f2a773c945b954bd0799d27b206e24436f6945ea5d013d95f43` |
 
 ## At Most One Serial Executor Advances A Workflow Run
 
@@ -223,7 +250,7 @@ Phase A 工具已随 [cluster#51](https://github.com/ora-space/cluster/pull/51) 
 | 只有删除完成回执才写 `released` 与释放时刻，且与 Workspace 删除同事务 | 真实 PostgreSQL：删除操作结算事务里释放行与 Workspace 删除时刻一致 | Covered |
 | Node 不可达的放弃有界；窗口内、未配置与已终止沙箱都不放弃，且保留仍存活 Workspace 的归属 | 真实 PostgreSQL：窗口内外、无窗口、终止沙箱与重复推进后的释放状态 | Covered |
 | 真实栈上的端到端释放与放弃 | 真实执行侧：普通成功与取消后的释放、Node 失联后的 `abandoned` 与删除操作失败、另一条路径删除后的补记，以及多 Controller 下删除操作只有一个完成者 | Partial |
-| Workspace 由另一条路径删除后的端到端补记 | 控制面补记分支已有直接测试；固定候选未找到无需产品改动或 SQL 编辑的真实外部删除触发器，端到端补记未观察到 | Partial |
+| Workspace 由另一条路径删除后的端到端补记 | 真实栈：另一条路径先提交 Workspace 删除事实，随后调度器补记 `released`，释放时刻等于该 Workspace 的 `deleted_at`，且不再声明第二次删除 | Missing |
 
 - 决策依据：D7（首期保证资源释放，不能泄漏沙箱），D3（运行 Workspace 归属在创建时冻结），D4（取消进入有界收尾、实际终态在清理后写入），不变量 2；[issue-run 根决策](../../../decisions/cloud/issue-run/0-agent-run-in-disposable-isolated-workspace.md) D4 的交付后释放语义对工作流首期不适用，只保留资源释放。
 - desktop 参考实现（`8909f07`）一侧：没有等价的持久释放事实。desktop 的 Workspace 是本地资源，运行终态的清理只覆盖会话与本地目录，相关失败语义见 [`crates/backend/src/workflow/run/operations/tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/operations/tests.rs) 的 `cancellation_commits_even_when_session_cleanup_fails` 与 [`crates/backend/src/workflow/run/loop_exit_tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/loop_exit_tests.rs) 的 `loop_exit_cleanup_failure_fails_closed`；它没有 Cloud 删除操作契约下的"释放终态 + 有界放弃"，不能为这张表提供证据。
@@ -256,7 +283,7 @@ Phase A 工具已随 [cluster#51](https://github.com/ora-space/cluster/pull/51) 
   `409 runtime_control_held` 169 次、`409 operation_in_progress` 176 次），运行随后按调度器自己的删除结算为 `released`，
   没有发生补记。`TestWorkflowRunReleaseHealsAWorkspaceDeletedByAnotherPath` 直接证明控制面补记，
   该真实栈场景仅观察到公开删除入口被拒。
-  固定候选的后续设计分析见 `backfill-drill-report.md`（代码分析，非新部署证据）：
+  固定候选的后续设计分析见 `backfill-drill-report.md`（代码分析，非新部署证据；覆盖状态以本表的 `Missing` 为准）：
   [`workflow_run_release.go:277–285、308–315`](https://github.com/ora-space/cloud/blob/1dc2a46/internal/core/workflow_run_release.go#L277-L315)
   要求 Workspace 已有 `deleted_at`，run 已终态且 release 仍为 `pending/releasing`，才以 Workspace 删除时刻补写 `released`。
   [`node.go:101–130`](https://github.com/ora-space/cloud/blob/1dc2a46/internal/core/node.go#L101-L130)
@@ -269,5 +296,5 @@ Phase A 工具已随 [cluster#51](https://github.com/ora-space/cluster/pull/51) 
   [`TestWorkflowRunReleaseHealsAWorkspaceDeletedByAnotherPath:333–343`](https://github.com/ora-space/cloud/blob/1dc2a46/internal/core/workflow_run_release_db_test.go#L333-L343)
   用 SQL 构造该前提，仅作控制面分支证据，本次没有重跑。
 - 仍缺：真实栈上其他路径先提交 Workspace 删除事实、随后由调度器补记且不再声明删除的直接观察。第 4 行保留原有汇总状态，
-  端到端补记单列 `Partial`：控制面补记已证明，物理容器删除不等于 Workspace 软删除，真实端到端路径未触发。承接事项为
+  端到端补记单列 `Missing`：控制面补记测试只作相邻证据，物理容器删除不等于 Workspace 软删除，真实端到端路径未触发。承接事项为
   [ora-space/circus#665](https://github.com/ora-space/circus/issues/665)；不改变前 3 项已覆盖的释放义务。
