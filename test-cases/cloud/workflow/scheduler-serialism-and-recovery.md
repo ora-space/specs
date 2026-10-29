@@ -21,7 +21,7 @@ Cloud 侧调度器已在 [cloud#67](https://github.com/ora-space/cloud/pull/67)�
 `d91344097ac9a2d0f079585cb1d8fbffa8dd78f7`、cluster `28bac762bd42753a82bb142039dfca976c71fe5b`。
 Phase A 工具已随 [cluster#51](https://github.com/ora-space/cluster/pull/51) 合入 main
 [`562351d`](https://github.com/ora-space/cluster/commit/562351d)；Phase B 工具见
-[cluster#54](https://github.com/ora-space/cluster/pull/54)（head [`2e7dbe3`](https://github.com/ora-space/cluster/commit/2e7dbe3)）。下文按报告 basename 与 WorkflowRun ID
+[cluster#54](https://github.com/ora-space/cluster/pull/54)（head [`e4a0882`](https://github.com/ora-space/cluster/commit/e4a0882)）。下文按报告 basename 与 WorkflowRun ID
 定位既有报告结论，不把报告读取时界当作数据库提交时钟。剩余部署级竞争与真实执行侧缺口继续由
 [ora-space/circus#665](https://github.com/ora-space/circus/issues/665) 承接。
 
@@ -223,7 +223,7 @@ Phase A 工具已随 [cluster#51](https://github.com/ora-space/cluster/pull/51) 
 | 只有删除完成回执才写 `released` 与释放时刻，且与 Workspace 删除同事务 | 真实 PostgreSQL：删除操作结算事务里释放行与 Workspace 删除时刻一致 | Covered |
 | Node 不可达的放弃有界；窗口内、未配置与已终止沙箱都不放弃，且保留仍存活 Workspace 的归属 | 真实 PostgreSQL：窗口内外、无窗口、终止沙箱与重复推进后的释放状态 | Covered |
 | 真实栈上的端到端释放与放弃 | 真实执行侧：普通成功与取消后的释放、Node 失联后的 `abandoned` 与删除操作失败、另一条路径删除后的补记，以及多 Controller 下删除操作只有一个完成者 | Partial |
-| 端到端补记（单列待定） | 登记措辞待 owner 决定；已有控制面测试与入口拒绝观察不替代端到端补记 | TODO(owner) |
+| Workspace 由另一条路径删除后的端到端补记 | 控制面补记分支已有直接测试；固定候选未找到无需产品改动或 SQL 编辑的真实外部删除触发器，端到端补记未观察到 | Partial |
 
 - 决策依据：D7（首期保证资源释放，不能泄漏沙箱），D3（运行 Workspace 归属在创建时冻结），D4（取消进入有界收尾、实际终态在清理后写入），不变量 2；[issue-run 根决策](../../../decisions/cloud/issue-run/0-agent-run-in-disposable-isolated-workspace.md) D4 的交付后释放语义对工作流首期不适用，只保留资源释放。
 - desktop 参考实现（`8909f07`）一侧：没有等价的持久释放事实。desktop 的 Workspace 是本地资源，运行终态的清理只覆盖会话与本地目录，相关失败语义见 [`crates/backend/src/workflow/run/operations/tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/operations/tests.rs) 的 `cancellation_commits_even_when_session_cleanup_fails` 与 [`crates/backend/src/workflow/run/loop_exit_tests.rs`](https://github.com/ora-space/desktop/blob/8909f07/crates/backend/src/workflow/run/loop_exit_tests.rs) 的 `loop_exit_cleanup_failure_fails_closed`；它没有 Cloud 删除操作契约下的"释放终态 + 有界放弃"，不能为这张表提供证据。
@@ -255,8 +255,19 @@ Phase A 工具已随 [cluster#51](https://github.com/ora-space/cluster/pull/51) 
   没有公开入口：脚本从 Workspace 行出现起每 0.25 秒重试 `DELETE /projects/:id` 直到运行自己释放，每一次都被拒（345 次：
   `409 runtime_control_held` 169 次、`409 operation_in_progress` 176 次），运行随后按调度器自己的删除结算为 `released`，
   没有发生补记。`TestWorkflowRunReleaseHealsAWorkspaceDeletedByAnotherPath` 直接证明控制面补记，
-  该真实栈场景仅观察到公开删除入口被拒；端到端补记的登记措辞仍待 owner 决定。
-- 仍缺："另一条路径已删除 Workspace"的端到端补记没有公开入口（项目删除在运行持有期间被拒并记下 `409 runtime_control_held` /
-  `409 operation_in_progress`），补记只由控制面单测直接证明。第 4 行保留原有汇总状态，端到端补记单列为
-  **TODO(owner)**，登记措辞由 owner 决定，承接事项为
+  该真实栈场景仅观察到公开删除入口被拒。
+  固定候选的后续设计分析见 `backfill-drill-report.md`（代码分析，非新部署证据）：
+  [`workflow_run_release.go:277–285、308–315`](https://github.com/ora-space/cloud/blob/1dc2a46/internal/core/workflow_run_release.go#L277-L315)
+  要求 Workspace 已有 `deleted_at`，run 已终态且 release 仍为 `pending/releasing`，才以 Workspace 删除时刻补写 `released`。
+  [`node.go:101–130`](https://github.com/ora-space/cloud/blob/1dc2a46/internal/core/node.go#L101-L130)
+  将物理 Node 断连对应的 Workspace 标为 `unavailable`，不会写删除事实；正常 sandbox terminate 也不等同于 cleanup。
+  Workspace 的软删除由 [`control.go:515–530、598–600`](https://github.com/ora-space/cloud/blob/1dc2a46/internal/core/control.go#L515-L600)
+  的操作 cleanup 写入。独立 Workspace 删除入口排除运行 Workspace（[`store.go:742–745`](https://github.com/ora-space/cloud/blob/1dc2a46/internal/core/store.go#L742-L745)），
+  项目删除要求 runtime control 为 idle（[`public.go:215–219`](https://github.com/ora-space/cloud/blob/1dc2a46/internal/core/public.go#L215-L219)），
+  而运行持有期间控制权为 maintenance（[`runtime_control.go:129–140`](https://github.com/ora-space/cloud/blob/1dc2a46/internal/core/runtime_control.go#L129-L140)）。
+  因而未运行不能建立软删除前提的容器故障，不把它登记为端到端补记。
+  [`TestWorkflowRunReleaseHealsAWorkspaceDeletedByAnotherPath:333–343`](https://github.com/ora-space/cloud/blob/1dc2a46/internal/core/workflow_run_release_db_test.go#L333-L343)
+  用 SQL 构造该前提，仅作控制面分支证据，本次没有重跑。
+- 仍缺：真实栈上其他路径先提交 Workspace 删除事实、随后由调度器补记且不再声明删除的直接观察。第 4 行保留原有汇总状态，
+  端到端补记单列 `Partial`：控制面补记已证明，物理容器删除不等于 Workspace 软删除，真实端到端路径未触发。承接事项为
   [ora-space/circus#665](https://github.com/ora-space/circus/issues/665)；不改变前 3 项已覆盖的释放义务。
