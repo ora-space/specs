@@ -21,7 +21,7 @@ Cloud 侧调度器已在 [cloud#67](https://github.com/ora-space/cloud/pull/67)�
 `d91344097ac9a2d0f079585cb1d8fbffa8dd78f7`、cluster `28bac762bd42753a82bb142039dfca976c71fe5b`。
 Phase A 工具已随 [cluster#51](https://github.com/ora-space/cluster/pull/51) 合入 main
 [`562351d`](https://github.com/ora-space/cluster/commit/562351d)；Phase B 工具见
-[cluster#54](https://github.com/ora-space/cluster/pull/54)（head [`1a74e71`](https://github.com/ora-space/cluster/commit/1a74e71)，合入后改为合并提交）。下文的报告 basename 与 WorkflowRun ID
+[cluster#54](https://github.com/ora-space/cluster/pull/54)（head [`986761c`](https://github.com/ora-space/cluster/commit/986761c61806368e7f055f72072c754b1d3c16eb)，合入后改为合并提交）。下文的报告 basename 与 WorkflowRun ID
 由以下证据位置表定位到完整文件名。文件保存在作者本地 cluster checkout 的忽略目录，未提交，尚无长期共享访问位置；
 表中 SHA-256 对应已保存报告的原字节副本。不把报告读取时界当作数据库提交时钟。
 剩余部署级竞争与真实执行侧缺口继续由
@@ -249,7 +249,7 @@ Phase A 工具已随 [cluster#51](https://github.com/ora-space/cluster/pull/51) 
 | 终态结算同时登记释放意图与删除声明，重放不重复声明 | 真实 PostgreSQL：终态事务后的释放行与删除操作数 | Covered |
 | 只有删除完成回执才写 `released` 与释放时刻，且与 Workspace 删除同事务 | 真实 PostgreSQL：删除操作结算事务里释放行与 Workspace 删除时刻一致 | Covered |
 | Node 不可达的放弃有界；窗口内、未配置与已终止沙箱都不放弃，且保留仍存活 Workspace 的归属 | 真实 PostgreSQL：窗口内外、无窗口、终止沙箱与重复推进后的释放状态 | Covered |
-| 真实栈上的端到端释放与放弃 | 真实执行侧：普通成功与取消后的释放、Node 失联后的 `abandoned` 与删除操作失败、另一条路径删除后的补记，以及多 Controller 下删除操作只有一个完成者 | Partial |
+| 真实栈上的端到端释放与放弃 | 真实执行侧：普通成功与取消后的释放、Node 失联后的 `abandoned` 与删除操作失败、另一条路径删除后的补记（单独登记在下一行），以及多 Controller 下删除操作只有一个完成者 | Partial |
 | Workspace 由另一条路径删除后的端到端补记 | 真实栈：另一条路径先提交 Workspace 删除事实，随后调度器补记 `released`，释放时刻等于该 Workspace 的 `deleted_at`，且不再声明第二次删除 | Missing |
 
 - 决策依据：D7（首期保证资源释放，不能泄漏沙箱），D3（运行 Workspace 归属在创建时冻结），D4（取消进入有界收尾、实际终态在清理后写入），不变量 2；[issue-run 根决策](../../../decisions/cloud/issue-run/0-agent-run-in-disposable-isolated-workspace.md) D4 的交付后释放语义对工作流首期不适用，只保留资源释放。
