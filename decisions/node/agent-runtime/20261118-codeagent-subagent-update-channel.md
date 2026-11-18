@@ -36,7 +36,7 @@ status: proposed
 | JSONL schema v2 与 Thread 共用共享 history，不新增记录类型或迁移旧文件 | 继承，不变；新增来源继续写入 `SessionUpdate` metadata |
 | D1：首期只识别 `_meta["opencode/child-session"]`，父子关系只来自显式来源，未知扩展不透明保留 | 修改（扩展）：新增受支持子代理来源 `_meta["_subagent/update"]`（在连接边界从 `_subagent/update` 扩展通知规范化生成）；其他未知 `_` 开头扩展通知不伪造为子代理内容 |
 | D1：按 `id`/`parentID` 与正整数 `depth` 连接多层嵌套 | 限定（已知限制）：`_subagent/update` 仅提供外层 `sessionId`/`taskId` 与可选父 `toolCallId`，缺少子任务间父子链，统一按 `depth: 1` 展平为同级只读卡片 |
-| D2：文本/思考保留完整 `ContentChunk`、metadata 与注解，禁止跨来源拼接；不同子来源 `plan` 互不覆盖；父回合结束不为有效子来源未决工具生成 `completed` | 继承并细化：生成 `_meta["_subagent/update"]` 时剥离逐帧 `timestamp` 以保证连续 chunk 合并；内层 `toolCallId` 作用域化为 `{taskId}:{innerToolCallId}`；实时与历史统一按来源 ID 隔离 `plan` 与未决工具 |
+| D2：文本/思考保留完整 `ContentChunk`、metadata 与注解，禁止跨来源拼接；不同子来源 `plan` 互不覆盖；父回合结束不为有效子来源未决工具生成 `completed` | 继承并细化：生成 `_meta["_subagent/update"]` 时剥离逐帧 `timestamp` 以保证连续 chunk 合并；内层 `toolCallId` 按 `subagent:{len}:{taskId}:{innerToolCallId}` 作用域隔离；实时与历史统一按来源 ID 隔离 `plan` 与未决工具 |
 | D3：子组不推断终态；父回合结束后只把明确完成的前台委托标为「委托已返回结果」，其余标为「后续未知（投影已停止）」 | 修改（扩展，待实测锁定）：`_subagent/update` 不依赖 OpenCode 的 `rawOutput.metadata.sessionID`，改由外层 `toolCallId` 关联父流委托工具；「已返回」如何区分 provider 上报完成与回合收束补成的 `completed`，须在取得真实帧后锁定 |
 | D4：有效子来源活动与增量子工具不重置或暂停父 prompt 无活动计时；归属、liveness 与运行诊断共用同一来源规则 | 继承，不变：`PromptLiveness`、`ora-history`、`@ora/chat` 诊断与 `SubagentGroup` 共用同一有效来源函数，显式清除、无效或冲突来源退回父流 |
 
@@ -76,13 +76,13 @@ status: proposed
    JSONL 紧凑性。对于缺少非空 `title` 的子代理 `tool_call`，可按 `_meta.codeAgentCLI.toolName`
    或固定占位标题回退。
 4. **内层 `toolCallId` 作用域隔离**：子代理在独立模型轮次执行，网关可能重新从 `call_0`/`call_1`
-   编号。翻译层必须按所属 `taskId` 对内层 `update.toolCallId` 做命名空间前缀（当前草案形态为
-   `{taskId}:{innerToolCallId}`），防止与父会话或其他兄弟子代理的工具 ID 在 `PromptLiveness`、
-   `HistoryAssembler` 与 UI 键值中发生碰撞。若真实 `taskId` 允许包含 `:`，仅靠单冒号拼接会产生
-   `a:b`+`c` 与 `a`+`b:c` 的歧义，须在正式 `approved` 方案中明确禁用 `:` 或改用无歧义编码。
-5. **归因命名空间权威性**：翻译层接管 `_subagent/update` 通道的来源归因，不得让内层载荷自带的
-   其他已知子来源命名空间（如 `opencode/child-session`）与 `_subagent/update` 共存冲突，否则统一
-   归因规则会判定来源冲突并将该子工具退回父流。翻译时应清除或拒绝内层冲突的子来源键。
+   编号。翻译层必须按所属 `taskId` 对内层 `update.toolCallId` 做无歧义的长度前缀命名空间编码
+   （`subagent:{len}:{taskId}:{innerToolCallId}`，其中 `len` 为 `taskId` 字节长度），防止与父会话
+   或兄弟子代理的工具 ID 在 `PromptLiveness`、`HistoryAssembler` 与 UI 键值中碰撞，并消除 `taskId`
+   自身含 `:` 时的二义性。
+5. **归因命名空间权威性**：翻译层接管 `_subagent/update` 通道的来源归因，插入 `_meta["_subagent/update"]`
+   前必须剥离内层载荷携带的其他已知子来源或回合收束内部标记（如 `opencode/child-session`、
+   `ora/turn-end-settled`），避免与 `_subagent/update` 冲突导致统一来源规则把该工具退回父流。
 
 **待实测确认项 1（转 `approved` 前必须由真实帧锁定）**：`_subagent/update.sessionId` 的真实语义。
 当前草案假设 CodeAgent 在 `_subagent/update.sessionId` 中填写的是**父 ACP 会话 ID**，因此它同时
@@ -132,9 +132,9 @@ Rust（`ora_history::child_source_id` / `has_child_source_namespace`）与 TypeS
 
 必须在取得 CodeAgent 真实帧序列后核实：CodeAgent 在子代理正常完成、失败、取消及仅部分输出场景下，
 父委托工具的 `tool_call` / `tool_call_update` 实际发送哪些状态与字段（如是否必发 `status: "completed"`
-以及是否带可识别的结果字段）。据此在 `approved` 版本明确：是以显式区分「provider 上报的 `completed`」
-与「回合结束补成的 `completed`」为准，还是依据 CodeAgent 终态帧的稳定字段作为「委托已返回结果」的
-唯一充分条件。
+以及是否带可识别的结果字段）。在实现上已先通过 `ora/turn-end-settled` / `settledByTurnEnd` 排除
+回合结束补成的 `completed`，待取得真实帧后在 `approved` 版本最终锁定是否还需绑定 CodeAgent 终态
+专属字段。
 
 ## D5：启用开关与兼容性边界
 
@@ -171,8 +171,8 @@ Rust（`ora_history::child_source_id` / `has_child_source_namespace`）与 TypeS
 - **转 `approved` 前的两项实测阻塞（必须先补真实帧）**：
   1. 获取 CodeAgent 启用 `CODEAGENT3_ACP_SUBAGENT_CHANNEL=true` 后的完整带时间戳真实帧序列（覆盖委托
      开始、子代理文本/思考/工具/计划与委托结束）。
-  2. 据此在 `approved` 版本锁定 D2 `_subagent/update.sessionId` 的含义与连接路由测试、确认 `taskId`
-     字符集与 `:` 分隔符安全性，以及锁定 D4「委托已返回结果」与回合结束补态的精确区分规则。
+  2. 据此在 `approved` 版本锁定 D2 `_subagent/update.sessionId` 的含义与连接路由规则，以及最终确认
+     D4「委托已返回结果」是否还需结合 CodeAgent 终态专属字段。
 - **本决策未解决的问题（留待后续 ADR）**：
   - `_subagent/update` 的真实多层嵌套链路（`parentTaskId` 或子任务树层级）；
   - 子代理独立终态事件通道或后台子代理继续运行后的脱离主回合订阅；
