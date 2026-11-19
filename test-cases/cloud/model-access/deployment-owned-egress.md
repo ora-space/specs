@@ -1,15 +1,18 @@
 # 部署方共享出网：模型转发、资产下载、解析与策略切换
 
 决策依据：[部署方出口与显式解析 ADR](../../../decisions/cloud/model-access/20261017-deployment-owned-egress-and-explicit-resolution.md)
-（`approved`）。Cloud 的共享策略实现已有下列受控测试证据；部署入口的拓扑采集、双服务停启和摘要比对仍缺直接证据。
+（`approved`）。Cloud 共享策略与离线部署入口已有下列受控证据，剩余故障矩阵逐项保留。
 状态逐项区分 `Covered`、`Partial` 与 `Missing`，不把受控服务或原有测试扩展为真实企业部署验收。原公网、凭据、冻结和撤销的已有证据继续见
 [个人模型访问](personal-model-access.md)；这些证据不能替代企业策略的组合验证。
 
 Cloud 实现与验证入口：[cloud#80](https://github.com/ora-space/cloud/pull/80)。本次证据来自
 `internal/egress/{policy,dns,health}_test.go`、`internal/modelgateway/{egress,transport,diagnostics}_test.go`、
 `internal/workflowasset/fetch_test.go` 和 `integration/deployment_egress_test.go`，后者使用真实
-HTTP/PostgreSQL/TCP DNS；模型转发的上游为受控 TLS 服务，不是现场供应商。部署相关义务仍由 cluster
-承接，ADR 保持 `approved`。
+HTTP/PostgreSQL/TCP DNS；模型转发的上游为受控 TLS 服务，不是现场供应商。部署实现见 [cluster#25](https://github.com/ora-space/cluster/pull/25)：
+`egress_config.py`、`egress_topology.py`、`egress_health.py`；直接验收为 `scripts/offline/smoke_egress.py`
+及其受控 DNS/TLS/公共 API 场景，控制流故障与双栈拓扑矩阵见 `test_egress.py`。
+慢下载源保持 ZIP 不完整并等待客户端关闭，直接检查取消早于独立 Fetch 截止，避免把小包自然完成或超时作为策略取消证据。
+整包正常路径另由 `smoke.py` 覆盖真实 Node 两轮、成果与释放、认证配置轮换；它不证明真实企业模型已验收。
 
 
 ## Public deployments must retain the existing HTTPS and trusted DNS policy
@@ -69,7 +72,7 @@ HTTP/PostgreSQL/TCP DNS；模型转发的上游为受控 TLS 服务，不是现�
 | 私网许可与可选 CIDR 独立 | RFC1918/ULA 的缺省拒绝、显式通过、CIDR 缺省和越界；另一个 target 许可无效。直接证据：`TestStrictStartupConfiguration` 与 `TestDenyPrecedenceAndPerTargetRanges` 直接覆盖缺省私网拒绝、显式许可、可选 CIDR 与越界；真实 TLS 私网成功见 `TestEnterpriseModelAndAssetShareTransportPolicy` | Partial |
 | 不可覆盖拒绝 | 两调用方在白名单+allowPrivate+覆盖 CIDR 下，cluster 网络、宿主接口/网关/VIP、loopback、link-local 仍拒绝。直接证据：`TestDenyPrecedenceAndPerTargetRanges` 与配置加载测试覆盖基础设施优先拒绝；两类业务入口逐地址类别的组合证据仍待补齐 | Partial |
 | 其他保留类别和全答案检查 | unspecified/multicast/documentation/benchmark/转换地址，A 允许+AAAA 拒绝及反向组合，mapped IPv6。直接证据：`TestDenyPrecedenceAndPerTargetRanges` 覆盖 mapped/保留类别，`TestPolicyTCPRejectsMixedAnswersAndUnlistedHostsBeforeLookup` 使用真实 TCP DNS 的 A 安全/AAAA 禁区组合；反向组合仍待补齐 | Partial |
-| 拓扑自动采集与可选补充 | 部署入口从 Docker 静态/动态 Node 池、默认桥和宿主接口生成双栈拒绝表，补充网段/地址只能合并；采集失败命令报错，未声明额外 NAT/VIP 不阻止启动 | Missing |
+| 拓扑自动采集与可选补充 | `TopologyTests` 覆盖默认桥、多网段、双栈接口/网关、配置池与补充的并集及失败拒绝；`smoke_egress.py` 在真实 Docker/host namespace 核对运行地址属于自动拒绝表。真实双栈 Docker 与外部 NAT 别名变化仍待补齐 | Partial |
 
 ## Enterprise resolution must use only the configured resolver or static mapping
 
@@ -106,19 +109,20 @@ HTTP/PostgreSQL/TCP DNS；模型转发的上游为受控 TLS 服务，不是现�
 - 风险：仅改文件却误以为策略已生效，旧进程/池仍发送，或加载失败退回宽许可、摘要不一致未被发现。
 - 前置状态：旧快照已加载且存在活跃 SSE、HTTPS 资产下载与空闲连接；新快照移除目标或收紧 CIDR/topology。
 - 触发：运行中仅改文件，或经部署入口停止两服务、换文件、再启动；配置加载失败、摘要不一致及显式回滚。
-- 必须成立：文件变动不热生效；确认两个服务旧进程退出后才换文件/启动，旧流与所有池已终止；有效新配置在启动时加载，失败进程不启动；`ora verify` 比对两端摘要，缺失/不一致报错。
+- 必须成立：文件变动不热生效；确认 Cloud、model-gateway 及已配置的 Repo Executor 旧进程退出后才换文件/启动，旧流与所有池已终止；有效新配置在启动时加载，失败进程不启动；`ora verify` 比对两端摘要，缺失/不一致报错。
 - 禁止结果：只关 idle 池或不确认退出就替换文件、无效配置自动回退 public/旧配置、摘要不一致仍宣称部署校验成功、自动重发中断的生成。
 - 决策依据：D1、D3、D6。
 - 验证义务与证据：
 
 | 义务 | 直接证据要求 | 状态 |
 | --- | --- | --- |
-| 配置加载失败不启动 | 两服务分别覆盖指定路径缺文件、版本/字段/重复键、空 CIDR、冲突开关及非法 topology，断言失败进程不监听业务端口、不回退 public。直接证据：`TestStrictStartupConfiguration`/`TestSnapshotAndCanonicalDigest` 覆盖 schema/文件/静态禁区，`TestStartupErrorsIdentifyFieldsWithoutValues` 覆盖字段路径与值脱敏；`TestEnterpriseModelAndAssetShareTransportPolicy` 覆盖开发例外冲突。完整两进程无监听启动矩阵待部署测试 | Partial |
-| 文件仅在启动加载 | 运行中修改文件不改变快照，按流程停止两个服务并替换配置后重启；新目标/拒绝项仅在重启后生效。直接证据：`TestSnapshotAndCanonicalDigest` 实际改文件后旧对象不变、重新 Load 后生效；双服务重启流程待 cluster 验收 | Partial |
-| 停止旧流和池 | 实际停止 Cloud 与 Gateway，证明 SSE/资产下载终止、旧池丢弃；未完整取包任务零文档结果，重启后新拨号按新策略拒绝旧目标；停止失败不换文件 | Missing |
-| 摘要比对 | 两端 healthz/管理接口报告规范化摘要与 schema；`ora verify` 对相同配置成功、摘要缺失/不一致报错，不依赖请求级对端确认。直接证据：`TestHealthExposesOnlyPolicyIdentity` 验证 healthz schema/摘要且不暴露配置；`TestSnapshotAndCanonicalDigest` 验证规范化与有效公网 DNS 影响摘要；ora verify 双端比对待 cluster 实现 | Partial |
-| 回滚与拓扑变更 | 管理员显式选择旧文件后重复停止/替换/启动；拓扑重新自动采集并合并可选补充，未声明 NAT/VIP 不成为额外启动门槛 | Missing |
+| 配置加载失败不启动 | Cloud 配置单元/二进制启动探针与 `ApplicationTests` 覆盖无效配置；`smoke_egress.py` 验证未知输入字段不动旧服务/快照，启动失败后双服务均停止。完整错误类别的双进程矩阵仍待补齐 | Partial |
+| 文件仅在启动加载 | `TestSnapshotAndCanonicalDigest` 与实际 `smoke_egress.py`：输入修改后 verify 拒绝未应用状态，经 apply 改为静态解析并移除旧目标，两个容器身份变化而镜像身份不变，新请求按新快照判定 默认 Cloud/model-gateway 的直接证据已具备；实际 Repo Executor 组合仍待补齐 | Partial |
+| 停止旧流和池 | `smoke_egress.py` 实际移除两个已停止的旧容器、重建同一镜像，受控慢资产下载取消且零文档结果；`ApplicationTests` 断言停止失败不换文件。活跃模型 SSE 的进程停止组合仍待补齐 | Partial |
+| 摘要比对 | `TestHealthExposesOnlyPolicyIdentity`、`ApplicationTests` 与 `VerificationTests`；实际 `smoke_egress.py` 注入单端不同策略使 ora verify 失败，再经真实 apply 恢复，覆盖同代成功/不一致拒绝及输入/生成快照变更识别；多副本真实部署矩阵待补齐 | Partial |
+| 回滚与拓扑变更 | 工具使用同一采集/停机/替换/启动路径，`ApplicationTests` 连续应用不同输入且未设 complete 门槛；实际 smoke 显式修复失败配置后恢复。现场拓扑变更与完整旧配置回滚的实测组合仍待补齐 | Partial |
 
+可选 Repo Executor 的部署接线证据为 `Partial`：cluster `ApplicationTests.test_optional_executor_stops_and_restarts_with_the_same_readonly_policy` 验证同一只读文件、停止/重建参数；`test_executor_is_selected_from_explicit_config_and_orphan_cannot_be_omitted` 验证显式选择与遗漏参与者拒绝；`test_explicit_extra_layer_survives_auth_override_and_policy_mounts_last` 验证额外服务不被认证覆盖，`test_real_external_git_overlay_joins_the_shared_policy` 以实际 `compose.external-git.yaml` 导出并核对共同只读挂载及内部健康端口；`VerificationTests.test_optional_executor_and_all_replicas_must_participate` 验证副本缺失与摘要不符拒绝，`test_executor_health_uses_plain_http_8084_and_shared_headers` 通过真实 HTTP 验证管理探针契约。Repo Executor 的共享出网实现与真实外部 Git 路径已有代码和单独验收，其中真实仓库验收使用开发解析例外。这些证据仍未覆盖三类真实服务在企业策略下共同停启、真实多副本摘要一致、完整旧输入回滚和正式现场 DNS/模型/资产组合；本 ADR 保持 `approved`。
 ## Current policy must constrain frozen bindings without reviving revoked grants
 
 - 风险：冻结被误读为永久网络许可，或策略重新允许后复活已撤销凭据。
@@ -141,9 +145,9 @@ HTTP/PostgreSQL/TCP DNS；模型转发的上游为受控 TLS 服务，不是现�
 
 | 义务 | 直接证据要求 | 状态 |
 | --- | --- | --- |
-| 两者使用同一集合与解析来源 | 同一部署快照的真实 Cloud Fetch/Gateway HTTP 贯通：许可内私网成功，未许可公网（含 7.x）/私网/错误端口拒绝；更换一个 resolver/静态映射同时影响两者，记录 DNS 目标而非只测共享函数。直接证据：`TestEnterpriseModelAndAssetShareTransportPolicy` 从模型 handler 与实际 Fetch 访问同一许可内私网 TLS 服务；`TestDeploymentEgressAssetDNSRejectionLeavesNoDocuments` 用同一策略和 TCP DNS 拒绝两条调用链；现场整体重配验收尚缺 | Partial |
+| 两者使用同一集合与解析来源 | Cloud 真实 handler/Fetch 测试加 `smoke_egress.py` 的实际 Cloud 保存与后台资产导入：共同 TCP DNS、许可内 HTTPS 取包成功、未许可目标在 DNS 前拒绝；改为静态解析/移除资产目标后两服务按同一新摘要生效。部署栈内有效 grant 模型转发完整矩阵仍待补齐 | Partial |
 | 全答案与不可覆盖拒绝 | 两入口分别覆盖 A/AAAA 混合禁区、cluster/宿主/loopback/link-local；新拨号完整校验，连接存活/空闲回收后重新解析，不建立禁止地址连接。直接证据：共享准入的全答案/拒绝优先测试及真实 Fetch/模型 DNS 拒绝已有直接证据；两入口全部地址类别和连接回收后的 DNS 变化矩阵尚缺 | Partial |
-| URL 与凭据边界不同但准入一致 | 合法签名 query 下载成功、模型 query 拒绝；服务端断言原路径/query 且资产 GET 无模型认证头，日志/失败信息不含签名 URL；别名/重定向/错误证书均拒绝。直接证据：`TestEnterpriseModelAndAssetShareTransportPolicy` 检查合法签名 query 原字节、资产无模型认证头、模型 SSE/工具调用、未许可目标、3xx、TLS 不可信与摘要失败；`TestFetchKeepsCheckedAddressAttributionWithoutTheSignedURL` 与 `TestProxyLogsOnlyBoundedCheckedDialAttribution` 固定失败归因只含数字地址和有限原因、不含签名 query；错误 hostname 和完整日志矩阵待补齐 | Partial |
+| URL 与凭据边界不同但准入一致 | 合法签名 query 下载成功、模型 query 拒绝；服务端断言原路径/query 且资产 GET 无模型认证头，日志/失败信息不含签名 URL；别名/重定向/错误证书均拒绝。直接证据：`TestEnterpriseModelAndAssetShareTransportPolicy` 检查合法签名 query 原字节、资产无模型认证头、模型 SSE/工具调用、未许可目标、3xx、TLS 不可信与摘要失败；`TestFetchKeepsCheckedAddressAttributionWithoutTheSignedURL` 与 `TestProxyLogsOnlyBoundedCheckedDialAttribution` 固定失败归因只含数字地址和有限原因、不含签名 query；实际 `smoke_egress.py` 的源端再次断言签名 query 和无个人模型认证头，导入生成真实工作流。错误 hostname 与完整日志矩阵待补齐 | Partial |
 | 资产原完整性与失败边界 | 真实 Fetch+PostgreSQL 验证 16 MiB/10–30–60 秒、摘要失败先于解析、包级失败零文档结果及下次触发重试；导入 revision 围栏不被策略切换绕过。直接证据：`TestDeploymentEgressAssetDNSRejectionLeavesNoDocuments` 实际 Fetch+PG 证明 DNS 拒绝为包级失败且零文档结果；受控 TLS Fetch 校验摘要。原大小/超时和导入 revision 证据仍见资产用例，不扩大为新策略全矩阵 | Partial |
 | 内部对象存储不是 HTTPS 旁路 | object key 只走固定私有客户端且不能携带 host；同一 cluster 服务若作为 HTTPS URL 则被拒，无自动降级 | Missing |
-| 共同配置重启生效 | 同时停止两服务、替换文件并重启，移除任一 target 后两调用方按新快照拒绝且旧池已销毁；停止取消未完整取包任务无部分导入，摘要不一致时 verify 报错 | Missing |
+| 共同配置重启生效 | 实际 `smoke_egress.py` 验证目标/DNS 改变、两个旧容器消失、镜像一致、未完成资产无文档结果、单端摘要错配拒绝、启动失败停止两端和显式恢复；新主机、多副本及活跃模型流组合仍待补齐 | Partial |

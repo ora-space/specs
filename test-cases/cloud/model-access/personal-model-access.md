@@ -41,7 +41,7 @@
 - 前置：一条有效运行授权，上游可持续发送 SSE。
 - 触发：调用冻结模型、上游错误、撤销绑定或超时。
 - 必须成立：两种协议和工具数据持续转发；加入冻结的认证与模型；撤销取消上游；HTTP 失败不回显诊断正文。
-- 禁止结果：跨模型请求、客户端指定目标、跟随重定向、绕过当前部署地址策略或把真实 Key 返回客户端。非企业模式仍禁止私网；企业模式的新增许可与不可覆盖禁区见[部署方模型出口用例](deployment-owned-egress.md)，其新增义务尚无实现证据。
+- 禁止结果：跨模型请求、客户端指定目标、跟随重定向、绕过当前部署地址策略或把真实 Key 返回客户端。非企业模式仍禁止私网；企业模式的新增许可与不可覆盖禁区见[部署方模型出口用例](deployment-owned-egress.md)，其新增义务和直接证据单独维护。
 - 证据：`cloud/internal/modelgateway/service_test.go`、`transport_test.go` 使用真实 TLS HTTP 边界验证转发、撤销、错误过滤与地址策略；`events_test.go`、`framing_test.go`、`completion_test.go` 直接覆盖 HTTP 200 内错误、SSE 格式及阻塞写入/正常结束竞态。`dns_test.go` 验证真实 HTTPS DNS 双栈、混合私网/基准地址拒绝、重定向及畸形响应；`diagnostics_test.go`、`diagnostics_classification_test.go` 验证有限分类和诊断过滤。可选 `TestLiveTrustedDNSAndVerifiedUpstreamTLS` 只证明无凭据连接与 TLS。状态 `Partial`，受控 CLI 两协议证据见 [PR 记录](https://github.com/ora-space/cluster/pull/15#issuecomment-6107672919)，真实供应商正常路径已由官方 OpenCode 两协议多轮工具会话验证；撤销、错误和故障的完整真实上游矩阵仍缺直接证据。
 
 ## Personal model usage must remain controlled by the run initiator

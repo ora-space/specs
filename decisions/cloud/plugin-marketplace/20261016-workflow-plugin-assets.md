@@ -5,8 +5,8 @@ status: implemented
 # Workflow 插件资产由 Cloud 自行取包、逐文档导入为可编辑副本
 
 > 后续决策：[部署方共享出网策略](../model-access/20261017-deployment-owned-egress-and-explicit-resolution.md)
-> 已批准将 D3 的 HTTPS 取包纳入与模型转发共用的 host:port 白名单和显式解析，尚待实现。
-> 本文 `implemented` 和既有证据不表示企业出网扩展已经落地；原公网行为仍用于非企业模式。
+> 后续决策的 D3 企业 HTTPS 取包已有部分实现，完整共享出网验证仍按后继用例逐项核对。
+> 本文的 `implemented` 只对应原有工作流资产导入；既有证据不自动扩大到企业出网，非企业模式仍沿用原公网行为。
 
 `kind = "workflow"` 的插件包是「工作流文档的投递载体」，不是插件代码。Cloud 在**资产导入步骤**
 里自己下载该插件版本的 `.orax`、校验 sha256、限定大小，把 `assets/workflows/` 下的每份 `*.json`
