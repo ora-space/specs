@@ -6,7 +6,7 @@ D1 的 Controller 义务与 D4 的能力门禁。这些规则只能由发送 `st
 正式使用方的接入尚未交付，下表证据一律为 `Missing`，随它的交付登记直接测试与固定提交。Cloud v2 的
 `v2-server` 已按同一组规则实现选择校验（`v2-server/internal/execution/mcp.go` 的 `MCPSelection.Validate`）
 与派发前能力门禁（`v2-server/internal/agentruntime/mcp.go` 的 `prepareMCP`），但 v2 `phase:1` 是临时实现，
-按现行规定不登记为 specs 证据。
+按现行规定不登记为 specs 证据（v2 另要求 `session_mcp_lifecycle`，不使用本 ADR 的冻结 setup）。
 
 ## Controller Sends Only Selections The Node Would Accept
 
@@ -33,7 +33,7 @@ Controller 用另一套规则构造选择：`settings` 被省略或多了未知�
 - 发送前按 D1 逐项镜像客户端规则：最多 **16** 个 Server；所有 `settings` 的紧凑 JSON UTF-8 长度之和
   最多 **64 KiB**（含键、标点与转义）；`plugin_id` 按原始 UTF-8 字节序严格递增、无重复且通过严格 ID
   解析；`plugin_version` 是精确 canonical 版本字符串；`settings` 必填，没有覆盖值时是空对象。
-- 两项上限独立于控制帧上限；非法或超限选择是 spec 校验错误，不启动 Agent、不发送任何控制帧。
+- 两项上限独立于控制帧上限；非法或超限选择是 spec 校验错误，不启动 Agent、不发送该 `start_agent_session`。
 - 只向同时声明 `session_mcp` 与 `agent_session` 的 Node 发送非空选择；空选择省略协议字段，不要求该能力。
 - 同一组边界样例在 Controller 与 Node 上得到相同的接受或拒绝结论。
 
@@ -47,9 +47,9 @@ Controller 用另一套规则构造选择：`settings` 被省略或多了未知�
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 发送前镜像 D1 客户端规则 | Controller 校验测试遍历边界样例：16 项与 64 KiB 的闭区间、字节序与严格 ID、canonical 版本、`settings` 必填；非法或超限选择在发送前被拒绝，不启动 Agent、不发送控制帧 | Missing |
+| 发送前镜像 D1 客户端规则 | Controller 校验测试遍历边界样例：16 项与 64 KiB 的闭区间、字节序与严格 ID、canonical 版本、`settings` 必填；非法或超限选择在发送前被拒绝，不启动 Agent、不发送该 `start_agent_session` | Missing |
 | 按能力派发 | Controller 派发测试：不声明 `session_mcp` 的 Node 收不到非空选择（或以有名字的原因拒绝派发），空选择不要求该能力 | Missing |
 
 ### 决策依据
 
-D1、D4 失败表第一行与能力门禁，不变量 1、2、5；Node 侧对应义务与证据见[显式 Session MCP 用例](../../node/agent-runtime/session-mcp.md)。
+D1、D4 失败表第一行与能力门禁，不变量 1、2；Node 侧对应义务与证据见[显式 Session MCP 用例](../../node/agent-runtime/session-mcp.md)。
