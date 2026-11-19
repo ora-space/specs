@@ -14,6 +14,12 @@ HTTP/PostgreSQL/TCP DNS；模型转发的上游为受控 TLS 服务，不是现�
 慢下载源保持 ZIP 不完整并等待客户端关闭，直接检查取消早于独立 Fetch 截止，避免把小包自然完成或超时作为策略取消证据。
 整包正常路径另由 `smoke.py` 覆盖真实 Node 两轮、成果与释放、认证配置轮换；它不证明真实企业模型已验收。
 
+离线部署证据对应固定验收候选 `upstream-20261119-v1`：cluster `0266c0fa8edc84f7e34dc80346945a034ddef233`、
+Cloud upstream `dc623160e75d5b5248f5b0462e0d6a755f74271d`（含已合并的 cloud#73 端点覆盖与 cloud#364 启动端点日志），
+[Actions run 44541074141](https://github.com/wanglongan587/cluster/actions/runs/44541074141) 的九镜像构建/导出、
+真实 Node/交付恢复、认证与共享出网 smoke 全部通过；认证 smoke 同时核对 Gateway 启动端点日志与已应用 site 覆盖逐项一致。
+该候选仍是 local-validation 全新安装验收，不是真实企业部署验收；cluster#25 合并后再定稿最终证据版本。
+
 
 ## Public deployments must retain the existing HTTPS and trusted DNS policy
 
