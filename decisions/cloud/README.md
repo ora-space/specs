@@ -15,6 +15,7 @@ Cloud 的领域与协议边界划分，不预先决定 Go package、数据库表
 | `squad` | [人机编组根决策](squad/0-workspace-scoped-human-agent-squads.md) approved，尚待实现；加入事务归 tenancy，执行另行决策 |
 | `project` | Project 聚合、Repository 意图、凭据引用和 Project 级资源状态 |
 | `workspace` | Workspace 业务身份、归属和生命周期意图：协作 Space（`collab_workspaces`）与运行时工作区（`workspaces`）两类聚合 |
+| `workspace-view` | 工作区查看：只读查看对话、工作流运行、任务运行的 Agent 工作目录（目录、文件、变更、diff）；[根决策](workspace-view/0-read-only-session-working-directory-view.md) proposed，是 #1029 正式契约的一部分 |
 | `operation` | 持久操作、幂等、版本、重试、状态转换和恢复证据 |
 | `execution-admission` | Access、Execution Ticket、准入关闭、idle 证据和活动保护 |
 | `controller-integration` | Controller lease、内部快照、effect plan、epoch fencing 和接管边界 |
