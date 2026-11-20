@@ -47,7 +47,7 @@ spec。
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
 | 空与省略等价、旧 spec 兼容 | `crates/node-protocol/tests/protocol/session_mcp.rs` 的 `session_mcp_round_trip_and_old_spec`：旧输入等于空选择、空选择不序列化、分帧往返保留显式 settings | Covered |
-| 有序唯一规范、版本 canonical、上限 | 同文件 `session_mcp_rejects_ambiguous_or_unbounded_selection`：重复、乱序、非严格 ID、`v1.2.0`、17 个 Server、值/键/转义分别越过 64 KiB 的选择在编码边界被拒绝（接收边界共用同一 `validate()`，见下方缺口）；恰好 16 个 Server 与恰好 64 KiB 被接受 | Partial |
+| 有序唯一规范、版本 canonical、上限 | 同文件 `session_mcp_rejects_ambiguous_or_unbounded_selection`：重复、乱序、非严格 ID、`v1.2.0`、17 个 Server、值/键/转义分别越过 64 KiB 的选择在编码与接收边界都被拒绝；恰好 16 个 Server 与恰好 64 KiB 被接受 | Partial |
 
 ### 代表性证据与剩余缺口
 
@@ -220,8 +220,8 @@ Node 在 `HelloAccepted.capabilities` 广告 `session_mcp`；echo agent 的 ACP 
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 能力广告与 wire 拼写 | `crates/node-protocol/tests/protocol/session.rs` 的 `accepts_independent_and_combined_execution_capabilities` 固定 `session_mcp` 拼写；`apps/ora-node/tests/standalone/agent_sessions/support.rs` 的生产握手断言真实 Node 进程广告 `SessionMcp`（与 `AgentSession` 同批）；反向「无 Agent 配置的 Node 不广告」未测 | Partial |
-| 能力失败停在 `session/new` 前 | `apps/ora-node/tests/agent_session/mcp.rs` 的 `mcp_capability_failures_stop_before_session_new`：ACP 方法列表只有 `initialize`，终态为 `agent_failed` + `mcp_load_session_missing` / `mcp_http_capability_missing`；失败路径自身的进程清理与租约释放未断言 | Partial |
+| 能力广告与 wire 拼写 | `crates/node-protocol/tests/protocol/session.rs` 的 `accepts_independent_and_combined_execution_capabilities` 固定 `session_mcp` 拼写；`apps/ora-node/tests/standalone/agent_sessions/support.rs` 的生产握手断言真实 Node 进程广告 `SessionMcp`（与 `AgentSession` 同批） | Partial |
+| 能力失败停在 `session/new` 前 | `apps/ora-node/tests/agent_session/mcp.rs` 的 `mcp_capability_failures_stop_before_session_new`：ACP 方法列表只有 `initialize`，终态为 `agent_failed` + `mcp_load_session_missing` / `mcp_http_capability_missing`，进程清理与租约归零 | Partial |
 | preflight 失败不启动 Agent | 同文件 `mcp_preflight_failures_start_no_agent`：`mcp_plugin_missing` / `mcp_setting_missing` 无 ACP 帧、无插件进程 | Covered |
 | 失败标识无值 | 上述两测试断言终态携带 `plugin_id` / `setting_id` / `transport` 且其 JSON、日志与文件扫描无值；spec 级失败按帧校验拒绝（`session_mcp_rejects_ambiguous_or_unbounded_selection`） | Covered |
 
