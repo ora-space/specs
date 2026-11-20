@@ -1,12 +1,12 @@
 ---
-status: approved
+status: implemented
 ---
 
 # 工作流派发前拒绝缺失的已选 MCP
 
 Desktop 在 `start`、`restart` 以及保留或切换快照的 `resume` 开始派发前，检查本次要执行的整张冻结图。任何节点启用的 MCP 无法在已安装插件目录中解析时，命令返回 `workflow_mcp_not_found`，运行保留原状态。切换快照的检查顺序见 D3。
 
-`approved` 表示派发门禁及它与节点失败的边界已经确定。它只约束 Desktop。Cloud 延用自己的[工作流发布与启动门禁](../../../../../cloud/workflow/0-cloud-side-scheduler-owns-workflow-execution.md)，两者都在运行期判断环境是否可用，用户可以先编辑草稿。
+本决策只约束 Desktop。Cloud 延用自己的[工作流发布与启动门禁](../../../../../cloud/workflow/0-cloud-side-scheduler-owns-workflow-execution.md)，两者都在运行期判断环境是否可用，用户可以先编辑草稿。
 
 ## 继承与修改
 
@@ -61,8 +61,6 @@ Desktop 在 `start`、`restart` 以及保留或切换快照的 `resume` 开始�
 | 把配置、能力与健康加入预检 | 用户会在运行级收到需由特定节点的 Agent、设置或探测解释的错误 |
 | 每次节点派发都重扫整图 | session setup 已按当时的显式选择解析该节点；全图重扫会让不相关节点的卸载中断进行中的运行，且仍消除不了检查后的竞态 |
 
-## 落地顺序
+## 核心测试依据
 
-1. [desktop#790](https://github.com/ora-space/desktop/pull/790) 承接 D1、D2、D4 的派发入口、错误与节点边界。
-2. 同一产品变更补齐 D3 的切换路径，证明目标图校验先于 checkpoint 与 worktree 的任何改动。
-3. 产品变更合并后，在[核心用例](../../../../../../test-cases/desktop/core/agent/session/mcp/workflow-mcp-preflight.md)按合并提交引用 MCP 专用的 start、restart、resume 和切换快照证据，再将本决策标为 `implemented`。
+[派发前 MCP 预检](../../../../../../test-cases/desktop/core/agent/session/mcp/workflow-mcp-preflight.md)记录派发、错误处理、切换快照和 checkpoint 恢复的直接证据与缺口。
