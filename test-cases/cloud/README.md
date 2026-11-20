@@ -182,6 +182,17 @@ cloud#76（`ceb39bc`）与 cluster#27（`033a4ea`）合入 main 并改为 `imple
 | plugin-marketplace | [配置元数据分发](plugin-marketplace/agent-configuration-metadata.md) | 配置读取触发执行/下载、catalog 更新改写已选声明、安装结果与计划脱钩、安装权越权读个人配置 |
 | model-access | [个人 Agent 配置、冻结与授权](model-access/personal-agent-configurations.md) | Key 进普通配置、CAS 失效、默认值漂移、Thread 越权、冻结不全、撤销复活、修复覆盖并发、多空间失配、别名越权、真实验收缺口 |
 
+## 已实现的确定性领取拒绝结算
+
+[Operation 领取结算决策](../../decisions/cloud/operation/20261014-settle-deterministic-dispatch-refusals.md)经 owner
+按原文批准后，由 [cloud#74](https://github.com/ora-space/cloud/pull/74)（`ee712e1`）实现领取事务内结算与
+`last_claimed_at` 轮转，状态改为 `implemented`；证据固定在该提交，各义务独立标记 Covered/Partial。
+真实 Rust Controller 的联合矩阵仍按 #108 记为未覆盖。
+
+| 领域 | 核心用例 | 重点风险 |
+| --- | --- | --- |
+| operation | [确定性领取拒绝与轮转](operation/deterministic-claim-refusals.md) | 拒绝占住队头、结算半提交、钩子失败未回滚、轮转饥饿、历史改写、未知执行被改写、旧快照推进、clone 预算被重置 |
+
 ## 已实现的 Issue 协作交互
 
 [Issue 协作根决策](../../decisions/cloud/issue-collaboration/0-typed-targets-and-explicit-execution-intent.md)为 `implemented`，补登 Cloud 已上线的协作契约。
