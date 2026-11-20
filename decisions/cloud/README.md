@@ -27,6 +27,7 @@ Cloud 的领域与协议边界划分，不预先决定 Go package、数据库表
 | `issue-collaboration` | Issue 上的协作交互：`@` 目标与模式、评论/交互/运行的关系、Timeline、Workflow 发起表单与 Confirm 边界 |
 | `issue-run` | Issue 上 @Agent 的运行编排：运行 Workspace、阶段状态机、取消、交付与释放 |
 | `thread` | Agent 运行的对话记录：Thread 条目、用户追加消息、结束条件与实时刷新 |
+| `chat` | 独立轻量聊天：个人私有的会话与消息、创建时冻结的模型绑定、会话范围的模型授权、请求作用域的流式回复，以及不起 Node 沙盒、不产生 Revision 的边界 |
 | `revision` | 对象存储配置、上传授权、Revision 校验与登记 |
 | `git-server` | 沙盒访问的 Git Server：协议、git-access 身份、按 Cloud 当前状态的逐请求授权与 ref 规则 |
 | `repo-executor` | 唯一访问外部 Git 仓库的执行器：服务身份、一次性授权与凭据兑换、同步与发布的执行步骤、结果分类和部署 |
