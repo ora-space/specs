@@ -18,7 +18,7 @@ HTTP/PostgreSQL/TCP DNS；模型转发的上游为受控 TLS 服务，不是现�
 Cloud upstream `dc623160e75d5b5248f5b0462e0d6a755f74271d`（含已合并的 cloud#73 端点覆盖与 cloud#364 启动端点日志），
 [Actions run 44541074141](https://github.com/wanglongan587/cluster/actions/runs/44541074141) 的九镜像构建/导出、
 真实 Node/交付恢复、认证与共享出网 smoke 全部通过；认证 smoke 同时核对 Gateway 启动端点日志与已应用 site 覆盖逐项一致。
-该候选仍是 local-validation 全新安装验收，不是真实企业部署验收；cluster#25 合并后再定稿最终证据版本。
+Cloud 来源锁从 `da2125f` 换到 `dc623160` 时一并带入 `internal/core/migrations` 的 0072–0075 四份 SQL 与迁移 README 更新，因此该候选仍是 local-validation 全新安装验收，不是真实企业部署验收，也不据此声称旧库升级兼容；cluster#25 合并后再定稿最终证据版本。
 
 
 ## Public deployments must retain the existing HTTPS and trusted DNS policy
