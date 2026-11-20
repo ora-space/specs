@@ -12,7 +12,7 @@ Cloud 的领域与协议边界划分，不预先决定 Go package、数据库表
 | `api-boundary` | 公开与内部 HTTP API、OpenAPI、分页、错误契约和输入边界 |
 | `identity-access` | 外部身份映射、服务与用户凭据、认证上下文和访问判定 |
 | `tenancy` | Tenant、Membership、角色、管理员保护和 owner 隔离 |
-| `squad` | [人机编组根决策](squad/0-workspace-scoped-human-agent-squads.md) approved，尚待实现；加入事务归 tenancy，执行另行决策 |
+| `squad` | [人机编组根决策](squad/0-workspace-scoped-human-agent-squads.md)（v1，approved，未实现）；[以 v2-server 为准的正式契约](squad/20261111-squad-contract-on-v2-server.md) proposed，approved 后取代根决策（#1029），执行另行决策 |
 | `project` | Project 聚合、Repository 意图、凭据引用和 Project 级资源状态 |
 | `workspace` | Workspace 业务身份、归属和生命周期意图：协作 Space（`collab_workspaces`）与运行时工作区（`workspaces`）两类聚合 |
 | `operation` | 持久操作、幂等、版本、重试、状态转换和恢复证据 |
