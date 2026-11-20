@@ -151,6 +151,7 @@
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
 | adapter 固定 `huawei-corp + uuid`，去掉首尾空白，显示名称字段缺失时回退 UUID，并拒绝缺失/全空白 UUID 与错误响应 | `idaas.TestExchangeUsesClientSecretPostAndReturnsCorporateIdentity`、`idaas.TestExchangeFallsBackToUUIDAndRejectsProviderAnswers` | `Covered` |
+| 部署覆盖 HTTPS authorize/token/userinfo 后保留身份与表单协议；非法 URL 不泄漏配置值 | `idaas.TestDeploymentEndpointsUseTLSAndPreserveProtocol`、`idaas.TestEndpointOverridesRejectUnsafeURLs`、`gateway.TestLoadConfigReadsFileAndEnvironmentOverrides` | `Covered`（受控 TLS 服务与配置边界；真实企业认证仍需现场验收） |
 | 全链路只建立一条 identity（假 IDaaS 返回带首尾空白的 uuid），显示名称保持首次 JIT 快照，登录不授予 membership | `integration.TestGatewayIDaaSLoginIdentityAndSessionLifetime` | `Covered` |
 | access/refresh token 不成为 session token，session 只保存最小归一身份字段 | `integration.TestGatewayIDaaSLoginIdentityAndSessionLifetime` | `Covered` |
 | 日志与公开错误不包含 code、token、refresh token、client secret、邮箱或工号 | 适配器错误不携带响应正文；尚无覆盖所有日志输出的捕获扫描 | `Partial` |

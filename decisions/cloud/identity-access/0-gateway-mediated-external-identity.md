@@ -105,6 +105,12 @@ Cloud 会返回用户无法理解的 `401 invalid_identity`。GitHub token、OAu
 
 ### D3a：华为 IDaaS 使用 2.0 `client_secret_post` Authorization Code，并以 UUID 作为稳定 subject
 
+下文三个路径是默认值。部署方可以分别配置 authorize、token、userinfo 的完整 HTTPS URL，
+用于同一企业身份权威在不同环境中的端点差异；浏览器请求不能选取这些地址。覆盖值不得包含 URL
+userinfo、query 或 fragment，参数仍由适配器按本节协议构造，token/userinfo 继续禁止跟随重定向。
+应用凭据以挂载文件提供，地址和 Client ID 由运行时配置提供；更换它们不要求重建镜像，但需重新创建
+Gateway 容器。此配置能力不改变 `huawei-corp`、UUID、scope、身份关联、会话撤销或 Cloud 授权规则。
+
 内网部署通过 `login.provider=huawei-idaas` 显式选择适配器。Gateway 使用 IDaaS 2.0 Authorization Code
 的 `client_secret_post` 机密客户端认证；PKCE 模式默认关闭，且面向无 secret 的公共客户端，因此不启用。
 authorize 地址为 `/saaslogin1/oauth2/v1/authorize`，只发送 `client_id`、`response_type=code`、固定
