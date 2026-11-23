@@ -3,14 +3,16 @@
 依据[Cloud iteration 执行契约](../../../decisions/cloud/workflow/20261025-iteration-foreach-execution.md)
 （`implemented`，D1–D6）。按业务风险登记发布门禁、轮次执行、持久化、取消与容量边界。
 源码证据核对基线为 cloud `09982ab350886b028cea8e0ed74a9a0abed7a43b`，来自已合并的
-cloud#179、#182、#184、#187、#189、#191；源码链接固定到该提交。现场证据各自保留部署版本，
+cloud#179、#182、#184、#187、#189、#191；源码链接固定到该提交。失败预留补充证据固定到已合并
+cloud#198 的 `e328be2e6d05aa712ff24602e04367ded0f28ff3`，其[六项 CI][reserve-ci]通过，
+PostgreSQL / 聚焦 race 验证记录见[补证运行][reserve-run]。本次源码核对未重跑测试；现场证据各自保留部署版本，
 不把较早版本的观察当作最新 main 重跑，也不以测试名称、代码实现或共用测试代替完整义务的直接断言。
 调度器共同义务见[调度串行与恢复](scheduler-serialism-and-recovery.md)。
 
 本文的 `Partial` 表示已有直接证据只覆盖义务的一部分；每行写明尚缺范围。剩余承接：
 
 - [#743][gaps]，@ElephantGit：G1 门禁/作用域，G2 数据/轮次矩阵，G3 恢复/取消竞争，G4 容量检查点/读取与视图矩阵。
-- [#702][reserve-gap]，@ElephantGit：最后失败轮的最终复制使用预留、两项以上 continue 在下一轮普通增长时超限的直接证据及正式说明。
+- [#702][reserve-gap] 的最后失败轮复制、下一轮普通增长边界及双语说明已由 cloud#198 交付；对应直接义务见容量表，不再列为待补范围。
 - [#619][sessions] / #691：完整节点会话读取及按轮入口；[共同恢复缺口 #665][recovery-gap] 保持原承接，不在此重复登记为已覆盖。
 
 真实栈的快节点 foreach/fail/continue/超项数/空数组、IA1/IC1、I8、ID1 和两入口验收分别见 [快节点][live-fast]、[真实 Agent 与取消][live-agent]、
@@ -73,6 +75,7 @@ desktop 均为 `d913440`。两入口补充报告记录 `deployment-ready`、`dir
 |---|---|---|
 | 缺省、硬上限与非法配置在发布时区分 | [配置矩阵][config] 拒绝 0/小数；[生产门禁][scope] 接受 100、拒绝 101；[现场][live-import] 超限草稿保留且发布拒绝。尚缺缺省 50、全部非法类型及默认策略直接断言（G2） | Partial |
 | N=M 正常运行，N=M+1 在两种策略下都零轮失败 | [调度器][scheduler] 的 RefusesAnOverLimitArray 覆盖 fail；[启动拒绝][invalid-source] 的 ContinueRejectsInvalidSourceBeforeFirstRound 覆盖 continue 且无成员状态；[现场超项数][live-fast] 失败。尚缺 N=M 精确边界及两策略的账本/归档/工作项完整计数（G2） | Partial |
+| 超项数诊断包含实际 N、上限 M 与调整指引 | [启动实现][iteration-run-current] 的 iteration_over_limit 仅提供 N 与 M，尚无调整指引；现有失败码断言不能证明完整提示，仍需实现和直接验证（G2） | Partial |
 
 - 决策依据：D2、D6，不变量 5。
 
@@ -199,7 +202,9 @@ desktop 均为 `d913440`。两入口补充报告记录 `deployment-ready`、`dir
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
 | 每个检查点与两类字节边界按实际编码生效 | [预算测试][budget] ExactJSONBytes 精确断言 UTF-8/转义输入 1 MiB 与 +1，LocalObligations 检查 collect/归档超限，TotalBudgetCountsRepeatedValues 检查重复值；[DB][guards] 覆盖多字节输入和成员提交。尚缺所有检查点的等于/超出边界与两策略 DB 矩阵（G4） | Partial |
-| 超限保留既有提交，并在失败预留内稳定结算 | [BudgetCASPreservesCommittedState][guards] 检查旧成员/来源未变、候选未泄漏、总量不超硬限；[预留测试][reserve] 检查历史失败不能放宽新增长、相同状态可重读及新失败结算。最后失败轮复制/下一轮增长由 #702 承接；完整诊断/账本/后续派发矩阵由 G4 承接 | Partial |
+| 超限保留既有提交，并在失败预留内稳定结算 | [BudgetCASPreservesCommittedState][guards] 检查旧成员/来源未变、候选未泄漏、总量不超硬限；[预留测试][reserve] 检查历史失败不能放宽新增长、相同状态可重读及新失败结算。下两行补齐最后轮复制与下一轮增长；其他检查点的完整诊断/账本/后续派发矩阵仍由 G4 承接 | Partial |
+| 最后一轮 continue 失败的账本与最终输出复制在同次 CAS 共用预留，仍受 8 MiB 硬限约束 | [TestWorkflowLastFailedIterationOutputCopyUsesBoundedReserve][reserve-boundary] 通过真实 PostgreSQL、生产 round engine 与 CAS，精确检查普通预算、普通预算+1、8 MiB−1/恰好/+1。去掉最终输出复制后候选仍在普通预算内；允许范围内完整持久化，超硬限时拒绝整个候选并保留旧账本和成员 | Covered |
+| 已提交失败轮超过普通预算后，下一轮普通增长拒绝且终态重放幂等 | [TestWorkflowContinueAfterReservedFailureRejectsOrdinaryGrowth][reserve-boundary] 使用两个 item，先提交失败轮再由调度器从 PostgreSQL 读取；断言下一轮以 workflow_state_size_exceeded 失败、账本/归档保留、总量不越 8 MiB，两次终态调度保持完整状态和版本 | Covered |
 | 接近总预算时整行 CAS 的耗时与 WAL 成本可复核 | [可复现测试][measurement] 使用生产 settleWorkflowRunStates 与真实事务；[原始测量][measurement-report] 记录负载、版本、逐次耗时和 WAL LSN，范围见下文 | Covered |
 
 测量边界：WSL/Docker、Go 1.27.1、PostgreSQL 17.11 x86_64，`wal_compression=off`，独占测试数据库；
@@ -208,6 +213,10 @@ desktop 均为 `d913440`。两入口补充报告记录 `deployment-ready`、`dir
 的物理重复，紧凑 JSON 8,322,048 字节，距普通上限 1,024 字节。10 次 CAS 合计 1.661229 s、平均 166.123 ms；
 WAL insert LSN 从 `0/791ABA58` 到 `0/7E8A38B0`，增量 91,192,920 字节。结果来自 #660 的记录，
 本次未重新测量；只证明该负载的整行 CAS 基线，不证明 100 轮完整成本或生产性能。
+
+预留边界测试从受控的合法失败成员检查点开始，直接证明生产 CAS 与后续调度的行为；不等同于真实 Agent
+从发布到完成的端到端执行，也不覆盖所有局部 1 MiB 检查点、两策略组合、活动轮 UI 归因或并发恢复。
+正式说明见[中文容量契约][reserve-doc-zh]与[英文容量契约][reserve-doc-en]。
 
 - 决策依据：D5、D6，不变量 9、落地与验证边界。
 
@@ -224,7 +233,7 @@ WAL insert LSN 从 `0/791ABA58` 到 `0/7E8A38B0`，增量 91,192,920 字节。�
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 活动 / 最终轮去重，成员和错误归因完整 | [轮次投影][rounds] 检查三项含 continue 失败、fail 后无后续轮、空源及活动轮；[详情组件][round-views] 检查 item/collect/成员与失败账本，现场 [I8][live-entry]、[IC1][live-agent]、[ID1][live-output] 补运行视图。会话入口未交付（#619/#691），iteration 容量失败完整呈现矩阵尚缺（G4） | Partial |
+| 活动 / 最终轮去重，成员和错误归因完整 | [轮次投影][rounds] 检查三项含 continue 失败、fail 后无后续轮、空源及活动轮；[详情组件][round-views] 检查 item/collect/成员与失败账本，现场 [I8][live-entry]、[IC1][live-agent]、[ID1][live-output] 补运行视图。普通节点会话区已交付，但[详情接线][detail-current]未向会话区传递所选历史轮的 attempt，按轮会话绑定仍缺（#619）；iteration 容量失败完整呈现矩阵尚缺（G4） | Partial |
 | API 兼容且列表不展开归档 | [历史 API][run-api] 的 workflowRunSummary 仍返回完整 nodeStates；现有轮次解析测试不能证明旧读取方兼容或列表载荷隔离。该完整义务尚无直接证据，且摘要载荷目标未实现，由 G4 核对兼容方案及直接测试 | Missing |
 
 - 决策依据：D3、D5，不变量 11。
@@ -245,6 +254,13 @@ WAL insert LSN 从 `0/791ABA58` 到 `0/7E8A38B0`，增量 91,192,920 字节。�
 [codec]: https://github.com/ora-space/cloud/blob/09982ab350886b028cea8e0ed74a9a0abed7a43b/internal/core/workflow_iteration_state_test.go
 [budget]: https://github.com/ora-space/cloud/blob/09982ab350886b028cea8e0ed74a9a0abed7a43b/internal/core/workflow_state_budget_test.go
 [reserve]: https://github.com/ora-space/cloud/blob/09982ab350886b028cea8e0ed74a9a0abed7a43b/internal/core/workflow_failure_reserve_db_test.go
+[reserve-boundary]: https://github.com/ora-space/cloud/blob/e328be2e6d05aa712ff24602e04367ded0f28ff3/internal/core/workflow_failure_reserve_boundary_db_test.go
+[reserve-ci]: https://github.com/ora-space/cloud/actions/runs/40618547983
+[reserve-run]: https://github.com/ora-space/circus/issues/745
+[reserve-doc-zh]: https://github.com/ora-space/cloud/blob/e328be2e6d05aa712ff24602e04367ded0f28ff3/docs/workflows/workflows.md
+[reserve-doc-en]: https://github.com/ora-space/cloud/blob/e328be2e6d05aa712ff24602e04367ded0f28ff3/docs/workflows/workflows.en.md
+[iteration-run-current]: https://github.com/ora-space/cloud/blob/e328be2e6d05aa712ff24602e04367ded0f28ff3/internal/core/workflow_iteration_run.go
+[detail-current]: https://github.com/ora-space/cloud/blob/e328be2e6d05aa712ff24602e04367ded0f28ff3/frontend/src/features/workflows/run/run-detail-page.tsx
 [measurement]: https://github.com/ora-space/cloud/blob/09982ab350886b028cea8e0ed74a9a0abed7a43b/internal/core/workflow_cas_measurement_test.go
 [rounds]: https://github.com/ora-space/cloud/blob/09982ab350886b028cea8e0ed74a9a0abed7a43b/frontend/src/features/workflows/run/run-rounds.test.ts
 [round-views]: https://github.com/ora-space/cloud/blob/09982ab350886b028cea8e0ed74a9a0abed7a43b/frontend/src/features/workflows/run/run-round-views.test.tsx
