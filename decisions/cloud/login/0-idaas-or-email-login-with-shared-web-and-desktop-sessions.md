@@ -4,6 +4,8 @@ status: approved
 
 # 登录与会话：部署版只走华为 IDaaS、凭一次性邀请链接入队，开发版用无密码邮箱，由 `V2_LOGIN` 二选一；网页和 desktop 两种会话落在同一个账号上；取代 v1 Gateway 的登录与 desktop 会话
 
+> 历史决策：[Desktop Cloud 连接第一版](../../desktop/cloud-connection/20261121-first-version-loopback-login-and-host-held-token.md) 对本决策 D6 的 Cloud 契约做了一处补充：新增 `POST /auth/desktop/deny`。它用于确认页上的「取消」：必须有网页会话并校验 `Origin`，带 `Bearer` 的调用一律拒绝；`redirectUri` 与批准走同一条回环校验；只把 `error=access_denied` 和原样的 `state` 送回回环地址，不签发任何东西。D6 的其余约定不变，desktop 一侧的继承与修改见该 ADR。
+
 Cloud 进程自己处理登录，没有独立的 Gateway。同一个程序有两种登录方式，由启动配置 `V2_LOGIN` 二选一：`idaas` 是部署版
 （内网演示和正式部署），只能用华为 IDaaS 登录，没有邮箱登录的入口；`email` 是开发版（公网演示），沿用现在的无密码
 邮箱登录。IDaaS 账号只以 IDaaS 的 `uuid` 认人：任何员工都能登录并自动得到账号，但打开管理员生成的一次性邀请链接

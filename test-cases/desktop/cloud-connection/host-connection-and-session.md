@@ -115,7 +115,8 @@
 - 触发：退出登录；改地址或清空地址；登出请求失败或超时；安全存储删除失败。
 - 必须成立：先删除本机条目和内存令牌，再用内存里的令牌吊销；吊销失败也清本地并提示“服务端撤销未确认”，改地址同样提示；
   不保留令牌作重试队列；同时取消进行中的登录；网页会话、其他设备的令牌、本地文件、工作区、模型连接、Agent 凭据和
-  Git 身份不变。
+  Git 身份不变。改地址时删除旧条目失败：旧条目按旧 origin 记，新地址读不到它，新地址保持未登录；失败写日志，
+  仍用内存里的令牌请旧服务器吊销，吊销结果照常经 `SetCloudServerResponse.revocation` 回报。
 - 禁止结果：退出后本机仍可用旧令牌；为重试保留令牌；退出影响网页会话或其他设备；改动本地 Git 或模型身份。
 - 决策依据：根决策 D6；第一版 ADR D1、D6，不变量 7。
 
@@ -125,3 +126,4 @@
 | --- | --- | --- |
 | 退出与改地址的顺序、吊销确认与未确认两种结果、取消进行中的登录 | `app_lib::cloud_connection::tests::signing_out_offline_is_local_and_unconfirmed`（连不上时本机已清、结果为未确认；可达时为已确认）；`changing_the_server_signs_out_of_the_old_one`（改地址删旧条目、吊销未确认如实回报）；`cancelling_during_the_exchange_revokes_the_issued_token`。仍缺：“先删条目再吊销”的顺序和退出时取消进行中的登录没有直接断言 | `Partial` |
 | 真实 v2-server 上 desktop 退出后令牌 `401`、网页会话仍有效 | cloud `internal/server/desktop_login_test.go` 的 `TestDesktopLogoutAndAccountState`（真实 v2-server 与数据库：登出后该令牌 `401`，同账号另一个令牌和网页会话仍有效）；Linux 真实栈（GNOME、gnome-keyring，desktop `e17c4f82`）与 Windows 11 真机（debug 构建，ora-space/circus#1379）：退出后吊销已确认、条目删除，服务端只剩别的令牌 | `Covered` |
+| 改地址时删除旧条目失败：新地址未登录、旧令牌仍请求吊销并回报结果 | 尚无 | `Missing` |
