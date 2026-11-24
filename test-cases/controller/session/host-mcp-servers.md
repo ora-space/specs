@@ -2,9 +2,11 @@
 
 依据[Controller 交付宿主 MCP 决策](../../../decisions/node/agent-runtime/20261118-host-mcp-servers-in-agent-session-spec.md)
 D1 与 D6。这些义务只能由提供宿主 Server 的一方（Controller 侧，在 Cloud v2 中就是 Cloud 进程）验证，Node
-侧义务见[Node 承载的宿主 MCP 用例](../../node/agent-runtime/host-mcp-servers.md)。使用方（工作流完成工具）尚未
-接入，下表证据一律为 `Missing`，随它的交付登记直接测试；使用方的决策（预计在 `cloud/workflow`）会接手或
-迁移这些用例。
+侧义务见[Node 承载的宿主 MCP 用例](../../node/agent-runtime/host-mcp-servers.md)。第一个使用方是
+[Cloud 经 Node 宿主 MCP 提供完成工具](../../../decisions/cloud/workflow/20261124-host-completion-tool-for-node-hosted-interactive-nodes.md)
+（`approved`），工作流侧的义务在[完成工具用例](../../cloud/workflow/host-completion-tool.md)。下表按首批实现合入 cloud main 的提交
+[`4ba9dc5a`](https://github.com/ora-space/cloud/commit/4ba9dc5a) 登记直接测试，缺口如实保留；停靠会话旧 execution 的结算
+还没有实现。
 
 ## Controller Sends Only Valid Host Servers To Capable Nodes
 
@@ -17,8 +19,8 @@ Node 关闭整条控制连接，重连后重发又被关闭；向未声明能力
 
 ### 前置状态
 
-可派发的 Node 分别声明与不声明 `session_host_mcp_servers`；部署配置为 Node 指定宿主端点地址；Controller
-使用 `node-protocol` 的共用接受与拒绝样例。
+可派发的 Node 分别声明与不声明 `session_host_mcp_servers`；单机部署，Agent 与 Controller 在同一网络
+命名空间；Controller 使用 `node-protocol` 的共用接受与拒绝样例。
 
 ### 触发
 
@@ -31,7 +33,8 @@ Node 关闭整条控制连接，重连后重发又被关闭；向未声明能力
 - 只向同时声明 `session_host_mcp_servers` 与 `agent_session` 的 Node 发送非空列表。
 - 需要宿主能力而没有具备能力的 Node 时，在 WorkflowRun 启动准入时以有名字的原因拒绝（或另选 Node），
   不降级为不需要宿主能力的行为。
-- 每个 Node 使用的 URL 来自部署配置；loopback 明文只用于与 Agent 同网络命名空间的端点。
+- 单机部署的端点只绑定 `127.0.0.1`，发给 Node 的 URL 是回环明文；loopback 明文只用于与 Agent 同网络命名空间的端点。
+- 多机、容器或沙箱部署的 URL 怎样取自部署配置，由另立的决策规定后再登记。
 
 ### 禁止结果
 
@@ -42,13 +45,13 @@ Node 关闭整条控制连接，重连后重发又被关闭；向未声明能力
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 共用样例判断一致 | Controller 校验测试遍历共用样例文件，逐项断言接受或拒绝与标注相同 | Missing |
-| 按能力派发与启动准入 | Controller 测试：不声明能力的 Node 收不到字段；需要宿主能力而无可用 Node 时，WorkflowRun 在启动准入时以有名字的原因被拒绝，没有任何节点开始运行 | Missing |
-| URL 来自部署配置 | Controller 配置测试：每个 Node 的宿主端点取自部署配置，远程沙箱没有 Agent 可达的 https 端点时不提供宿主能力 | Missing |
+| 共用样例判断一致 | Controller 校验测试遍历共用样例文件，逐项断言接受或拒绝与标注相同。证据：[`TestHostMCPServersMatchNodesSharedSamples`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/execution/hostmcp_test.go) 遍历 `url_cases` 与 `list_cases`，逐项比较判断；[`TestAnInvalidHostListIsNotSent`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/agentruntime/host_tools_test.go)：非法列表不发送。缺口：`raw_cases` 没有断言（Controller 的类型无法构造）；样例是锁定 Node 提交上的副本，没有测试检查副本与来源一致 | Partial |
+| 按能力派发与启动准入 | Controller 测试：不声明能力的 Node 收不到字段；需要宿主能力而无可用 Node 时，WorkflowRun 在启动准入时以有名字的原因被拒绝，没有任何节点开始运行。证据：[`TestHostToolsNeedANodeThatTakesThem`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/agentruntime/host_tools_test.go)、[`TestARunIsRefusedAtItsStartWithoutTheTool`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/workflowhost/agent_completion_test.go)。缺口：没有改变 `agent_session` 的声明 | Partial |
+| 单机部署的端点只在本机回环 | Controller 测试：真实端点只绑定 `127.0.0.1`，发给 Node 的 URL 是回环明文。证据：[`TestTheEndpointServesTheOneTool`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/completiontool/server_test.go) 用真实端点签发的 URL 通过 D1 文法校验并可以调用，文法只允许字面回环地址用明文 http；[`TestHostToolsReachTheAgentAndNothingElse`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/agentruntime/host_tools_test.go)：给定的 URL 原样随 start 发给 Node。缺口：没有直接断言监听地址与 URL 的 scheme、主机。多机、容器或沙箱部署的部署配置另立决策后再登记 | Partial |
 
 ### 决策依据
 
-D1、D6“按能力派发、启动前准入”与“可达性由部署配置决定”，不变量 1、5。
+D1、D6“按能力派发、启动前准入”，不变量 1、5；“可达性由部署配置决定”在单机部署上由使用方决策 D1 修改。
 
 ## Host Endpoints Stay Valid Or The Execution Ends Before Serving
 
@@ -91,10 +94,10 @@ execution）。
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 跨重启有效或在提供服务前结束 | Controller 重启测试：同一 execution 在重启后能成功调用宿主工具，或者在宿主 Server 接受第一个请求之前已经以有名字的原因结束 | Missing |
-| 先持久化再发送 | Controller 测试：在发送与持久化之间注入崩溃，重启后的值与第一次发送的逐字节相同，或该 execution 在提供服务前被结束 | Missing |
-| 无法恢复时启动检查结束 execution | Controller 测试：凭据不可恢复时，启动检查在提供服务前走正常结束路径并记录原因 | Missing |
-| 重发相同字节 | Controller 测试：重发 start 时宿主列表与首次发送逐字节相同 | Missing |
+| 跨重启有效或在提供服务前结束 | Controller 重启测试：同一 execution 在重启后能成功调用宿主工具，或者在宿主 Server 接受第一个请求之前已经以有名字的原因结束。选择后者。证据：[`TestAReportSurvivesARestartButItsCredentialsDoNot`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/workflowhost/agent_completion_test.go) 断言重启前的 token 被拒绝；[`TestRecoveryKeepsTheSessionOfAParkedInteractiveNode`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/store/interactive_recovery_test.go) 断言没有停靠的会话在恢复时结束；[`TestTheCompletionToolIsServedAfterEarlierNodesStopped`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/completion_tool_order_test.go) 只断言源码里的启动顺序。缺口：停靠会话的旧 execution 还没有在提供服务前结算并记录原因 | Partial |
+| 先持久化再发送 | Controller 测试：在发送与持久化之间注入崩溃，重启后的值与第一次发送的逐字节相同，或该 execution 在提供服务前被结束。选择“在提供服务前结束”；没有注入崩溃的测试 | Missing |
+| 无法恢复时启动检查结束 execution | Controller 测试：凭据不可恢复时，启动检查在提供服务前走正常结束路径并记录原因。证据：[`TestRecoveryKeepsTheSessionOfAParkedInteractiveNode`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/store/interactive_recovery_test.go)：没有停靠的会话在恢复时结束。缺口：没有断言原因，停靠会话的旧 execution 没有结算 | Partial |
+| 重发相同字节 | Controller 测试：重发 start 时宿主列表与首次发送逐字节相同。没有重发 start 的测试 | Missing |
 
 ### 决策依据
 
@@ -138,11 +141,11 @@ D3“重发 start 时值被忽略”，D6“先持久化再发送，重发相同
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 按 execution 隔离凭据 | 宿主 Server 测试：另一个 execution 的凭据被拒绝且状态不变 | Missing |
-| attempt 绑定与有效期 | 宿主 Server 测试：早先 attempt 或过期的 token 被拒绝且状态不变 | Missing |
-| 以持久状态判定有效期 | Controller 测试：五种离开运行态的事件各自之后，同一凭据被拒绝 | Missing |
-| 吊销后重启仍拒绝 | Controller 测试：execution 结束后重启 Controller，同一凭据仍被拒绝 | Missing |
-| 自动接受不放大跨 execution 或跨 attempt 的调用 | 宿主 Server 测试：开启自动接受的节点收到越权调用时不完成 | Missing |
+| 按 execution 隔离凭据 | 宿主 Server 测试：另一个 execution 的凭据被拒绝且状态不变。证据：[`TestAnotherNodesCredentialOrTokenIsRefused`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/completiontool/server_test.go)、[`TestCredentialsEndWithTheirAgent`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/completiontool/server_test.go)：另一个节点的凭据、换掉的 execution 的凭据与编造的凭据都被拒绝，没有信号 | Covered |
+| attempt 绑定与有效期 | 宿主 Server 测试：早先 attempt 或过期的 token 被拒绝且状态不变。证据：[`TestACallIsAcceptedOnceAndOnlyForItsOwnTurn`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/completiontool/server_test.go)、[`TestResendingAPromptReplacesItsToken`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/completiontool/server_test.go)、[`TestAReportDoesNotOutliveItsTurn`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/workflowhost/agent_completion_test.go) | Covered |
+| 以持久状态判定有效期 | Controller 测试：五种离开运行态的事件各自之后，同一凭据被拒绝。证据：[`TestWorkflowNodeTurnLive`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/store/workflow_completion_tool_test.go)：停靠、轮次结束、运行取消后不再有效；[`TestCancellingARunWithdrawsTheTool`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/workflowhost/agent_completion_test.go)、[`TestAnAgentWithoutHTTPMCPFailsTheNode`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/workflowhost/agent_completion_test.go)：取消与 Agent 丢失之后端点拒绝。缺口：五种事件没有逐一测试，没有 `EndSession` 与 `StopUnconfirmed` | Partial |
+| 吊销后重启仍拒绝 | Controller 测试：execution 结束后重启 Controller，同一凭据仍被拒绝。证据：[`TestAReportSurvivesARestartButItsCredentialsDoNot`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/workflowhost/agent_completion_test.go)：重启后旧 token 被拒绝。缺口：没有用重启前的端点 URL 再调用，也没有先结束 execution 再重启 | Partial |
+| 自动接受不放大跨 execution 或跨 attempt 的调用 | 宿主 Server 测试：开启自动接受的节点收到越权调用时不完成。证据：[`TestAReportComesOnlyFromTheNodesOwnLiveTurn`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/workflowhost/agent_completion_test.go)：开启自动接受的两个节点互相越权调用都不留信号。缺口：只在首轮，首轮本来不自动接受 | Partial |
 
 ### 决策依据
 

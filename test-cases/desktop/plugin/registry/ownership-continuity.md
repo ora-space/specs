@@ -4,16 +4,15 @@
 
 ### 风险
 
-`skills` 表的活跃行以 `namespace = <完整 canonical Plugin ID>` 匹配，`effect_sources` 表的
-`UNIQUE(effect_kind, source_kind, namespace, identifier)` 同样以完整 plugin id 为键。若卸载流程
-只删除安装目录、不按同一把键清理这两张表，旧行会永远保持 active：卸载后重装同名插件会与旧行的
-native identity（技能名本身，不含 namespace）冲突，导致该 Workspace 的 Skill 收敛拿不到干净的
-Current；而如果旧行恰好不再冲突，则是另一种后果——无主的 ownership 永久残留，任何人都清不掉。
+`skills` 表的活跃行以 `namespace = <完整 canonical Plugin ID>` 匹配。若卸载流程只删除安装目录、
+不按同一把键清理该表，旧行会永远保持 active：它指向已删除的 package root，在 Skills 设置中残留为
+Unavailable，卸载后重装同名插件时与新行并存；无主的行永久残留，任何人都清不掉。
+（`effect_sources` 表曾以同一把键持久化 Plugin Skill Source，已随
+[Effect 退役](../../../../decisions/desktop/core/agent/session/skill/0-skill-catalog-from-storage-paths.md)删除。）
 
 ### 前置状态
 
-- 一个 Skill 插件已安装，其 `skills` 行与对应的 `effect_sources` 行已写入，且已通过 Effect 收敛
-  在某 Workspace 中物化出实际文件。
+- 一个 Skill 插件已安装，其 `skills` 行已写入。
 - 该插件的完整 canonical Plugin ID（`<namespace>/<identifier>`）是这些行的匹配键。
 
 ### 触发
@@ -23,30 +22,26 @@ Current；而如果旧行恰好不再冲突，则是另一种后果——无主�
 ### 必须成立
 
 - 卸载完成后，`skills` 表中该 plugin id 名下的全部行被清除。
-- 卸载完成后，`effect_sources` 表中该 plugin id 名下的全部行被清除（连同其驱动的 Desired
-  Projection 收敛为空，物化产物被移除）。
 - 清理只按完整 plugin id 匹配，不影响其他 namespace 下同名插件或同 identifier 不同 namespace
   的插件残留的行。
 
 ### 禁止结果
 
-- 卸载后安装目录已消失，但 `skills` 或 `effect_sources` 中仍保留该 plugin id 的行。
+- 卸载后安装目录已消失，但 `skills` 中仍保留该 plugin id 的 active 行。
 - 卸载清理误删了其他 namespace 下同 identifier 插件的行。
-- 卸载不经过 Effect 收敛就直接 `DELETE` 持久化行，绕开 ownership 账本直接留下无主的物化产物。
 
 ### 验证义务与证据
 
 | 验证义务 | 代表性证据测试 | 状态 |
 |---|---|---|
-| 在 repository 层直接调用移除操作时，给定 plugin id 的 `skills` 行与其 Desired Effect 计数归零 | `ora_db::repository_tests::plugin_skill_projection_round_trips_and_is_removed_with_its_plugin` | `Partial` |
-| 通过真实的 `uninstall_plugin` 后端流程（而非直接调用 repository 方法）触发上述清理 | 尚无直接证据；现有端到端卸载测试（`ora_backend::plugin::tests::rtk_hook_plugin_clean_data_directory_e2e`）针对 Hook 插件，不产生 `skills`/`effect_sources` 行 | `Missing` |
-| 卸载清理后，`effect_sources` 表中该 plugin id 名下的行本身被移除（而不仅是其 Desired Effect 计数归零） | 尚无直接证据；现有测试只查询 `effect_desired_effects`/`effect_scopes`，未直接断言 `effect_sources` 行被删除 | `Missing` |
+| 在 repository 层直接调用移除操作时，给定 plugin id 的 `skills` 行归零 | `ora_db::repository_tests::plugin_skill_projection_round_trips_and_is_removed_with_its_plugin` | `Partial` |
+| 通过真实的 `uninstall_plugin` 后端流程（而非直接调用 repository 方法）触发上述清理 | 尚无直接证据；现有端到端卸载测试（`ora_backend::plugin::tests::rtk_hook_plugin_clean_data_directory_e2e`）针对 Hook 插件，不产生 `skills` 行 | `Missing` |
 | 卸载清理不影响其他 namespace 下同 `identifier` 插件残留的行 | 尚无直接证据 | `Missing` |
 
 ### 决策依据
 
-- 来源派生 Namespace 决策「namespace 一旦落盘就不可改变」一节：列出 `skills` 表、`effect_sources`
-  表是完整 plugin id 匹配键的两处持久化位置，并说明匹配失败的具体后果。
+- 来源派生 Namespace 决策「namespace 一旦落盘就不可改变」一节：列出 `skills` 表是以完整 plugin id
+  为匹配键的持久化位置，并说明匹配失败的具体后果；其中 `effect_sources` 一行已随 Effect 退役失去对象。
 - 来源派生 Namespace 决策不变量 6、7。
 
 ## Agent Identity and Session Resolution Must Key Off the Full Canonical Plugin ID

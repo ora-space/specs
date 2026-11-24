@@ -11,7 +11,10 @@ ADR 为 `implemented`。证据基线是 cloud main 上 [cloud#403](https://githu
 [`2b80c023`](https://github.com/ora-space/cloud/commit/2b80c023)，以及补齐提示文案与运行测试的
 [cloud#417](https://github.com/ora-space/cloud/pull/417) 的合并提交 [`43ad6eb2`](https://github.com/ora-space/cloud/commit/43ad6eb2)：
 编辑器测试、v2-server 单元测试与运行测试，以及 `frontend-v2/e2e` 的真实 Node 用例。只有测试失败会直接说明义务不成立
-时才登记为证据。恢复版本（D4）还不存在，最后一个用例的义务留待该版本验证。
+时才登记为证据。前三个用例约束恢复版本之前的产品版本，证据固定在这些提交上；恢复版本的实现合入 cloud main
+（[`4ba9dc5a`](https://github.com/ora-space/cloud/commit/4ba9dc5a)）时，其中只适用于恢复版本之前的测试已删除或改写。最后一个用例由
+[Cloud 经 Node 宿主 MCP 提供完成工具](../../../decisions/cloud/workflow/20261124-host-completion-tool-for-node-hosted-interactive-nodes.md)
+兑现，证据按该提交登记，完成工具本身的用例见[经 Node 宿主 MCP 的完成工具](host-completion-tool.md)。
 
 ## New Interactive Nodes Default To End Turn Before The Completion Tool Ships
 
@@ -95,13 +98,13 @@ ADR 为 `implemented`。证据基线是 cloud main 上 [cloud#403](https://githu
   Agent 不支持 HTTP MCP 时以 `host_mcp_http_capability_missing` 失败；升级前启动的会话在结束前保持 `end_turn`。
 - 禁止结果：任何已保存的值或快照被改写；`agent` 节点仍按 `end_turn` 执行；能力不足时按 `end_turn` 运行；
   升级前启动的会话被要求完成信号。
-- 验证义务与证据（恢复版本尚不存在，待该版本验证）：
+- 验证义务与证据：
 
 | 义务 | 所需直接证据 | 状态 |
 | --- | --- | --- |
-| 新节点写 `agent`，已保存的值与快照不改写 | 编辑器测试与升级测试：升级前后比较已保存的图和快照 | `Missing` |
-| 显式 `agent` 按完成信号 ADR 执行，自动接受生效 | Controller 运行测试：恢复版本下 `agent` 节点等待完成信号，开启自动接受的节点在信号后自动完成 | `Missing` |
-| 能力不足时明确失败，不降级 | Controller 测试：Node 不声明能力时启动准入拒绝；Agent 不支持 HTTP MCP 时会话以 `host_mcp_http_capability_missing` 结束 | `Missing` |
-| 升级前启动的会话保持 `end_turn` | 升级测试：升级前启动的交互会话在升级后由发起人按 `end_turn` 门禁完成 | `Missing` |
+| 新节点写 `agent`，已保存的值与快照不改写 | [`workflow-agent-completion-fields.test.tsx`](https://github.com/ora-space/cloud/blob/4ba9dc5a/frontend-v2/src/features/workflows/editor/workflow-agent-completion-fields.test.tsx) 的 “defaults a node turned interactive to agent and clears the policy when turned off”、“keeps a saved interactive node with … as it is” 与 “keeps an explicit end_turn when the mode is turned on”，以及 [`workflow-agent-inactivity-field.test.tsx`](https://github.com/ora-space/cloud/blob/4ba9dc5a/frontend-v2/src/features/workflows/editor/workflow-agent-inactivity-field.test.tsx)：新节点写 `agent` 与 `schemaVersion: 4`，显式 `end_turn` 与没有该字段的节点不改写。缺口：没有升级前后比较已保存的图与快照的测试 | `Partial` |
+| 显式 `agent` 按完成信号 ADR 执行，自动接受生效 | [`TestAReportedFirstTurnNeedsBothConfirmations`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/workflowhost/agent_completion_test.go) 与 [`TestAutoAcceptTakesAReportedHumanTurn`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/workflowhost/agent_completion_test.go)：等待上报与确认，自动接受在上报后完成，完成的 attempt 没有未应用设置；[`workflow-agent-completion-fields.test.tsx`](https://github.com/ora-space/cloud/blob/4ba9dc5a/frontend-v2/src/features/workflows/editor/workflow-agent-completion-fields.test.tsx) 的 “names no setting of the completion rule as unapplied”：编辑器不再显示暂不生效 | `Covered` |
+| 能力不足时明确失败，不降级 | [`TestARunIsRefusedAtItsStartWithoutTheTool`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/workflowhost/agent_completion_test.go)：启动准入拒绝；[`TestHostToolsNeedANodeThatTakesThem`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/agentruntime/host_tools_test.go)、[`TestAnAgentWithoutHTTPMCPKeepsNodesDetail`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/agentruntime/host_tools_test.go) 与 [`TestAnAgentWithoutHTTPMCPFailsTheNode`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/workflowhost/agent_completion_test.go)：派发时缺能力与 Agent 不支持 HTTP MCP 各以有名字的原因失败 | `Covered` |
+| 升级前启动的会话保持 `end_turn` | [`TestANodeParkedBeforeTheToolStaysEndTurn`](https://github.com/ora-space/cloud/blob/4ba9dc5a/v2-server/internal/workflowhost/agent_completion_test.go)：摘要记录为 `end_turn` 的停靠节点不附加完成工具，由发起人按 `end_turn` 门禁完成 | `Covered` |
 
 - 决策依据：D4，不变量 5、6；宿主 MCP ADR D4、D6。

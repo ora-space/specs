@@ -39,6 +39,7 @@ ora_complete_workflow_step({ "attemptToken": "..." })
 - **启用条件**：节点是 interactive agent、冻结图的 `completionSignal: agent`、且节点处于 `Pending` 或 `Running`。`completionSignal: end_turn` 的遗留节点、非交互节点和普通对话不注入。
 - **授权来源**：节点冻结图的完成策略 + host 签发的单 attempt attempt token；用户 MCP 配置不能添加或移除它，插件也不能声明它。
 - **创建/恢复/刷新**：`session/new` 与 `session/load` 时按「节点绑定 + 冻结图策略」重新推导并注入；绑定缺失或损坏时不注入（fail closed），不扩大权限。Agent 替换或 provider 重建时签发新 token、旧 token 失效。
+  > 历史决策：经 Node 承载的 Cloud v2 例外：Node 在同一 execution 内重启 Agent（插件刷新）时，已排队的一轮沿用为它签发的 token，不重签，见[Cloud 经 Node 宿主 MCP 提供完成工具](../../../cloud/workflow/20261124-host-completion-tool-for-node-hosted-interactive-nodes.md)（`approved`）D3。换到新的 execution 时，以及 desktop 直接承载的会话，仍按本条签发新 token。
 - **撤销**：节点离开 `Pending`/`Running`（完成、失败、取消）、运行结束或 Session 停止时作废 token；之后到达的调用返回 `not_awaiting`。OpenCode 的进程级 MCP 注册表可能仍让工具在进程内可见，这是 provider 一致性缺口；host server 只认 token 与当前绑定，不假设可见性等于授权。
 - 工具不读写用户文件、不执行命令，只记录完成意图；是否推进仍由完成门禁决定。
 

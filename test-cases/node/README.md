@@ -97,7 +97,8 @@ Node 侧已实现为 `implemented`。18 条核心用例分别维护直接证据�
 [会话尝试环境标记决策](../../decisions/node/agent-runtime/20261120-attempt-mark-in-session-stop-evidence.md)为
 `implemented`，在同一文件新增“会话停止杀掉全部带标记进程”用例，并在另外六个用例中补充义务；19 项义务按
 [desktop#802](https://github.com/ora-space/desktop/pull/802) 的 head `198cc415` 登记直接证据（7 项 `Covered`、10 项 `Partial`、
-2 项 `Missing`），缺口逐项保留在用例里。
+2 项 `Missing`），缺口逐项保留在用例里。其中“轮次之间与保留会话不杀常驻进程”一项随下文轮次进程栅栏决策的实现，按
+desktop#807 `447a59de` 改登记为 `Covered`，19 项现为 8 项 `Covered`、10 项 `Partial`、1 项 `Missing`。
 
 | 领域 | 核心用例 | 重点风险 |
 | --- | --- | --- |
@@ -117,13 +118,38 @@ Partial。只能由 Controller 验证的义务在
 
 ## 取消一轮与一轮结束后保留会话
 
-[取消一轮决策](../../decisions/node/protocol/20261116-cancel-turn-and-keep-session-after-turn-ends.md)为 `approved`，
-尚未实现。30 条核心用例与决策的 30 条验证义务一一对应，状态均为 `Missing`。会话命令与事件的既有规则见
+[取消一轮决策](../../decisions/node/protocol/20261116-cancel-turn-and-keep-session-after-turn-ends.md)为 `implemented`，
+由 desktop `2fc5e2ca` 与 `447a59de` 实现 Node 一侧。30 条核心用例与决策的 30 条验证义务一一对应，按 desktop main `447a59de`
+登记为 3 项 `Covered`、25 项 `Partial`、2 项 `Missing`。会话命令与事件的既有规则见
 [Agent 运行的协议消息用例](protocol/agent-run-messages.md)，结束会话时的停止证据见
 [会话 MCP 刷新与宿主健康用例](agent-runtime/session-mcp-lifecycle.md)，它们的证据保持原范围。用例 11、12、13
 另含[会话尝试环境标记决策](../../decisions/node/agent-runtime/20261120-attempt-mark-in-session-stop-evidence.md)
-带来的义务，按 desktop#802 `198cc415` 登记为 2 项 `Partial`、1 项 `Missing`。
+带来的义务，按 desktop#802 `198cc415` 登记时为 2 项 `Partial`、1 项 `Missing`；其中用例 13 的那一项（保留会话的取消不杀
+任何进程，`Missing`）与下文的轮次进程栅栏决策相反，已被“13（轮次进程栅栏）”一行取代，后者现为 `Partial`。用例 10、13、19 另含轮次进程栅栏决策带来的义务，
+按 desktop#807 `447a59de` 登记为 10、19 `Covered`，13 `Partial`。用例 6、18、19、20、30 另含下文失败原因决策带来的义务，
+均为 `Missing`。
 
 | 领域 | 核心用例 | 重点风险 |
 | --- | --- | --- |
 | protocol | [取消一轮与一轮结束后保留会话](protocol/cancel-turn-and-keep-session.md) | 取消没有结论或结论晚于期限、取消误伤下一轮、上一轮的迟到更新混进下一轮、没有停止证据就写终态或放行交付、MCP 门禁中取消与超时各记一个结果、重复取消拖过期限、重启丢失原结束决定、账本不可写时把内存状态当作结论、旧 Controller 握手失败或接管新会话、只选取消的会话在失败后被保留 |
+
+## 轮次进程栅栏
+
+[保留会话前先停掉这一轮新起的进程决策](../../decisions/node/protocol/20261123-turn-process-fence-before-keeping-session.md)为
+`implemented`，由 [desktop#807](https://github.com/ora-space/desktop/pull/807) 实现。8 个核心用例的 21 项义务按合并提交 `447a59de`
+登记为 11 项 `Covered`、9 项 `Partial`、1 项 `Missing`。取消一轮用例与
+[会话 MCP 刷新与宿主健康用例](agent-runtime/session-mcp-lifecycle.md)的证据保持原范围，不推导本文的新义务。
+
+| 领域 | 核心用例 | 重点风险 |
+| --- | --- | --- |
+| protocol | [轮次进程栅栏](protocol/turn-process-fence.md) | 保留会话时本轮后台作业仍在写 checkout、下一轮早于栅栏派发、杀掉懒启动的 LSP/MCP 或轮次开始前的进程、清空环境的子进程逃出栅栏、判断不清仍保留会话、栅栏位置错误让杀进程后的反应混进下一轮、栅栏之后豁免进程静默新起的进程活过 `stopped`、结论超出 G + F + Q + R、正常完成也杀进程、重启后本轮进程无人清理、伪造标记借栅栏杀别人的进程 |
+
+## 一轮失败的原因
+
+[一轮的失败与取消分开记录决策](../../decisions/node/protocol/20261124-turn-failure-reason-distinct-from-cancel.md)为
+`approved`。决策尚未实现，15 条义务均为 `Missing`。取消一轮用例与轮次进程栅栏用例的证据保持原范围，
+不推导本文的新义务。
+
+| 领域 | 核心用例 | 重点风险 |
+| --- | --- | --- |
+| protocol | [一轮失败的原因与失败后的会话结论](protocol/turn-failure-reason.md) | 失败被记成取消或取消被记成失败、ACP 错误码与 Agent 文字丢失、文字未清洗或超长或进入码与日志、看门狗被回 `end_turn` 时重发或不说明原因、看门狗无回应与 Agent 进程退出的 detail 与 D3 表不符、失败后会话保留却没有结论或结论顺序错乱、不能保留时原失败原因被覆盖、未协商的 Controller 收到新事件或选择失败后保留、新字段让旧读者拒绝历史、重启后补出与事实不符的结论 |

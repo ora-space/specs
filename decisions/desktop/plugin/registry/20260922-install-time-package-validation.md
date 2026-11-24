@@ -4,6 +4,8 @@ status: implemented
 
 # 插件分发：安装期以包内清单校验并保证失败零残留
 
+> 历史决策：D2 中由身份决定的 `effect_sources` 行已由[Skill 按存储路径以会话清单交给 Agent](../../core/agent/session/skill/0-skill-catalog-from-storage-paths.md)（`approved`）随 Effect 退役删除；安装目录、私有数据目录与 `skills` 行的身份一致性规则不变。
+
 安装 marketplace 插件时，宿主不再用 registry 清单校验解包结果，而是解析并校验**包内** `orax.toml`
 （installed 形态），用与 discovery 完全相同的校验路径判定这个包装上之后能否被发现。同时把下载
 产物 `.orax` 明确定义为传输中间物：安装开始先清扫缓存中的历史残留，成功或失败都删除本次下载，

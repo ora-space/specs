@@ -5,18 +5,22 @@ Node 实现依据固定合并提交 [`28da0a4e`](https://github.com/ora-space/de
 Node 侧验收结论按第三轮复审：第 4、5、6、8、12 条为 `Passed`，其余为 `Partial`。
 `Passed` 是该轮 Node 侧验收结论，不表示跨仓库义务全部完成，也不替代表内逐项的
 `Covered / Partial / Missing`。表内保留原验证目标，下面列固定源码的代表性直接证据及不能由它推导的缺口。
-测试运行与变异结果保存在 [#1218](https://github.com/ora-space/circus/issues/1218)，
-本次证据核对与 Low 处置保存在 [#1231](https://github.com/ora-space/circus/issues/1231)。
-Controller/v2 的协议接线仍由 [#1171](https://github.com/ora-space/circus/issues/1171) 承接；旧门禁测试不算接线通过。
+测试运行与变异结果保存在 [circus#1218](https://github.com/ora-space/circus/issues/1218)，
+本次证据核对与 Low 处置保存在 [circus#1231](https://github.com/ora-space/circus/issues/1231)。
+Controller/v2 的协议接线仍由 [circus#1171](https://github.com/ora-space/circus/issues/1171) 承接；旧门禁测试不算接线通过。
 [显式 Session MCP 用例](session-mcp.md)、[共享 checkout 会话用例](shared-checkout-sessions.md)、
 [会话执行用例](session-execution.md)与[尝试锁用例](../git-execution/attempt-locks-and-stop-evidence.md)的
 证据保持各自范围，不推导本文新义务。
 
 [会话尝试环境标记决策](../../../decisions/node/agent-runtime/20261120-attempt-mark-in-session-stop-evidence.md)（`implemented`）修改了本文的停止证据：在尝试锁、重启收口、未排空升级、运维对账、
-版本重启与探测清理六个用例中补充义务，并新增[会话停止杀掉全部带标记进程](#a-session-stop-kills-every-attempt-marked-process-and-turns-kill-none)。
+版本重启与探测清理六个用例中补充义务，并新增[会话停止杀掉全部带标记进程](#a-session-stop-kills-every-attempt-marked-process-and-finished-turns-kill-none)。
 这 19 项义务按 [desktop#802](https://github.com/ora-space/desktop/pull/802) 的 head
 [`198cc415`](https://github.com/ora-space/desktop/commit/198cc41517a837ec436a897655403adc790b8c0d)（尚未合入 main）登记直接证据：
 7 项 `Covered`、10 项 `Partial`、2 项 `Missing`。既有义务的证据按原固定提交 `28da0a4e` 保留，不因新决策改变状态。
+其中“轮次之间与保留会话不杀常驻进程”一项随[轮次进程栅栏决策](../../../decisions/node/protocol/20261123-turn-process-fence-before-keeping-session.md)
+的实现，按 [desktop#807](https://github.com/ora-space/desktop/pull/807) 的合并提交
+[`447a59de`](https://github.com/ora-space/desktop/commit/447a59de6722500cae0be011860e63e5127a3b23) 改登记为 `Covered`，
+这 19 项现为 8 项 `Covered`、10 项 `Partial`、1 项 `Missing`。
 评审方在 `198cc415` 上用发布包 OpenCode 0.6.11 与 Claude 0.4.5 复测 EndSession 和导致会话结束的 CancelTurn、OpenCode 的
 SIGKILL 后重启（Claude 的重启复测在中间版本 `07c495e0`），作业都在报告停止前被杀；这是运行记录，不是可重复测试，不登记为证据。
 
@@ -395,7 +399,7 @@ D4 宿主策略第 1–3 条，不变量 5；继承 Desktop ACP setup/refresh �
 | V2 / V3 合并 | 未派发 V2 被丢弃并释放租约、已派发 V2 先确认停止的测试 | Missing |
 | execution 资源跨重启 | 重启前后 ora-git socket 地址与模型授权不变、撤销时按原策略结束的测试 | Partial |
 | 替换先杀旧尝试的带标记进程 | 旧 Agent 的脱组后台作业在替换中被杀、旧尝试记 `lock_processes_and_marks` 后才启动后继的测试 | Partial |
-| 真实 Agent 跨进程 load 前提 | 固定 OpenCode 1.19.3 与 claude-agent-acp 0.99.1 在保留 HOME/cwd 时新进程 load 原 ID 并保留历史，记录见 [circus #1204](https://github.com/ora-space/circus/issues/1204)；空 MCP、未经 Node 重启接缝，不能替代上面的 Node 集成测试 | Partial |
+| 真实 Agent 跨进程 load 前提 | 固定 OpenCode 1.19.3 与 claude-agent-acp 0.99.1 在保留 HOME/cwd 时新进程 load 原 ID 并保留历史，记录见 [circus#1204](https://github.com/ora-space/circus/issues/1204)；空 MCP、未经 Node 重启接缝，不能替代上面的 Node 集成测试 | Partial |
 
 ### 代表性证据与剩余缺口
 
@@ -576,12 +580,12 @@ Node 侧验收：`Partial`。
 
 D5“停止证据与记录”，不变量 7；扩展 Node 直接执行 Git 的尝试锁机制；[尝试环境标记决策](../../../decisions/node/agent-runtime/20261120-attempt-mark-in-session-stop-evidence.md) D1–D3、D6，不变量 1–5、11。
 
-## A Session Stop Kills Every Attempt-Marked Process And Turns Kill None
+## A Session Stop Kills Every Attempt-Marked Process And Finished Turns Kill None
 
 ### 风险
 
-Agent 工具起的后台作业（`cmd &`、`setsid`）在会话结束后仍写工作区，而停止被记为 `confirmed`（circus #1350）；
-反过来，轮次之间或保留会话的取消杀掉 LSP、MCP 等常驻进程；嵌套 Node 覆盖外层标记，外层停止漏掉内层的进程；
+Agent 工具起的后台作业（`cmd &`、`setsid`）在会话结束后仍写工作区，而停止被记为 `confirmed`（circus#1350）；
+反过来，轮次之间或保留会话的取消杀掉 LSP、MCP 等常驻进程（保留会话的取消只杀这一轮的栅栏范围，见下文）；嵌套 Node 覆盖外层标记，外层停止漏掉内层的进程；
 伪造的标记让 Node 杀到尝试开始前就存在的进程，或产生假的停止证据。
 
 ### 前置状态
@@ -599,7 +603,10 @@ EndSession、Agent 失败、导致会话结束的取消、Node 优雅关闭、No
 - 每种会话结束方式下，两个部署插件的后台作业（`cmd &` 与 `setsid`）都在 Node 报告停止之前被杀，之后不再写入；
   作业存活时不记 `confirmed`。
 - 被杀的包括开发服务器、文件监视进程、MCP 与语言服务，以及会话中启动的共享守护进程，即使其他会话仍在使用。
-- 一轮正常完成后，以及会话被保留的取消或失败之后，Node 不发任何冻结或杀信号，带标记的常驻进程跨轮次存活。
+- 一轮正常完成后，Node 不发任何冻结或杀信号，带标记的常驻进程跨轮次存活。会话被保留的取消或失败之后，按
+  [轮次进程栅栏决策](../../../decisions/node/protocol/20261123-turn-process-fence-before-keeping-session.md)（`implemented`）只杀
+  这一轮新起、且不在“这一轮开始前已启动、此刻仍存活的本尝试进程”所在会话中的进程，常驻进程同样存活；栅栏的义务见
+  [轮次进程栅栏用例](../protocol/turn-process-fence.md)，本用例不重复登记。
 - 嵌套 Node 给子进程的值为 `外层:attempt`；外层尝试停止时内层 Node 及其全部尝试的进程被杀；内层 Node 只认领
   列出自己 token 的进程。
 - 伪造标记的进程只有在尝试开始之后启动的才会被认领；持续伪造只把确认拖到 `stop_unconfirmed`，不产生停止证据。
@@ -615,7 +622,7 @@ EndSession、Agent 失败、导致会话结束的取消、Node 优雅关闭、No
 |---|---|---|
 | 每种结束方式都杀后台作业 | 两个部署插件分别在 EndSession、导致会话结束的取消、Node 优雅关闭、SIGKILL 后重启下，`cmd &` 与 `setsid` 作业在停止报告前退出、之后不再写入的真实 Node 测试 | Partial |
 | 守护进程随会话结束 | 会话中启动、其他会话仍在使用的守护进程随该会话结束被杀的测试 | Partial |
-| 轮次之间与保留会话不杀 | 一轮正常完成后、会话被保留的取消之后带标记的常驻进程仍存活的测试 | Missing |
+| 轮次之间与保留会话不杀常驻进程 | 一轮正常完成后带标记的进程仍存活、会话被保留的取消之后轮次开始前的常驻进程仍存活的测试；保留会话的取消杀掉本轮进程由[轮次进程栅栏用例](../protocol/turn-process-fence.md)登记。证据（desktop#807 `447a59de`）：[`jobs_of_a_finished_turn_survive_the_next_turns_cancel`](https://github.com/ora-space/desktop/blob/447a59de6722500cae0be011860e63e5127a3b23/apps/ora-node/tests/agent_session/turn_processes.rs#L195) 与 [`the_agents_own_helper_survives_a_kept_cancel`](https://github.com/ora-space/desktop/blob/447a59de6722500cae0be011860e63e5127a3b23/apps/ora-node/tests/agent_session/turn_processes.rs#L157) | Covered |
 | 嵌套 Node 标记链 | 外层停止杀掉内层 Node 的全部进程、内层停止不触及外层其他进程的测试 | Partial |
 | 伪造标记的边界 | 尝试开始前启动的带标记进程不被发信号、持续伪造时确认不提前而转为 `stop_unconfirmed` 的测试 | Partial |
 
@@ -637,7 +644,10 @@ desktop#802 `198cc415` 的真实 Node 测试用 echo-agent fixture 模拟部署�
 - 结束方式：仓库里没有经 `CancelTurn` 以 `session_ending` 结束会话的用例，“轮次仍在运行时结束”走的是 EndSession；评审的临时
   用例与真实插件复测（运行记录）表明取消路径同样先杀作业，补进仓库后再登记。部署插件的优雅关闭没有真实复测。
 - 守护进程：fixture 作业与被收养的守护进程在扫描面前相同，但没有“另一会话仍在使用”的用例。
-- 轮次之间与保留会话：没有断言带标记进程跨轮次存活的测试（现有用例只在轮次结束后 pin 住作业）；保留会话的取消没有带标记进程的测试。
+- 轮次之间与保留会话：已由 desktop#807 `447a59de` 补齐。[`jobs_of_a_finished_turn_survive_the_next_turns_cancel`](https://github.com/ora-space/desktop/blob/447a59de6722500cae0be011860e63e5127a3b23/apps/ora-node/tests/agent_session/turn_processes.rs#L195) 断言正常完成的一轮
+  留下的带标记 `setsid` 作业与 Agent 会话中的 helper 跨轮次存活，并活过下一轮保留会话的取消，会话结束时作业才被杀；
+  [`the_agents_own_helper_survives_a_kept_cancel`](https://github.com/ora-space/desktop/blob/447a59de6722500cae0be011860e63e5127a3b23/apps/ora-node/tests/agent_session/turn_processes.rs#L157) 断言 Agent 在被取消的一轮里于自己会话中起的 helper 活过保留会话的取消，
+  下一轮找到同一进程。
 - 嵌套 Node：只有标记值与匹配的单测，没有真实的嵌套 Node 用例。
 - 伪造：持续伪造把确认拖到 `stop_unconfirmed` 没有测试。
 
@@ -645,7 +655,7 @@ macOS 与 Windows 不在本用例范围内。
 
 ### 决策依据
 
-[尝试环境标记决策](../../../decisions/node/agent-runtime/20261120-attempt-mark-in-session-stop-evidence.md) D4、D5、D8，不变量 7、8；本文决策 D5“终态、转交与门禁”。
+[尝试环境标记决策](../../../decisions/node/agent-runtime/20261120-attempt-mark-in-session-stop-evidence.md) D4、D5、D8，不变量 7、8；本文决策 D5“终态、转交与门禁”；[轮次进程栅栏决策](../../../decisions/node/protocol/20261123-turn-process-fence-before-keeping-session.md) D2、D7（修改标记决策 D4 中保留会话的一条）。
 
 ## Restart Recovery Confirms A Stop Only On The Same Kernel Or The Same Host
 

@@ -75,7 +75,7 @@ secret 默认值、存储值、有效值不回传，只返回来源与 redacted�
 
 ### 风险
 
-两条启动路径使用不同配置，配置失效阻断 Skill 物化，或重置被误认为立即撤销凭据。
+两条启动路径使用不同配置，配置失效阻断 Skill 交付，或重置被误认为立即撤销凭据。
 
 ### 前置状态
 
@@ -87,7 +87,7 @@ secret 默认值、存储值、有效值不回传，只返回来源与 redacted�
 
 ### 必须成立
 
-两条路径共享同一冻结快照，所有 Agent 进程树可读取全部完整有效配置，非 Agent 插件不获得注入；可选缺失不产生变量，无效配置整包跳过且不阻断其他插件、会话或 Skill 物化。配置变更仅在 Desktop 重启后影响注入，设置页提示重启，不自动中断会话；单独重启 Agent 仍使用旧快照。
+两条路径共享同一冻结快照，所有 Agent 进程树可读取全部完整有效配置，非 Agent 插件不获得注入；可选缺失不产生变量，无效配置整包跳过且不阻断其他插件、会话或 Skill 交付。配置变更仅在 Desktop 重启后影响注入，设置页提示重启，不自动中断会话；单独重启 Agent 仍使用旧快照。
 
 ### 禁止结果
 
@@ -98,7 +98,7 @@ secret 默认值、存储值、有效值不回传，只返回来源与 redacted�
 | 验证义务 | 代表性证据 | 状态 |
 | --- | --- | --- |
 | 两条路径、无 cwd、跨工作区和后代进程共享快照，非 Agent 插件不注入 | [真实 Deno Agent、后代与 host spawn 测试](https://github.com/ora-space/desktop/blob/8218ef060614f8fdada03bdffbea4a654ed7c223/crates/plugin-lifecycle/src/environment_tests.rs)；[声明撞名矩阵、脱敏诊断与冻结快照测试](https://github.com/ora-space/desktop/blob/8218ef060614f8fdada03bdffbea4a654ed7c223/crates/backend/src/plugin/skill_environment.rs)；真实进程测试使用固定 provider，跨工作区完整串联尚无合并测试 | `Partial` |
-| 缺必填、损坏、非法、NUL 整包跳过；可选缺失不注入，Skill 仍物化，诊断无值 | [声明撞名矩阵、脱敏诊断与冻结快照测试](https://github.com/ora-space/desktop/blob/8218ef060614f8fdada03bdffbea4a654ed7c223/crates/backend/src/plugin/skill_environment.rs)；[规范化、标量、整包跳过与别名拒绝测试](https://github.com/ora-space/desktop/blob/8218ef060614f8fdada03bdffbea4a654ed7c223/crates/plugin-config/src/skill.rs)；配置无效时仍完成 Skill 物化的组合路径未直接覆盖 | `Partial` |
+| 缺必填、损坏、非法、NUL 整包跳过；可选缺失不注入，Skill 仍交付，诊断无值 | [声明撞名矩阵、脱敏诊断与冻结快照测试](https://github.com/ora-space/desktop/blob/8218ef060614f8fdada03bdffbea4a654ed7c223/crates/backend/src/plugin/skill_environment.rs)；[规范化、标量、整包跳过与别名拒绝测试](https://github.com/ora-space/desktop/blob/8218ef060614f8fdada03bdffbea4a654ed7c223/crates/plugin-config/src/skill.rs)；配置无效时仍完成 Skill 物化的组合路径未直接覆盖 | `Partial` |
 | 保存、重置、安装、更新、卸载后重启 Agent 不刷新，重启 Desktop 才刷新；不自动停止会话，界面提示重启 | [声明撞名矩阵、脱敏诊断与冻结快照测试](https://github.com/ora-space/desktop/blob/8218ef060614f8fdada03bdffbea4a654ed7c223/crates/backend/src/plugin/skill_environment.rs)（保存、重置、卸载及重新 capture）；[配置页保留、清空与重启提示测试](https://github.com/ora-space/desktop/blob/8218ef060614f8fdada03bdffbea4a654ed7c223/packages/app-shell/src/features/settings/plugins-settings.test.tsx)；安装/更新/活动会话不中断的完整组合仍缺直接证据 | `Partial` |
 | 宿主交付不写工作区、Effect、ACP、日志；存储明文与脚本输出不在防泄漏承诺内 | [配置 API 与三类型脱敏测试](https://github.com/ora-space/desktop/blob/8218ef060614f8fdada03bdffbea4a654ed7c223/crates/backend/src/plugin_configuration.rs)；[真实 Deno Agent、后代与 host spawn 测试](https://github.com/ora-space/desktop/blob/8218ef060614f8fdada03bdffbea4a654ed7c223/crates/plugin-lifecycle/src/environment_tests.rs)；宿主全部工作区/Effect/ACP/日志交付面尚无统一直接断言，不能据此承诺第三方脚本防泄漏 | `Partial` |
 

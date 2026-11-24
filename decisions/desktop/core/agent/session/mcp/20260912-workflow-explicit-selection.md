@@ -6,6 +6,8 @@ status: implemented
 
 > 历史决策：D1、D4 中「已选 MCP 缺失」的判断已由[派发前预检](20261119-workflow-mcp-preflight.md)提前到 Desktop 运行派发前。派发后的 session setup 与既有 Session 恢复仍按本文处理。
 
+> 历史决策：D4 中“Skill 保持 Effect 物化语义：安装后可物化到 Workspace”已由[Skill 按存储路径以会话清单交给 Agent](../skill/0-skill-catalog-from-storage-paths.md)（`approved`）修改：已安装 Skill 以存储路径进入每个会话的清单，不写入 Workspace。节点启用表示该节点必须使用该 Skill、不是安全白名单的规则不变。
+
 工作流 Agent 节点把冻结的 `mcps` 绑定作为显式 MCP 白名单。普通聊天继续自动选择当前合格插件；工作流只解析已启用的完整插件 ID，空集合表示不注入任何 MCP。Ora 在发送边界记录不含秘密的选择身份，便于区分 Host 选择错误与 Agent 未按会话落实 MCP 的错误。
 
 本决策修改根决策的全局选择范围，但保留共享 Agent 进程、ACP wire contract、运行时刷新和 Workspace 文件边界。工作流选择随 Session 持久化，Actor 恢复不再依赖 `workflow_node_runs` 反查图快照。OpenCode 当前不能从共享进程中撤销早先 Session 注册的 MCP，这是尚未解决的 provider 一致性缺口；本决策不通过为每个 Session 启动长期子进程来规避该问题。

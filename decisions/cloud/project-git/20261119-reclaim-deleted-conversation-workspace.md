@@ -12,7 +12,7 @@ status: implemented
 登记还在，下次启动接着做。删的时候确认目录只属于这个对话、没有会话还在用、路径没有经符号链接逃出 checkout 根。
 
 本 ADR 为 `implemented`：owner 2026-11-19 在 circus #1318 评审通过，由 circus #1196 的运行 #1319 实现（cloud PR #419，
-`d4ec60d5`）；实现中对 approved 稿的修改见“实现时的修改”一节，核心测试用例见
+`d4ec60d5`）；后续 circus #1354（运行 #1387，cloud PR #435，`fe0b378b`）补上嵌套 Git 目录内的摘要边界，见 D2。实现中对 approved 稿的修改见“实现时的修改”一节，核心测试用例见
 [工作目录回收用例](../../../test-cases/cloud/project-git/workspace-reclaim.md)。依据是 owner 2026-11-16 在 circus #1191
 选定的方案 A 第二阶段和 2026-11-19 在 #1196 列出的判断条件；实测依据是 #1119：24 小时内 101 个工作目录全部保留，
 其中 45 个属于已删除的普通对话。它是[回合交付](20261112-single-machine-turn-delivery.md)（下称“交付 ADR”）的后续决策，同时修改
@@ -112,9 +112,15 @@ status: implemented
     内容；每个嵌套仓库的整棵子树（工作树和它的 Git 目录，对象在内）；嵌套仓库的 `.git` 是 gitfile、符号链接或含 `commondir`
     的目录时，指向的 Git 目录在 checkout 内就连同整棵目标（同一目录只算一次）。摘要读文件不调 Git、不跟随链接，先 `Lstat`
     再以不跟随、非阻塞的方式打开并复核；与交付共用字节上限，条目上限 10 万。超出上限、遇到特殊文件、读取失败、指向 checkout
-    之外或解析不了，摘要都记为不完整，并且一旦不完整不会再恢复。所以同一路径、同样增删行数的内容改写，stash 被替换、ref 改指向、
-    暂存区被替换，都会改变它；`discard` 时要带回。顶层 `.git` 含 `commondir` 时不另读共享仓库：顶层的 ref 是在 checkout 上
-    列出的，已经包含共享仓库里的全部 ref 及其目标，没有 ref 指向的对象不算会丢掉的成果。
+    之外或解析不了，摘要都记为不完整，并且一旦不完整不会再恢复。嵌套 Git 目录内部同样不跟随：目录里出现符号链接或特殊文件、
+    每个解析到的 Git 目录（及顶层 `.git/modules/<name>`）下存在 `objects/info/alternates`（只查这一层；没有被工作树解析到的
+    更深层 Git 目录——例如嵌套仓库已 deinit 的 `.git/modules/<x>`——不查，因为 ref 已经绑定，加不出可达的成果）、
+    `.git/modules/<name>` 里存在 `commondir`，或者 Git 目录解析到 checkout 根，都判摘要不完整（`discardable` 为假，`discard`
+    按下方顺序校验，默认删除保留的目录由运维按 D6 处理）；fail-closed 的代价是嵌套仓库的 hook 是符号链接、
+    `clone --shared`/`--reference`、`submodule.alternateLocation` 这些合法布局同样不可丢弃，交运维处理；嵌套仓库工作树里的符号链接
+    仍只记录链接目标，不影响摘要是否完整。所以同一路径、同样增删行数的内容改写，stash 被替换、ref 改指向、暂存区被替换，
+    都会改变它；`discard` 时要带回。顶层 `.git` 含 `commondir` 时不另读共享仓库：顶层的 ref 是在 checkout 上列出的，已经包含
+    共享仓库里的全部 ref 及其目标，没有 ref 指向的对象不算会丢掉的成果。
 - **删除参数** `workspace`：
   - `reclaim`（默认，调用方不带参数时也是它）：能恢复就回收；不能恢复就保留目录，对话照样删除；
   - `discard`：用户明确丢弃，不管能不能恢复都回收。请求必须带回预览的 `revision`（不带时返回 400）；删除时（结束会话之前）重新计算，

@@ -64,7 +64,7 @@ marketplace 安装。
 ### 风险
 
 包内清单的 `identifier`、`version`、`kind` 与 registry 清单不一致时，安装目录、插件私有数据目录、
-`skills` 行与 `effect_sources` 行会按其中一个身份建立，而 discovery 之后按包内清单读取。无论采信
+`skills` 行会按其中一个身份建立，而 discovery 之后按包内清单读取。无论采信
 哪一侧，都会把一份身份的数据挂到另一份身份上，或让一次安装的产物永远无法被发现。反过来，如果
 把展示字段也纳入一致性判定，作者在包内更新 `title`、`description` 或图标就会被拒绝安装。
 

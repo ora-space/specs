@@ -91,8 +91,14 @@ blocked/node_unavailable 无界 retrySeconds 保留为独立后续问题。
 [经 Node 承载的交互节点默认 `end_turn`](../../decisions/cloud/workflow/20261119-end-turn-default-until-host-completion-tool.md)
 于 2026-11-19 经 owner 批准，D2 由 [cloud#403](https://github.com/ora-space/cloud/pull/403)（merge `2b80c023`）实现、
 [cloud#417](https://github.com/ora-space/cloud/pull/417)（merge `43ad6eb2`）补齐提示文案与运行测试后改为 `implemented`；
-12 项义务为 4 Covered / 3 Partial / 5 Missing：编辑器默认值、`agent` 按 `end_turn` 执行、自动接受不生效与暂不生效标记有直接证据，
-保留已有值与跨端导入只有部分证据，不依赖探测以及恢复版本之后的行为没有直接证据。
+12 项义务为 7 Covered / 4 Partial / 1 Missing：编辑器默认值、`agent` 按 `end_turn` 执行、自动接受不生效与暂不生效标记，以及恢复版本之后
+`agent` 生效、能力不足明确失败、升级前会话保持 `end_turn` 有直接证据，保留已有值、跨端导入与恢复时不改写只有部分证据，不依赖探测
+没有直接证据。
+
+[Cloud 经 Node 宿主 MCP 提供完成工具](../../decisions/cloud/workflow/20261124-host-completion-tool-for-node-hosted-interactive-nodes.md)
+于 2026-11-24 经 owner 批准，兑现上一决策的 D4。首批实现已合入 cloud main
+（[`4ba9dc5a`](https://github.com/ora-space/cloud/commit/4ba9dc5a)），核心用例同批建立并按该提交登记直接证据；停靠会话旧 execution 的结算与
+“没有连上”的提示还没有实现。32 项义务为 15 Covered / 7 Partial / 10 Missing。
 
 desktop 参考实现（`8909f07`）的直接证据在每个用例里单独标注，并如实记下与它不同的地方：同一 run 内多个 agent 节点首期串行（desktop 在同一次调度 pass 里并行派发 sibling agent，所以"至多一个串行执行者"这一条在它身上是 `Partial`）、图在整个运行生命周期内不可变（desktop 另有 `snapshot_switch` 可替换冻结图）、发布时就拒绝不可执行节点（desktop 只在启动时拒绝）、启动表单用 `snapshotId`（desktop 无此表单）。这些义务没有 desktop 证据可依托，只能由 Cloud 自己的测试证明。
 
@@ -110,6 +116,7 @@ desktop 参考实现（`8909f07`）的直接证据在每个用例里单独标注
 | workflow | [变量聚合的发布门禁与有序透传](workflow/variable-aggregator.md) | 首个已赋值与空值混淆、多值顺序漂移、no-match 空成功、非前驱放行、跨容器与跨轮串值、非法配置冻结 |
 | workflow | [Iteration 的 foreach 执行与按轮账本](workflow/iteration-foreach-execution.md) | 迭代源非前驱、轮内变量泄漏、收集陈旧值、策略丢账本、恢复重跑、取消后开新轮、体积截断、最后一轮重复展示 |
 | workflow | [工作流节点会话读取](workflow/node-session-read.md) | 跨尝试串会话、游标跳过记录、旧尝试冒领新输出、终态回执按形状误判、sessionId 直读越权、输出与结束原因混用、`result` 为空误判在途、单页即宣称完整 |
+| workflow | [经 Node 宿主 MCP 的完成工具](workflow/host-completion-tool.md) | 工具进入不该有的会话、跨节点或跨轮上报、持久状态已结束仍接受、缺能力时降级或继续绕过准入、首轮被自动接受、重启后旧 execution 没有结论、没有连上却没有提示、凭据与 token 进入 Cloud 的持久面 |
 | workflow | [完成工具送达前的默认完成方式](workflow/end-turn-default-before-completion-tool.md) | 默认值与实际执行不一致、显式选择被覆盖、静默降级、跨端导入改写、恢复时批量改写或能力不足时降级 |
 | model-access | [个人槽位映射与按槽位绑定](model-access/executor-slot-mappings.md) | 映射越权、槽位被顶替、在途运行被改映射、会话借用别的槽位授权 |
 

@@ -4,6 +4,8 @@ status: implemented
 
 # 来源派生 Namespace：用 Marketplace Source 身份替代清单自述的 namespace
 
+> 历史决策：“namespace 一旦落盘就不可改变”一节中 `effect_sources`、`effect_consumers` 两行，以及 native identity 冲突和“先卸载让 Effect 收敛”的迁移说明，已由[Skill 按存储路径以会话清单交给 Agent](../../core/agent/session/skill/0-skill-catalog-from-storage-paths.md)（`approved`）随 Effect 退役而失去对象：Effect 表由前向迁移删除，同名 Skill 按存储路径区分、不再冲突。`skills` 表与插件目录按完整 Plugin ID 匹配的规则不变。
+
 插件的 `namespace` 不再由条目清单声明，而由发布该条目的 Marketplace Source 决定：字段从清单
 schema 中移除，`<namespace>/<identifier>` 中的 namespace 段由宿主从**规范化后的 source URL** 派生为一个
 定长、文件系统安全的标识，并在 source 首次绑定时持久化。同时清单解析从「拒绝未知字段」改为

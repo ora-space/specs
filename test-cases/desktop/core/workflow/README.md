@@ -8,7 +8,7 @@
 复合运行时（迭代节点）的落地承诺见
 [迭代节点决策](../../../../decisions/desktop/core/workflow/20260915-iteration-composite-runtime.md)。
 while 的独立轮池、上限两策略和早退见[while-Loop 决策](../../../../decisions/desktop/core/workflow/20261013-while-loop-with-durable-round-scopes.md)。
-Agent 长任务的静默容错见
+Agent 长任务的冻结配置及会话隔离见[静默策略决策](../../../../decisions/desktop/core/workflow/20261008-prompt-inactivity-policy.md)，当前计时、续期和到期规则见
 [工作流有限与无限等待决策](../../../../decisions/desktop/core/workflow/20261123-workflow-agent-wait-limit.md)。
 交互式节点的完成门禁、park 快照与 force 见
 [交互式节点完成契约](../../../../decisions/desktop/core/workflow/20261021-interactive-node-completion.md)；

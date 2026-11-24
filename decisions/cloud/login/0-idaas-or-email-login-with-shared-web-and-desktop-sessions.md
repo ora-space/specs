@@ -13,7 +13,7 @@ Cloud 进程自己处理登录，没有独立的 Gateway。同一个程序有两
 两种会话指向同一个账号，看到的团队、权限和数据完全一样。第一版不做的：其他登录提供方、会话轮换、和 IDaaS 同步离职、
 desktop 的部署身份校验。
 
-本 ADR 为 `approved`：owner 已在 circus #1093 确认评审意见，核心测试用例见 [登录与会话](../../../test-cases/cloud/login/login-and-sessions.md)。它是领域 `cloud/login` 的根决策，前提是
+本 ADR 为 `approved`：owner 已在 circus #1093 确认评审意见，核心测试用例见 [登录与会话](../../../test-cases/cloud/login/login-and-sessions.md)。D1–D5 已由 ora-space/cloud#399、ora-space/cloud#400、ora-space/cloud#402 实现，只差部署版下的真实 IDaaS 验证；D6 的 Cloud 侧与 desktop 侧已由 ora-space/cloud#432、ora-space/desktop#806 实现（含 [desktop Cloud 连接第一版](../../desktop/cloud-connection/20261121-first-version-loopback-login-and-host-held-token.md) 对 D6 契约新增的 `POST /auth/desktop/deny`），开发版下已在 Windows 真机上按最终代码验证（Linux 真实栈跑在较早的版本）。真实 IDaaS 验证（含部署版 desktop 登录）由 ora-space/circus#1292 承接，完成后本决策改为 `implemented`。它是领域 `cloud/login` 的根决策，前提是
 [Cloud 单进程根决策](../lifecycle/0-single-process-cloud-on-enterprise-intranet.md)（下称“A1”）。依据是 owner 2026-11-12
 在 circus #1050、#1093 的结论（只接华为 IDaaS；开发版邮箱、部署版 IDaaS，同一程序靠配置切换；首次登录自动建账号、
 被邀请后才看到团队；desktop 会话沿用 30 天不用即过期；部署版凭一次性邀请链接入队，取代 11-12 上午的"按工号邀请"）。读取的代码版本为 cloud `0ca0a9a0`
@@ -260,6 +260,7 @@ A1 的“被取代的 v1 决策”一节已经把 v1 登录的三份 ADR 列为�
    加入团队。
 2. **#1084（desktop 登录）**：Cloud 一侧的确认页、授权码和 desktop 令牌，以及 desktop 一侧的实现。依赖第 1 步的
    账号模型，可以在第 1 步合并前先做 preflight。完成条件：开发版和部署版下 desktop 都能登录、调用 API、登出。
-3. 核心测试用例已随本文 `approved` 补上；两步实现合并后改为 `implemented`。
+3. 核心测试用例已随本文 `approved` 补上。两步实现都已合并，开发版已验证；部署版下的 D1–D5 和 desktop 登录要在第一次内网部署时
+   用真实 IDaaS 验证（ora-space/circus#1292）。ora-space/circus#1292 完成后，本文改为 `implemented`。
 
 从第 1 步起，部署版只能用 IDaaS 登录；开发版的行为不变。

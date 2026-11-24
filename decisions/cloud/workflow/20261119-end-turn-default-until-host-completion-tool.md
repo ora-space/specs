@@ -4,6 +4,11 @@ status: implemented
 
 # 经 Node 承载的交互节点：完成工具送达前新节点默认 `end_turn`，按产品版本恢复 `agent`
 
+> 历史决策：D4 由[Cloud 经 Node 宿主 MCP 提供完成工具](20261124-host-completion-tool-for-node-hosted-interactive-nodes.md)
+> （`approved`）兑现。恢复版本起，D2 的默认 `end_turn` 与“`agent` 按 `end_turn` 执行并标为暂不生效”不再适用，新节点的默认值与
+> 显式 `agent` 的执行以该决策为准；风险一节留给使用方的“Agent 到不了端点的部署”也见该决策 D1。D3、D4 的
+> 不改写与升级前会话保持 `end_turn` 不变。
+
 [Agent 完成信号](../../desktop/core/workflow/20261110-agent-completion-signal.md)（下称完成信号 ADR）让新建的
 交互节点默认 `completionSignal: "agent"`，前提是宿主能把完成工具交给 Agent。经 Node 承载的 Controller
 （目前是 Cloud v2 的 v2-server）还做不到：[宿主 MCP](../../node/agent-runtime/20261118-host-mcp-servers-in-agent-session-spec.md)

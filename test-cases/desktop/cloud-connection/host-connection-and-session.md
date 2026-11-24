@@ -3,7 +3,11 @@
 依据[宿主连接根 ADR](../../../decisions/desktop/cloud-connection/0-host-owned-cloud-connection-and-session.md) 与
 [第一版后续 ADR](../../../decisions/desktop/cloud-connection/20261121-first-version-loopback-login-and-host-held-token.md)
 （下称“第一版 ADR”）。根决策中暂停的义务（部署身份、TOFU 与能力协商、证书固定与内网 HTTP、换地址迁移、活动上报与
-轮换、60 秒发现吊销、deep link）不在本文；它们恢复时由新的后续 ADR 补回用例。实现合并前，下列义务均为 `Missing`。
+轮换、60 秒发现吊销、deep link）不在本文；它们恢复时由新的后续 ADR 补回用例。
+证据读取的是合并后的 desktop `7fc4544f`（ora-space/desktop#806）与 cloud `1635cc7d`（ora-space/cloud#432）。真实环境验证都用开发版
+（`V2_LOGIN=email`）的 debug 构建，正式安装包没有验证过，目前也没有承接的事项。Linux 真实栈跑在 desktop `e17c4f82`，之后
+`65fc2552`、`c4788689`、`8d03a4df`、`4ce28c05` 改写了协调器与安全存储，没有在最终代码上重跑；Windows 11 真机跑在 desktop
+`63aee9b8`、cloud `15161217`，代码与合并提交相同。
 
 ## Local Work Remains Available Across Every Cloud Failure
 
@@ -19,8 +23,8 @@
 
 | 验证义务 | 代表性证据 | 状态 |
 | --- | --- | --- |
-| Windows 与 Linux 正式包在各种 Cloud 状态下启动、本地编辑与 Agent 运行正常，检查不阻塞就绪 | 尚无 | `Missing` |
-| `401` 与安全存储不可用只改变 Cloud 状态，不触碰本地现场 | 尚无 | `Missing` |
+| Windows 与 Linux 正式包在各种 Cloud 状态下启动、本地编辑与 Agent 运行正常，检查不阻塞就绪 | Linux 真实栈（GNOME、gnome-keyring，desktop `e17c4f82`）与 Windows 11 真机（debug 构建，ora-space/circus#1379）：未登录、已登录、需要重新登录时应用照常启动；`app_lib::cloud_connection::tests::an_unusable_secure_store_turns_cloud_off`（启动时安全存储失败只表现为 Cloud 状态）。仍缺：正式包，以及在这些状态下实际运行 Agent 与编辑 | `Partial` |
+| `401` 与安全存储不可用只改变 Cloud 状态，不触碰本地现场 | `app_lib::cloud_connection::tests::a_rejected_token_is_deleted`；`an_unusable_secure_store_turns_cloud_off`（只改变 Cloud 会话与条目）。协调器只持有安全存储、Cloud 接口、浏览器和地址设置这几个端口，碰不到本地文件；没有测试直接断言本地现场不变 | `Partial` |
 
 ## Only The Host Holds The Desktop Token
 
@@ -38,9 +42,9 @@
 
 | 验证义务 | 代表性证据 | 状态 |
 | --- | --- | --- |
-| Windows 与 Linux 真实安全存储的写入、读回、删除，Windows 条目为本机持久化 | 尚无 | `Missing` |
-| 写入、删除失败的各条路径（尽力吊销、状态、不在内存保持登录） | 尚无 | `Missing` |
-| 前端与插件拿不到令牌，日志、配置与 URL 中没有令牌 | 尚无 | `Missing` |
+| Windows 与 Linux 真实安全存储的写入、读回、删除，Windows 条目为本机持久化 | Linux 真实栈（GNOME、gnome-keyring，desktop `e17c4f82`，早于安全存储改写）：登录写入、重启读回、停用后删除、退出删除；Windows 11 真机（debug 构建，ora-space/circus#1379）：`CredReadW` 读到 GENERIC、`Persist=2`（`CRED_PERSIST_LOCAL_MACHINE`），重启读回，停用与退出后读回为 not found；`app_lib::cloud_connection::secure_store::platform::tests::blob_round_trips_as_utf16`（只在 Windows 上编译，CI 不跑，见 ora-space/circus#1483）。仍缺：Linux 在最终代码上的真实安全存储；“不漫游”只有 Persist 位作证 | `Partial` |
+| 写入、删除失败的各条路径（尽力吊销、状态、不在内存保持登录） | `app_lib::cloud_connection::tests::an_unusable_secure_store_turns_cloud_off`（写入失败：吊销刚签发的令牌、不存条目、显示安全存储不可用；启动读取失败同样显示）；`signing_out_with_a_failing_store_still_revokes_and_says_so`（退出时删除失败仍吊销并显示）。仍缺：改地址时和收到 `401` 后删除失败这两条 | `Partial` |
+| 前端与插件拿不到令牌，日志、配置与 URL 中没有令牌 | `xtask::export_desktop::tests::public_catalog_is_complete_and_plugin_grants_remain_restricted`（插件 webview 仍只有 `plugin_webview_invoke`）；`ora_backend::settings::tests::cloud_server_round_trips_and_clears`（本地配置只存 origin）。令牌类型的 `Debug` 只打印占位符、契约里的连接状态没有令牌字段，但没有测试直接断言日志与 URL 中没有令牌 | `Partial` |
 
 ## Callbacks Cannot Change The Initiating Server Or Transaction
 
@@ -60,10 +64,10 @@
 
 | 验证义务 | 代表性证据 | 状态 |
 | --- | --- | --- |
-| 回调状态机：错误路径与 `state`、`error`、重复、超时、取消与替换事务 | 尚无 | `Missing` |
-| 收到授权码后取消、改地址或替换事务：令牌删除并吊销，新登录的条目不受影响 | 尚无 | `Missing` |
-| 监听范围与所有结束路径的资源释放 | 尚无 | `Missing` |
-| Windows 与 Linux 正式包经真实系统浏览器完成登录与确认页取消 | 尚无 | `Missing` |
+| 回调状态机：错误路径与 `state`、`error`、重复、超时、取消与替换事务 | `app_lib::cloud_connection::loopback::tests::ignores_strays_and_returns_the_matching_code`（错误路径与 `state` 回 `404`、事务继续，合法投递后监听关闭）；`error_redirect_is_denied`；`app_lib::cloud_connection::tests::a_denied_approval_signs_nothing_in`；`an_unanswered_sign_in_times_out_and_stops_listening`；`cancelling_releases_the_listener`；`a_new_sign_in_replaces_the_previous_one` | `Covered` |
+| 收到授权码后取消、改地址或替换事务：令牌删除并吊销，新登录的条目不受影响 | `app_lib::cloud_connection::tests::cancelling_during_the_exchange_revokes_the_issued_token`；`cancelling_during_the_secure_store_write_leaves_nothing_stored`；`changing_the_server_during_the_exchange_revokes_the_issued_token`；`a_new_sign_in_during_the_exchange_revokes_the_old_token` | `Covered` |
+| 监听范围与所有结束路径的资源释放 | `app_lib::cloud_connection::loopback::tests::ignores_strays_and_returns_the_matching_code`（只绑定 `127.0.0.1`，成功后关闭）；`app_lib::cloud_connection::tests::an_unanswered_sign_in_times_out_and_stops_listening`；`cancelling_releases_the_listener`；`a_new_sign_in_replaces_the_previous_one`；Windows 11 真机（debug 构建，ora-space/circus#1379）：登录中只监听 `127.0.0.1:<随机端口>`，没有防火墙提示。仍缺：被拒绝结束和退出程序这两条路径没有断言监听已关闭 | `Partial` |
+| Windows 与 Linux 正式包经真实系统浏览器完成登录与确认页取消 | Windows 11 真机（debug 构建，ora-space/circus#1379）：宿主用系统接口打开默认 Chrome，登录与确认页「取消」都完成；Linux 真实栈（GNOME、gnome-keyring，desktop `e17c4f82`）：真实 Chromium 完成登录。仍缺：正式包，以及 Linux 上的确认页「取消」 | `Partial` |
 
 ## The Token Only Goes To The Origin That Issued It
 
@@ -80,9 +84,9 @@
 
 | 验证义务 | 代表性证据 | 状态 |
 | --- | --- | --- |
-| 地址规范化与拒绝清单 | 尚无 | `Missing` |
-| 3xx 不跟随、回环与 `NO_PROXY` 直连、系统信任库校验 | 尚无 | `Missing` |
-| 改地址后旧令牌不发往新地址 | 尚无 | `Missing` |
+| 地址规范化与拒绝清单 | `app_lib::cloud_connection::server::tests::normalizes_to_one_origin`；`refuses_addresses_that_are_not_a_bare_origin` | `Covered` |
+| 3xx 不跟随、回环与 `NO_PROXY` 直连、系统信任库校验 | `app_lib::cloud_connection::api::tests::only_unauthorized_rejects_the_token`（带 `Location` 的 `302` 按连不上处理）；`ora_utils::http::client::tests::environment_proxy_is_not_used_for_loopback`；`loopback_request_goes_direct`；`ora_utils::http::proxy::tests::no_proxy_bypasses_environment_proxy`（规则级：命中 `NO_PROXY` 时不取环境代理）；Windows 11 真机（debug 构建，ora-space/circus#1379）：设了死端口的 `HTTP(S)_PROXY` / `ALL_PROXY` 后仍能连上回环地址的 Cloud。仍缺：非回环主机命中 `NO_PROXY` 的直连、只信系统信任库 | `Partial` |
+| 改地址后旧令牌不发往新地址 | `app_lib::cloud_connection::tests::changing_the_server_signs_out_of_the_old_one`（改地址后新地址为未登录、旧条目已删、吊销只发往旧地址）；`changing_the_server_during_the_exchange_revokes_the_issued_token`。没有断言新地址从未收到旧令牌 | `Partial` |
 
 ## Only A 401 For The Current Token Ends The Session
 
@@ -100,9 +104,9 @@
 
 | 验证义务 | 代表性证据 | 状态 |
 | --- | --- | --- |
-| 各类回答到会话状态的映射 | 尚无 | `Missing` |
-| 迟到 `401` 与新登录、退出、改地址的竞争 | 尚无 | `Missing` |
-| 真实 v2-server 上停用账号后重启提示重新登录、条目被删 | 尚无 | `Missing` |
+| 各类回答到会话状态的映射 | `app_lib::cloud_connection::api::tests::only_unauthorized_rejects_the_token`（`401` 为拒绝；`500`、`503`、`302`、端口关闭为连不上；`404` 为请求错误）；`app_lib::cloud_connection::tests::a_rejected_token_is_deleted`；`an_unreachable_server_keeps_the_token`。仍缺：超时、TLS 错误，以及其他 `4xx` 在协调器里不改变会话 | `Partial` |
+| 迟到 `401` 与新登录、退出、改地址的竞争 | `app_lib::cloud_connection::tests::a_late_rejection_leaves_a_newer_sign_in_alone`（旧令牌的 `401` 在退出并重新登录后到达：新会话和新条目都不受影响）。仍缺：改地址后迟到的 `401` | `Partial` |
+| 真实 v2-server 上停用账号后重启提示重新登录、条目被删 | Linux 真实栈（GNOME、gnome-keyring，desktop `e17c4f82`，早于协调器改写）：停用后重启为需要重新登录、钥匙环条目被删；Windows 11 真机（debug 构建，ora-space/circus#1379）：停用后回到前台的检查得到 `401`，提示重新登录、条目被删；`app_lib::cloud_connection::tests::end_to_end::signs_in_restarts_notices_revocation_and_signs_out`（真实 HTTP 客户端与回环，桩 Cloud）。仍缺：Linux 在最终代码上重跑 | `Partial` |
 
 ## Signing Out Or Changing The Address Only Affects This Desktop
 
@@ -120,6 +124,6 @@
 
 | 验证义务 | 代表性证据 | 状态 |
 | --- | --- | --- |
-| 退出与改地址的顺序、吊销确认与未确认两种结果、取消进行中的登录 | 尚无 | `Missing` |
-| 真实 v2-server 上 desktop 退出后令牌 `401`、网页会话仍有效 | 尚无 | `Missing` |
+| 退出与改地址的顺序、吊销确认与未确认两种结果、取消进行中的登录 | `app_lib::cloud_connection::tests::signing_out_offline_is_local_and_unconfirmed`（连不上时本机已清、结果为未确认；可达时为已确认）；`changing_the_server_signs_out_of_the_old_one`（改地址删旧条目、吊销未确认如实回报）；`cancelling_during_the_exchange_revokes_the_issued_token`。仍缺：“先删条目再吊销”的顺序和退出时取消进行中的登录没有直接断言 | `Partial` |
+| 真实 v2-server 上 desktop 退出后令牌 `401`、网页会话仍有效 | cloud `internal/server/desktop_login_test.go` 的 `TestDesktopLogoutAndAccountState`（真实 v2-server 与数据库：登出后该令牌 `401`，同账号另一个令牌和网页会话仍有效）；Linux 真实栈（GNOME、gnome-keyring，desktop `e17c4f82`）与 Windows 11 真机（debug 构建，ora-space/circus#1379）：退出后吊销已确认、条目删除，服务端只剩别的令牌 | `Covered` |
 | 改地址时删除旧条目失败：新地址未登录、旧令牌仍请求吊销并回报结果 | 尚无 | `Missing` |

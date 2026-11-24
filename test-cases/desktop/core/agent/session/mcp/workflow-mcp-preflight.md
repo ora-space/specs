@@ -16,6 +16,7 @@
 - 未选择或禁用的绑定允许其插件缺失。运行期间卸载依赖后，重复 start 仍返回当前运行，restart 仍返回 `workflow_run_not_restartable`。
 - 配置不完整或 Agent 能力不足要在节点 session setup 报错；运行开始后卸载、或在预检和派发之间卸载，由后续 session setup 拒绝已选插件缺失。已有 Session 的恢复保持原选择并 fail closed。
 - 错误只含节点 id、节点标题和 MCP id；预检只读。
+- 不可恢复的 resume 先按原有规则返回 `workflow_run_not_resumable`，依赖缺失不改变这个结果。
 
 ### 禁止结果
 
@@ -25,15 +26,16 @@
 
 | 决策与验证义务 | 主线直接证据或缺口 | 状态 |
 | --- | --- | --- |
-| D1：卸载已选 MCP 后 start 被拒，状态仍为 `Pending` | 待 desktop#790 合并并按合并提交核对错误与持久状态 | `Missing` |
-| D1：同一 MCP 缺失阻止 restart 和保留快照 resume，原状态不变 | 待 desktop#790 合并，须有 MCP 专用测试 | `Missing` |
-| D1：卸载后重复 start 和对 Running 的 restart 仍给出原结果 | 待 desktop#790 合并，须在命令之间实际移除依赖 | `Missing` |
-| D1：检查整张图，忽略禁用绑定 | 缺少目标图边界的直接主线断言 | `Missing` |
-| D2：包无效及同 ID 非 MCP 均按缺失处理 | 缺少派发门禁的主线证据 | `Missing` |
-| D2：已安装但配置不完整的 MCP 通过预检，随后在 session setup 失败 | [已选插件缺失或配置不完整时整体拒绝](https://github.com/ora-space/desktop/blob/adaa6672d10f60be2edd10ef61a61102b04a9d89/crates/backend/src/session_setup/mcp/selection_tests.rs#L85)仅直接验证 resolver 返回配置错误，仍缺“该运行可以先启动”的证据 | `Partial` |
-| D2：预检之后发生卸载，节点按 setup 错误失败，恢复不会放宽选择 | 缺少贯穿调度与节点 setup 的竞态用例 | `Missing` |
-| D4：错误只含节点与 MCP 身份，标题缺省时仍可定位 | 缺少直接核对错误载荷与显示回退的主线证据 | `Missing` |
-| D1/D4：拒绝不造成 Session、ACP 或 worktree 副作用 | 缺少直接观测这些边界的主线证据 | `Missing` |
+| D1：卸载已选 MCP 后 start 被拒，状态仍为 `Pending` | [移除后启动](https://github.com/ora-space/desktop/blob/0a648ce8dc2f914949cbf444eda1a77d3c16da07/crates/backend/src/workflow/run/operations/precheck_tests.rs#L394)比较完整错误并重新读取 `Pending`；重装后同一运行可以启动 | `Covered` |
+| D1：同一 MCP 缺失阻止 restart 和保留快照 resume，原状态不变 | [取消后移除 MCP](https://github.com/ora-space/desktop/blob/0a648ce8dc2f914949cbf444eda1a77d3c16da07/crates/backend/src/workflow/run/operations/precheck_tests.rs#L425)分别调用 restart 和保留快照的 resume，两次拒绝后运行记录完全相同；`Succeeded` 的 restart 和 `Failed` 的 resume 尚缺同样的对照（补测承接 [circus#1393](https://github.com/ora-space/circus/issues/1393)） | `Partial` |
+| D1：不可恢复的运行先按恢复资格拒绝，不先报依赖错误 | 缺少 `workflow_run_not_resumable` 与缺失依赖同时成立时的直接对照（补测承接 [circus#1393](https://github.com/ora-space/circus/issues/1393)） | `Missing` |
+| D1：卸载后重复 start 和对 Running 的 restart 仍给出原结果 | [移除后重复命令](https://github.com/ora-space/desktop/blob/0a648ce8dc2f914949cbf444eda1a77d3c16da07/crates/backend/src/workflow/run/operations/precheck_tests.rs#L620)断言再次 start 返回 `Running`，对该运行 restart 仍返回 `workflow_run_not_restartable` | `Covered` |
+| D1：检查整张图，忽略禁用绑定 | [禁用绑定时启动](https://github.com/ora-space/desktop/blob/0a648ce8dc2f914949cbf444eda1a77d3c16da07/crates/backend/src/workflow/run/operations/precheck_tests.rs#L455)验证禁用绑定被跳过；尚缺对条件分支、循环体和已成功节点的直接证明（补测承接 [circus#1393](https://github.com/ora-space/circus/issues/1393)） | `Partial` |
+| D2：包无效及同 ID 非 MCP 均按缺失处理 | [损坏 MCP 包](https://github.com/ora-space/desktop/blob/0a648ce8dc2f914949cbf444eda1a77d3c16da07/crates/backend/src/workflow/run/operations/precheck_tests.rs#L655)和[同 ID 的 Skill 包](https://github.com/ora-space/desktop/blob/0a648ce8dc2f914949cbf444eda1a77d3c16da07/crates/backend/src/workflow/run/operations/precheck_tests.rs#L467)分别断言 start 被拒且运行保持 `Pending` | `Covered` |
+| D2：已安装但配置不完整的 MCP 通过预检，随后在 session setup 失败 | [缺少必填设置的运行获准启动](https://github.com/ora-space/desktop/blob/0a648ce8dc2f914949cbf444eda1a77d3c16da07/crates/backend/src/workflow/run/operations/precheck_tests.rs#L620)；[节点解析对显式选中的缺失或配置不完整插件返回错误](https://github.com/ora-space/desktop/blob/0a648ce8dc2f914949cbf444eda1a77d3c16da07/crates/backend/src/session_setup/mcp/selection_tests.rs#L85)。两个独立用例覆盖各自的判断边界，未在同一次运行观测节点失败（补测承接 [circus#1393](https://github.com/ora-space/circus/issues/1393)） | `Partial` |
+| D2：预检之后发生卸载，节点按 setup 错误失败，恢复不会放宽选择 | [显式选中的缺失插件返回 `SelectedPluginUnavailable`](https://github.com/ora-space/desktop/blob/0a648ce8dc2f914949cbf444eda1a77d3c16da07/crates/backend/src/session_setup/mcp/selection_tests.rs#L85)；[修改草稿后恢复仍使用冻结的选择](https://github.com/ora-space/desktop/blob/0a648ce8dc2f914949cbf444eda1a77d3c16da07/e2e/tests/desktop/core/session/tests/workflow_mcp.rs#L87)。尚缺贯穿预检与节点 setup 的竞态用例（补测承接 [circus#1393](https://github.com/ora-space/circus/issues/1393)） | `Partial` |
+| D4：错误只含节点与 MCP 身份，标题缺省时仍可定位 | [比较完整后端错误](https://github.com/ora-space/desktop/blob/0a648ce8dc2f914949cbf444eda1a77d3c16da07/crates/backend/src/workflow/run/operations/precheck_tests.rs#L394)与[前端按标题和 MCP id 显示](https://github.com/ora-space/desktop/blob/0a648ce8dc2f914949cbf444eda1a77d3c16da07/packages/app-shell/src/i18n/contract-error.test.ts#L98)。缺少后端在标题为空白时回填节点 id、及设置实值不外露的直接断言（补测承接 [circus#1393](https://github.com/ora-space/circus/issues/1393)） | `Partial` |
+| D1/D4：拒绝不造成 Session、ACP 或 worktree 副作用 | [拒绝目标依赖时保留未提交文件](https://github.com/ora-space/desktop/blob/0a648ce8dc2f914949cbf444eda1a77d3c16da07/crates/backend/src/workflow/run/operations/precheck_tests.rs#L483)直接观测 worktree，尚未观测 Session 创建或 ACP 流量（补测承接 [circus#1393](https://github.com/ora-space/circus/issues/1393)） | `Partial` |
 
 ### 决策依据
 
@@ -63,9 +65,9 @@
 
 | 决策与验证义务 | 主线直接证据或缺口 | 状态 |
 | --- | --- | --- |
-| D3：目标图缺 MCP 或 Skill 时在回滚前拒绝，保留调用前运行和 worktree | 待 desktop#790 合并；分别制造目标图缺失并断言错误、状态、快照与目录内容 | `Missing` |
-| D3：旧图缺失、目标图已修复时可以切换 | 缺少只改变目标绑定的直接主线证据 | `Missing` |
+| D3：目标图缺 MCP 或 Skill 时在回滚前拒绝，保留调用前运行和 worktree | [含真实 checkpoint 的两种目标图](https://github.com/ora-space/desktop/blob/0a648ce8dc2f914949cbf444eda1a77d3c16da07/crates/backend/src/workflow/run/operations/precheck_tests.rs#L483)分别拒绝缺失 MCP、Skill，比较公开运行字段（含状态和快照 id）与未提交的 `README.md`；恢复依赖后同一请求切换到目标快照并写回 checkpoint 内容，反证拒绝发生在回滚之前 | `Covered` |
+| D3：旧图缺失、目标图已修复时可以切换 | 缺少只改变目标绑定的直接主线证据（补测承接 [circus#1393](https://github.com/ora-space/circus/issues/1393)） | `Missing` |
 
 ### 决策依据
 
-[派发预检 D3](../../../../../../decisions/desktop/core/agent/session/mcp/20261119-workflow-mcp-preflight.md)及[Plugin Skill 来源和物化规则](../../../../../../decisions/desktop/core/effect/skill/0-plugin-skill-source.md)。
+[派发预检 D3](../../../../../../decisions/desktop/core/agent/session/mcp/20261119-workflow-mcp-preflight.md)及[Skill 会话清单决策 D8](../../../../../../decisions/desktop/core/agent/session/skill/0-skill-catalog-from-storage-paths.md)（`approved`；Skill 依赖按 Catalog 解析与存储路径存在判定）。

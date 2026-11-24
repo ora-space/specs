@@ -5,8 +5,7 @@
 ### 风险
 
 `derive_from_canonical_url` 的结果一旦写入某个已安装插件的目录名，就会被冻结进
-`installed/<namespace>/<identifier>/<version>/`、插件私有数据目录、`skills` 表与
-`effect_sources` 表。如果规范化规则、slug 折叠规则或摘要长度在未来实现中漂移，同一 source URL
+`installed/<namespace>/<identifier>/<version>/`、插件私有数据目录与 `skills` 表。如果规范化规则、slug 折叠规则或摘要长度在未来实现中漂移，同一 source URL
 会在不同版本或不同平台下派生出不同 namespace，导致同一份已安装数据在重启或升级后找不到自己的
 身份。规范化把大小写、默认端口、尾部 `/`、尾部 `.git` 全部折叠掉，任何一步遗漏都会让两个本应
 等价的写法产生两个身份；反之，折叠力度过大也可能让本应不同的仓库共享一个 namespace。
@@ -60,7 +59,7 @@
 
 派生只在 source 首次绑定时发生一次，此后必须只读。如果重新配置或删除后重新添加同一仓库时重新
 现算 namespace 而不是复用历史绑定，已安装插件会与新计算出的 namespace 失配：安装目录、私有数据
-目录、`skills` 行与 `effect_sources` 行全部按旧 namespace 索引，新 namespace 找不到任何一行，
+目录与 `skills` 行全部按旧 namespace 索引，新 namespace 找不到任何一行，
 表现为数据凭空消失或残留孤儿行永远清不掉。
 
 ### 前置状态
@@ -84,7 +83,7 @@
 - 同一 canonical URL 在不同绑定动作之间产生不同 namespace。
 - 同一仓库的两种拼写被配置成两条独立的 source 记录。
 - 已安装插件在其 source 被删除又以等价 URL 重新添加后，因 namespace 改变而与自己的安装目录、
-  `skills` 行或 `effect_sources` 行失配。
+  `skills` 行失配。
 
 ### 验证义务与证据
 
@@ -93,7 +92,7 @@
 | 默认 marketplace 短路绑定到 `official`，不派生 | `ora_backend::marketplace_sources::tests::binds_the_reserved_namespace_only_to_the_default_source` | `Covered` |
 | 删除 source 后以等价 URL 重新添加复用历史绑定的 namespace | `ora_backend::marketplace_sources::tests::reuses_one_binding_across_equivalent_urls_and_re_adds` | `Covered` |
 | 同一仓库的第二种拼写不能被配置成第二条 source 记录 | `ora_backend::marketplace_sources::tests::rejects_a_second_spelling_of_a_configured_source` | `Covered` |
-| 端到端场景：真实已安装插件（携带 `skills`/`effect_sources` 行）在其 source 删除并以等价 URL 重新添加、宿主重启后，namespace 与全部持久化行保持一致 | 尚无跨进程集成证据；上述测试只覆盖绑定表本身，未覆盖已安装插件的下游持久化行 | `Missing` |
+| 端到端场景：真实已安装插件（携带 `skills` 行）在其 source 删除并以等价 URL 重新添加、宿主重启后，namespace 与全部持久化行保持一致 | 尚无跨进程集成证据；上述测试只覆盖绑定表本身，未覆盖已安装插件的下游持久化行 | `Missing` |
 
 ### 决策依据
 

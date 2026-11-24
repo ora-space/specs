@@ -4,7 +4,7 @@ status: implemented
 
 # 交互式节点首轮停靠：首次自动回合需显式确认，异常停靠与等待参与分开显示
 
-> 拟修订：[工作流 Agent 单次发送默认按进展等待，超长静默须显式选择](20261123-workflow-agent-wait-limit.md) 已批准（`approved`）。实施后，有限 `wait` 到期时，自动首轮直接失败，人类回合以 `prompt_timed_out` 异常停靠。
+> 历史决策：有限 `wait` 到期时，交互节点的自动首轮失败，人类回合按 `prompt_timed_out` 异常停靠。见[已实施的工作流等待策略](20261123-workflow-agent-wait-limit.md)。
 
 交互式 Agent 节点目前只要本轮以 `EndTurn` 结束且 blockers 为空就视为 ready；但 agent 也可能用 `EndTurn` 结束一个「向用户提问」的回合，界面于是同时显示「等待参与」和「完成并进入下一步」，点击后跳过用户回答。本决策给 workflow 自动发起的首轮 park 增加 `turn_unconfirmed` blocker：首轮正常结束也不再自动 ready，用户通过新增的 `confirmInitialTurn` 请求字段完成一次普通推进，不记 `completion_forced`。`force` 与 `completion_forced` 只用于覆盖非确认类 blocker；同时把停靠路径上的超时、截断、拒答、未知、会话崩溃等异常停靠与用户主动停止、agent 等待确认分开显示，异常停靠默认不可无确认推进，只能继续或显式强制完成。
 

@@ -4,6 +4,8 @@ status: implemented
 
 # MCP 通过 ACP Session 注入并令运行中会话收敛到最新配置
 
+> 历史决策：[Skill 按存储路径以会话清单交给 Agent](../skill/0-skill-catalog-from-storage-paths.md)（`approved`）修改本决策中与 Effect 共享 barrier 的部分：开头“Skill 仍按 Effect 决策物化”、术语“Agent Session Barrier”、D4、不变量 6 与验收场景中的 Skill Effect 并发一条不再适用。Skill 改为按存储路径以会话清单交给 Agent，不占用 barrier、不重启 Agent、不 reload 会话；barrier 只剩 MCP refresh 一个原因。D1–D3、D5–D9 与其余不变量不变。
+
 Ora 在 ACP `session/new` 与 `session/load` 前，从当前已安装且配置完整的 MCP 插件生成一次性的
 `mcpServers` 内存快照，并随请求交给 Agent。插件安装、更新、卸载或 Settings revision 变化后，Host
 还会令持有 provider channel 的运行中会话通过标准 `session/load` 收敛到最新快照：当前 prompt 不被

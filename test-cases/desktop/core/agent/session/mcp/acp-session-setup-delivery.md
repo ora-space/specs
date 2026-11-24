@@ -141,53 +141,57 @@ Host 为 `session/new`、显式 `session/load` 或 Live Session refresh 解析 E
 - Session MCP 根决策 D3：配置变化令 Live Session 在安全点热更新。
 - 不变量 4、5。
 
-## Effect And MCP Must Share One Agent Session Barrier
+## MCP Refresh Must Hold One Agent Session Barrier Per Agent
 
 ### 风险
 
-如果 Skill mutation 与 MCP refresh 各自重启 Agent 或 reload Session，会绕过 Effect fencing、丢失
-owed MCP update，或让新 prompt 穿过变更窗口。
+如果同一 Agent 上的 MCP refresh 各自 reload Session 而不经过同一个 barrier，会丢失 owed MCP update，
+或让新 prompt 穿过变更窗口。如果 Skill 变化也去占用 barrier，会话会为不需要 reload 的变化被阻塞。
 
 ### 前置状态
 
-- 同一 Agent 同时声明 Skill Effect Resource，并承载至少一个 Live Session。
-- Skill Resource mutation 与 MCP Desired revision 变化可能并发。
+- 同一 Agent 承载至少一个 Live Session。
+- MCP Desired revision 变化，可能与 Skill 安装、卸载并发。
 
 ### 触发
 
-Effect `coordinate`/`reactivate` 与 MCP refresh 争用同一个 Agent Session Barrier。
+MCP refresh 占用该 Agent 的 Agent Session Barrier；同时 Skill Catalog 发生变化。
 
 ### 必须成立
 
-- 同一 Agent 的 MCP refresh 与 Effect mutation 互斥；已有 barrier 内只能提高待收敛 Desired revision。
+- 同一 Agent 的 barrier 互斥；已有 barrier 内只能提高待收敛 Desired revision。
 - 不同 Agent 不共享 barrier。
 - Agent 被替换后，恢复路径现场解析最新 MCP Snapshot。
+- Skill 变化不占用 barrier，不重启 Agent，不 reload Session。
 
 ### 禁止结果
 
-- MCP wakeup 启动第二条绕过 Effect fencing 的 Agent restart 或 Session reload。
+- MCP wakeup 启动第二条绕过 barrier 的 Agent restart 或 Session reload。
 - 先恢复旧 MCP 集合再遗漏 owed update。
-- 把 Session MCP 收敛解释为 Effect Target ready。
+- 因 Skill 变化阻塞 prompt admission 或 reload Session。
 
 ### 验证义务与证据
 
 | 验证义务 | 代表性证据测试 | 状态 |
 | --- | --- | --- |
-| 同一 Agent 上 MCP 与 Effect 原因互斥占用 barrier | `ora_backend::session_setup::mcp::tests::mcp_and_effect_share_one_agent_session_barrier` | `Covered` |
+| 同一 Agent 上 barrier 的不同原因互斥占用 | `ora_backend::session_setup::mcp::tests::mcp_and_effect_share_one_agent_session_barrier`（当前以 MCP 与 Effect 两个原因证明互斥；Effect 原因随退役删除后需改写） | `Covered` |
 | 无关 Agent 不共享 barrier | `ora_backend::session_setup::mcp::tests::unrelated_agents_do_not_share_a_barrier` | `Covered` |
 | Agent replacement 后恢复的 Session 现场解析最新 MCP | 现有 replacement 测试未断言恢复请求携带最新 `mcpServers` | `Missing` |
+| Skill 变化不占用 barrier、不 reload Session | 尚无直接证据 | `Missing` |
 
 ### 决策依据
 
-- Session MCP 根决策 D4：Session Runtime 与 Effect 共享 Agent Session Barrier，但不共享 readiness。
+- Session MCP 根决策 D4：Session Runtime 提供 Agent Session Barrier，但不共享 readiness；其中与 Effect
+  共享的部分已由 [Skill 会话清单决策](../../../../../../decisions/desktop/core/agent/session/skill/0-skill-catalog-from-storage-paths.md)
+  D7（`approved`）修改。
 - 不变量 6、11。
 
 ## MCP Lifecycle Must Not Touch Workspace Files Or Claim Ready
 
 ### 风险
 
-如果 setup/refresh/卸载仍写入 Agent 原生项目文件，或把旧 MCP Effect format 继续当作 Consumer
-Resource，会重新引入 shared-file ownership，并把配置完整误称为 `MCP Ready`。
+如果 setup/refresh/卸载仍写入 Agent 原生项目文件，或把插件声明的 MCP 文件 format 当作需要物化的
+Workspace 资源，会重新引入 shared-file ownership，并把配置完整误称为 `MCP Ready`。
 
 ### 前置状态
 
@@ -196,13 +200,12 @@ Resource，会重新引入 shared-file ownership，并把配置完整误称为 `
 
 ### 触发
 
-解析 Snapshot、安装/保存/卸载 MCP、或把 Agent 注册为 Effect Consumer。
+解析 Snapshot、安装/保存/卸载 MCP，或 Agent 插件注册时声明这些 Resource。
 
 ### 必须成立
 
 - resolver 不创建、修改或删除 Workspace 文件。
-- 未发布的 MCP 文件物化 format 被跳过；只声明这些 format 的插件不是 Effect Consumer。
-- Skill Resource 仍可正常注册。
+- 插件声明的 MCP 文件物化 format 不产生任何 Workspace 写入。
 
 ### 禁止结果
 
@@ -215,8 +218,7 @@ Resource，会重新引入 shared-file ownership，并把配置完整误称为 `
 | 验证义务 | 代表性证据测试 | 状态 |
 | --- | --- | --- |
 | resolver 不改变 Workspace 文件集合 | `ora_backend::session_setup::mcp::tests::resolver_does_not_create_workspace_files` | `Covered` |
-| 未发布 MCP format 不进入 Effect Consumer | `ora_backend::agent_runtime::plugin_agent::tests::skips_unpublished_mcp_file_materialization_resources` | `Covered` |
-| 仅声明 MCP format 的插件不是 Consumer | `ora_backend::agent_runtime::plugin_agent::tests::treats_mcp_only_materialization_as_no_consumer` | `Covered` |
+| 插件声明的 MCP format 不进入任何 Workspace 写入路径 | `ora_backend::agent_runtime::plugin_agent::tests::skips_unpublished_mcp_file_materialization_resources`、`treats_mcp_only_materialization_as_no_consumer`（只证明这些 format 不进入 Effect Consumer，Effect 是此前唯一的 Workspace 写入方；Effect 退役后 `effectResources` 整体被忽略，需改写） | `Partial` |
 | setup、refresh、失败与卸载的端到端文件不变性 | 尚无 Desktop e2e 覆盖安装到 refresh 全路径的 Workspace 快照 | `Missing` |
 
 ### 决策依据

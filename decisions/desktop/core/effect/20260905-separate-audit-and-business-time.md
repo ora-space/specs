@@ -1,8 +1,10 @@
 ---
-status: implemented
+status: superseded
 ---
 
 # Effect 的行审计时间由写事务拥有，业务时间独立保存
+
+> 已被取代：本决策由 [Skill 按存储路径以会话清单交给 Agent，取代 Effect 物化](../agent/session/skill/0-skill-catalog-from-storage-paths.md) 取代，原因：Effect 表由前向迁移删除，本文的审计时间与业务时间规则失去对象。当前系统承诺以取代者为准；取代者的实现合并之前，desktop 里仍在运行的 Effect 以本文为历史依据。Effect 的核心用例暂时保留，在取代者进入 `implemented` 时随 Effect 代码及其中的引用一并删除。
 
 Effect repository 在取得写事务后采样注入时钟，同一事务共享该采样值；每行独立保留自己的时间下界。
 源数据版本、Operation 阶段时间和调度截止时间各自保留业务语义，不再作为跨行审计时间传播。

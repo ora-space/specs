@@ -59,7 +59,7 @@ Workspace 插件根装有 agent 插件与其他插件。
 ### 必须成立
 
 - 只启动指定版本的 agent 插件，会话结束时插件进程组整树终止；不符或未安装时以 `agent_failed{agent_plugin_unavailable}` 结束。
-  脱离进程组的后代由尝试环境标记覆盖，其义务与证据见[会话 MCP 刷新与宿主健康用例](session-mcp-lifecycle.md#a-session-stop-kills-every-attempt-marked-process-and-turns-kill-none)，本用例的证据不推导它。
+  脱离进程组的后代由尝试环境标记覆盖，其义务与证据见[会话 MCP 刷新与宿主健康用例](session-mcp-lifecycle.md#a-session-stop-kills-every-attempt-marked-process-and-finished-turns-kill-none)，本用例的证据不推导它。
 - Agent 进程树的提交使用 `GIT_AUTHOR_*`/`GIT_COMMITTER_*`，checkout 的 `.git/config` 与全局配置不变。
 - 会话期间持有插件租约，结束后释放。
 - 配置了工作负载用户时，插件进程与宿主为它启动的全部子进程以工作负载 UID/GID 运行（无附加组、`no_new_privs`、

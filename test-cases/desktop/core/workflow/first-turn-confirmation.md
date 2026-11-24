@@ -43,6 +43,8 @@ workflow 自动发起的首轮以 `EndTurn` 正常结束，但 agent 实际上�
 
 ## Abnormal Parking Is Distinct From Awaiting User
 
+有限 `wait` 到期时，自动首轮直接失败，人类回合在原会话以 `prompt_timed_out` 异常停靠。两条生产入口及会话视图的直接证据见[有限等待到期用例](prompt-inactivity.md#a-bounded-wait-settles-once-before-node-failure-handling)，该义务整体为 `Partial`（自动首轮释放执行会话尚无独立断言）。
+
 ### 风险
 
 超时、截断、拒答、未知、会话崩溃等异常与「等待参与」共用同一状态，用户可以在没有确认的情况下推进。

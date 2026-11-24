@@ -1,8 +1,10 @@
 ---
-status: implemented
+status: superseded
 ---
 
 # Skill Effect：将 Plugin Skill 发布为不可变 Source 并经 ownership 收敛
+
+> 已被取代：本决策由 [Skill 按存储路径以会话清单交给 Agent，取代 Effect 物化](../../agent/session/skill/0-skill-catalog-from-storage-paths.md) 取代，原因：Plugin Skill 不再发布为 Effect Source，Catalog 中的 Available Skill 直接按插件包内的存储位置进入会话清单，不再物化到 Workspace。当前系统承诺以取代者为准；取代者的实现合并之前，desktop 里仍在运行的 Effect 以本文为历史依据。Effect 的核心用例暂时保留，在取代者进入 `implemented` 时随 Effect 代码及其中的引用一并删除。
 
 Ora 把 Skill 插件动态提供给 Catalog 的每个 Plugin Skill 发布为 immutable Effect Source revision，
 再由通用 Effect Target/Resource 协调、ownership ledger 和 filesystem adapter 将完整 Skill package

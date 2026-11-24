@@ -1,8 +1,10 @@
 ---
-status: implemented
+status: superseded
 ---
 
 # Effect 系统基础：以 Generic Target 组织声明式收敛
+
+> 已被取代：本决策由 [Skill 按存储路径以会话清单交给 Agent，取代 Effect 物化](../agent/session/skill/0-skill-catalog-from-storage-paths.md) 取代，原因：Effect 只有 Skill 一个消费者，Skill 改为按存储路径交给 Agent 后，Ora 不再写 Workspace，没有需要收敛的外部状态，desktop 整体退役 Effect。当前系统承诺以取代者为准；取代者的实现合并之前，desktop 里仍在运行的 Effect 以本文为历史依据。Effect 的核心用例暂时保留，在取代者进入 `implemented` 时随 Effect 代码及其中的引用一并删除。
 
 Ora 采用 Workspace-scoped、level-triggered 的 Effect 系统，把完整 Desired State 安全收敛到
 外部环境，并以可持久化证据证明 Consumer 已经能够消费结果。系统以 Generic Target 作为调度

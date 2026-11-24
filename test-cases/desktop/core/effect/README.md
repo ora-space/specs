@@ -1,5 +1,7 @@
 # Effect 核心测试用例
 
+> 本目录服务的 Effect 决策已被 [Skill 按存储路径以会话清单交给 Agent，取代 Effect 物化](../../../../decisions/desktop/core/agent/session/skill/0-skill-catalog-from-storage-paths.md) 取代。这些用例在取代者进入 `implemented` 时随 Effect 代码及其引用一并删除，此前仍是现有 Effect 实现的证据。
+
 本目录是 Effect 模块的 reviewer 风险导航图。它记录需要长期守住的系统承诺，以及这些承诺是否
 已有直接、可信的可执行证据；它不是测试函数目录，也不负责登记所有单元测试、表驱动输入或底层
 adapter conformance 测试。

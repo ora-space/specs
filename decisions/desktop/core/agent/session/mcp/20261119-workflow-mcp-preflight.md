@@ -1,12 +1,14 @@
 ---
-status: approved
+status: implemented
 ---
 
 # 工作流派发前拒绝缺失的已选 MCP
 
+> 历史决策：D3 与“继承与修改”中提到的 Skill 物化规则已由[Skill 按存储路径以会话清单交给 Agent](../skill/0-skill-catalog-from-storage-paths.md)（`approved`）D8 修改：Skill 依赖检查改为 skill ID 能在 Catalog 中解析、且存储路径下的 `SKILL.md` 存在；D3 链接的 Plugin Skill Source 决策已改为 `superseded`。MCP 预检与检查顺序不变。
+
 Desktop 在 `start`、`restart` 以及保留或切换快照的 `resume` 开始派发前，检查本次要执行的整张冻结图。任何节点启用的 MCP 无法在已安装插件目录中解析时，命令返回 `workflow_mcp_not_found`，运行保留原状态。切换快照的检查顺序见 D3。
 
-`approved` 表示派发门禁及它与节点失败的边界已经确定。它只约束 Desktop。Cloud 延用自己的[工作流发布与启动门禁](../../../../../cloud/workflow/0-cloud-side-scheduler-owns-workflow-execution.md)，两者都在运行期判断环境是否可用，用户可以先编辑草稿。
+本决策只约束 Desktop。Cloud 延用自己的[工作流发布与启动门禁](../../../../../cloud/workflow/0-cloud-side-scheduler-owns-workflow-execution.md)，两者都在运行期判断环境是否可用，用户可以先编辑草稿。
 
 ## 继承与修改
 
@@ -24,11 +26,11 @@ Desktop 在 `start`、`restart` 以及保留或切换快照的 `resume` 开始�
 
 `startWorkflowRun`、`restartWorkflowRun` 和 `resumeWorkflowRunFromFailure` 在即将开始新一轮调度时，遍历目标快照中各节点的 `enabled: true` MCP 绑定，按完整插件 ID 查询 session setup 使用的已安装插件目录。未选、禁用及空集合沿用显式选择语义。保存草稿、发布或创建运行时不增加这项 MCP 校验。
 
-`Pending` 的 start、允许重启的运行（含 `Succeeded`），以及可恢复的 `Failed` 或 `Cancelled` 运行进入这道门禁。已在运行时重复 start 仍返回当前运行；restart 一个 `Running` 运行仍返回 `workflow_run_not_restartable`。这两条路径上卸载插件也不会把原来的结果改为依赖错误。
+`Pending` 的 start、允许重启的运行（含 `Succeeded`），以及可恢复的 `Failed` 或 `Cancelled` 运行进入这道门禁。已在运行时重复 start 仍返回当前运行；restart 一个 `Running` 运行仍返回 `workflow_run_not_restartable`。这两条路径上卸载插件也不会把原来的结果改为依赖错误。resume 先按原有规则判断运行是否可以恢复，不可恢复的运行返回 `workflow_run_not_resumable`，依赖缺失不会优先于它报出。
 
 ### D2：把安装可用性与配置资格分开
 
-缺少安装包、安装包无效、相同 ID 的插件没有提供 MCP 时，预检都拒绝派发。提示说明节点所需的 MCP 不可用，用户可以安装或恢复符合该 ID 的 MCP。已安装的有效 MCP 即使配置不完整、Agent 不支持该 transport 或健康探测失败，也通过这项安装检查。
+缺少安装包、安装包无效、相同 ID 的插件没有提供 MCP 时，预检都拒绝派发。提示说明节点所需的 MCP 不可用，用户可以安装或恢复符合该 ID 的 MCP。已安装的有效 MCP 即使配置不完整、Agent 不支持该 transport 或健康探测失败，也通过这项安装检查。Agent 是否安装不属于预检：runtime 在节点启动 Session 时解析冻结的 Agent 身份，缺失时以 `agent_not_installed` 失败。
 
 运行已经派发后，若插件在后续节点开始前被移除，按前序 D1 在 session setup 以 `session_mcp_setup_failed` 报告节点失败。预检与第一次派发之间发生卸载也由这层检查兜底。配置不完整、能力不足同样在 session setup 失败；恢复既有 Session 遵从前序 D2，不能缩减已选集合继续执行。
 
@@ -38,7 +40,9 @@ Desktop 在 `start`、`restart` 以及保留或切换快照的 `resume` 开始�
 
 ### D4：错误足以定位节点和依赖
 
-`workflow_mcp_not_found` 携带节点 id、节点标题和 MCP id。用户界面在标题缺省时显示节点 id。参数只暴露这些身份；command、arguments、env、URL、headers 和其他 Setting 实值不会进入此错误。
+`workflow_mcp_not_found` 携带节点 id、节点标题和 MCP id；节点标题为空白时，`node_title` 直接回退填入节点 id，使界面统一显示可定位的名称。参数只暴露这些身份；command、arguments、env、URL、headers 和其他 Setting 实值不会进入此错误。
+
+**与批准版本的偏离**：批准版把回退放在界面——标题缺省时由界面显示节点 id。最终实现改在后端：`workflow_mcp_not_found` 与同类的 Skill 依赖错误共用 `node_display_name`，节点标题为空白时直接把它填成节点 id，界面只显示收到的 `node_title`。原因是画布、运行视图和其他消费方都读同一个 `node_title`，回退写在一处即可覆盖所有表面，空白标题也不会进入诊断参数。
 
 ## 后果
 
@@ -61,8 +65,6 @@ Desktop 在 `start`、`restart` 以及保留或切换快照的 `resume` 开始�
 | 把配置、能力与健康加入预检 | 用户会在运行级收到需由特定节点的 Agent、设置或探测解释的错误 |
 | 每次节点派发都重扫整图 | session setup 已按当时的显式选择解析该节点；全图重扫会让不相关节点的卸载中断进行中的运行，且仍消除不了检查后的竞态 |
 
-## 落地顺序
+## 核心测试依据
 
-1. [desktop#790](https://github.com/ora-space/desktop/pull/790) 承接 D1、D2、D4 的派发入口、错误与节点边界。
-2. 同一产品变更补齐 D3 的切换路径，证明目标图校验先于 checkpoint 与 worktree 的任何改动。
-3. 产品变更合并后，在[核心用例](../../../../../../test-cases/desktop/core/agent/session/mcp/workflow-mcp-preflight.md)按合并提交引用 MCP 专用的 start、restart、resume 和切换快照证据，再将本决策标为 `implemented`。
+[派发前 MCP 预检](../../../../../../test-cases/desktop/core/agent/session/mcp/workflow-mcp-preflight.md)记录派发、错误处理、切换快照和 checkpoint 恢复的直接证据与缺口。

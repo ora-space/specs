@@ -4,6 +4,8 @@ status: implemented
 
 # Skill 插件：以静态多 Skill 包动态提供 Catalog Skill
 
+> 历史决策：[Skill 按存储路径以会话清单交给 Agent](../../../core/agent/session/skill/0-skill-catalog-from-storage-paths.md)（`approved`）修改本决策的下游边界：开头“Skill 进入 Catalog 后如何发布、选择和物化为 Effect，属于 Effect 领域决策”与“当前未解决的问题”最后一条不再适用。Catalog 中 Available 的 Plugin Skill 不发布为 Effect Source，直接以 package root 作为存储位置进入会话 Skill 清单；`desktop/core/effect/skill` 已改为 `superseded`。D1–D7 与不变量不变。
+
 Ora 的 Skill 插件是一个不启动进程的静态插件包。插件用 `orax.toml` 声明
 `kind = "skill"`，并在固定的 `assets/<skill-directory>/SKILL.md` 布局中携带一个或多个
 Skill。宿主在插件发现阶段验证整包，在插件安装、更新和启动同步时把每个有效 Skill 投影到共享

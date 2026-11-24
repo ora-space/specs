@@ -14,6 +14,16 @@ Desktop Backend 中的 ACP Agent 运行时（`crates/backend/src/agent_runtime`�
 > 历史决策：D5 中“模型凭据由沙盒部署以环境变量提供”已被[运行范围的模型代理](20261010-run-scoped-model-proxy.md)
 > 修改：模型绑定的会话经 Node 的模型代理访问平台代理，真实 Key 不进入沙盒。其余规则不变。
 
+> 历史决策：D6“Agent 轮次失败、超时、连接丢失”一行的“会话保持”已被
+> [取消一轮并在轮次结束后保留会话](../protocol/20261116-cancel-turn-and-keep-session-after-turn-ends.md)（`implemented`）
+> 修改：连接丢失结束会话；失败与超时只在会话选择了 `keep_session_on_failure` 且满足该决策 D2 时保留。其余规则不变。
+
+> 历史决策：D6 中“按运行时既有规则记录 `TurnEnded`”与兼容性边界中“会话 JSONL 格式（`ora-history` 所有）不变”，由
+> [一轮的失败与取消分开记录](../protocol/20261124-turn-failure-reason-distinct-from-cancel.md)（`approved`）修改：`TurnEnded`
+> 增加可选字段 `ended_by` 与 `failure`（失败原因码、ACP 错误码与清洗后至多 1 KiB 的 Agent 文字），`stop_reason`、
+> `SCHEMA_VERSION` 与文件布局不变，旧记录照常读取。这些部分以该决策为准。
+> 其余规则不变。
+
 本 ADR 处于 `implemented`：共享运行时在 desktop 的 `crates/agent-runtime`，Node 侧会话执行在 `apps/ora-node/src/session/`
 （D7 的接口定义在 `session/ports.rs`），验证见 `test-cases/node/agent-runtime/` 下的用例。它是 `node/agent-runtime` 的根决策（本目录范围：“Agent 进程、ACP 转发、会话连接和
 运行恢复”）。协议消息见 [Node 协议后续决策](../protocol/20260928-streamed-thread-events-and-session-commands.md)；

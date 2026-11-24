@@ -334,4 +334,6 @@ D2 的“不隔离的后果”正是如此），整个部署是一个信任域�
   按能力派发与文法校验、端点与凭据跨 Controller 重启有效或在提供服务前结束、凭据以持久状态判定有效期、attempt 级授权。
 
 Node 侧证据按 desktop 固定合并提交登记，受理后崩溃重启的结算与 `mcp_lifecycle` 会话的 load 要求两项为
-`Partial`，其余为 `Covered`；Controller 侧的使用方尚未接入，证据仍为 `Missing`。
+`Partial`，其余为 `Covered`；Controller 侧的第一个使用方是
+[Cloud 经 Node 宿主 MCP 提供完成工具](../../cloud/workflow/20261124-host-completion-tool-for-node-hosted-interactive-nodes.md)，
+证据与缺口登记在 Controller 侧用例。

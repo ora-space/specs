@@ -8,6 +8,12 @@ status: implemented
 > 关闭：Desktop 不再支持 macOS，不再为 macOS 另立决策；Windows 项不变。本决策不覆盖 macOS 的说明继续成立。其余
 > 决策不变，本提示不改变本决策的状态。
 
+> 历史决策：D4“不会发任何停止信号的情况”第二条、不变量 7 中“保留会话的取消与失败不发任何停止信号”，以及“本决策
+> 未解决的问题”第一条，由[保留会话前先停掉这一轮新起的进程](../protocol/20261123-turn-process-fence-before-keeping-session.md)
+> （`implemented`）修改：Linux 上，会话被保留的取消或失败之前，Node 复用本决策 D2 的扫描、冻结与杀，只停掉这一轮新起、
+> 且不在“这一轮开始前已启动、此刻仍存活的本尝试进程”所在会话中的被认领进程；一轮正常完成后仍不发任何信号。
+> 这些部分以该决策为准。其余决策不变，本提示不改变本决策的状态。
+
 Linux 上，Node 给 Agent 尝试和 stdio 探测尝试派发的每个进程设置 `ORA_SESSION_ATTEMPT=<attempt>`，后代经
 `fork`/`execve` 继承它。尝试登记前，Node 先持久写下这次尝试的开始时刻和进程用户（范围记录）。停止尝试时，
 Node 先用 SIGSTOP 冻结所有在尝试开始后启动、带标记或经仍在的父进程被认领的存活进程，反复扫描到不再出现新进程
@@ -446,7 +452,7 @@ desktop#802 在评审中按以下方式偏离或细化了 approved 文本。每�
 ## 核心测试用例
 
 见[会话 MCP 刷新与宿主健康用例](../../../test-cases/node/agent-runtime/session-mcp-lifecycle.md)：
-[会话停止杀掉全部带标记进程、轮次之间不杀](../../../test-cases/node/agent-runtime/session-mcp-lifecycle.md#a-session-stop-kills-every-attempt-marked-process-and-turns-kill-none)
+[会话停止杀掉全部带标记进程、轮次之间不杀](../../../test-cases/node/agent-runtime/session-mcp-lifecycle.md#a-session-stop-kills-every-attempt-marked-process-and-finished-turns-kill-none)
 （D4、D5、D8），以及尝试锁、重启收口、未排空升级、运维对账、版本重启与探测清理各用例中 D1–D3、D6、D7 的义务；
 [取消一轮用例](../../../test-cases/node/protocol/cancel-turn-and-keep-session.md)的第 11、12、13 条另含取消导致会话结束时的
 后台作业与保留会话时不杀任何进程。22 项义务按 desktop#802 head `198cc415` 登记证据：7 项 `Covered`、12 项 `Partial`、

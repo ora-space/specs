@@ -1,5 +1,5 @@
 ---
-status: approved
+status: implemented
 ---
 
 # Desktop Cloud 连接第一版：经系统浏览器与回环地址登录 v2-server，令牌只在宿主与系统安全存储并绑定登录时的 Cloud 地址；部署身份、自签证书与内网 HTTP、会话轮换与活动上报、deep link 暂停
@@ -14,17 +14,17 @@ Desktop 宿主让用户填一个 Cloud 地址，点「登录」后用系统浏�
 - 开发版（`V2_LOGIN=email`）和部署版（华为 IDaaS）用同一套 desktop 流程：desktop 只依赖“浏览器里有网页会话”，不关心
   网页用哪种方式登录。
 
-本 ADR 为 `approved`：owner 2026-11-23 在 ora-space/specs#324 两轮评审后批准；实现在 ora-space/circus#1379（ora-space/cloud#432、ora-space/desktop#806），尚未合并。
+本 ADR 为 `implemented`：owner 2026-11-23 在 ora-space/specs#324 批准，由 cloud#432（`v2-server` 与 `frontend-v2`）和 desktop#806 实现（ora-space/circus#1379），本文已按两者的最终实现同步，验证见文末“落地顺序：实现与验证”。
 它是 [宿主连接根决策](0-host-owned-cloud-connection-and-session.md)（下称“根决策”）的后续 ADR，按
 [登录与会话根决策](../../cloud/login/0-idaas-or-email-login-with-shared-web-and-desktop-sessions.md)（下称“A6”）D6 的安排写
 desktop 一侧的规则。依据是 owner 2026-11-12 在 ora-space/circus#1084 定的第一版范围（填地址、系统浏览器登录、回环回调、
 系统安全存储、显示连接状态与登出、Cloud 吊销后提示重新登录；deep link、内网 HTTP、自签证书信任、换地址迁移、会话轮换
-不做）。读取的版本为 desktop `63aee9b8`（ora-space/desktop#806）、cloud `15161217`（ora-space/cloud#432）、specs `6421762`。
+不做）。同步时读取的版本为合并后的 desktop `7fc4544f`（ora-space/desktop#806）、cloud `1635cc7d`（ora-space/cloud#432）。
 
 - **涉及**：desktop 宿主（`apps/desktop/src-tauri`）、契约与逻辑操作（`crates/contracts`、`xtask`）、本地配置
   （`crates/user-config`）、通用 HTTP 能力（`crates/utils`）、app-shell 的设置界面与中英文文档。
 - **Cloud 一侧不在本文**：确认页、一次性授权码、换令牌、令牌的存储与过期、`Bearer` 优先的认人规则都由 A6 D6 规定，由
-  cloud 的 `v2-server` 实现（实现运行 ora-space/circus#1379）。本文只引用它对 desktop 可见的部分。
+  cloud 的 `v2-server` 实现（ora-space/cloud#432）。本文只引用它对 desktop 可见的部分。
 - **协议权威**：根决策开头把 [Gateway 原生会话 ADR](../../cloud/identity-access/20261019-deployment-bound-desktop-sessions.md)
   认作认证与会话协议的唯一权威。v2-server 不实现那份协议（A6 取代了 v1 Gateway 的 desktop 会话），本文起 desktop 与
   Cloud 之间的协议以 A6 D6 为准。
@@ -68,7 +68,7 @@ desktop 一侧的规则。依据是 owner 2026-11-12 在 ora-space/circus#1084 �
 | 不变量 3：旧凭据只发送给传输信任通过且部署签名身份匹配的目标 | 修改 | 令牌只发往登录时规范化的 Cloud origin，不跟随重定向（不变量 3） |
 | 不变量 1、2、5、6 | 继承，不变 | 第一版没有云端订阅和离线缓存，不变量 5、6 自然成立 |
 | 不变量 4：全部窗口只共享一个活动 server / 账号与续期所有者 | 继承 | 依赖单实例插件（D3） |
-| 落地边界：阶段按 Gateway ADR D7 共用；没有轮换恢复契约不能将第一阶段标为完成；最低兼容 server 版本 | 修改 | 第一阶段的完成条件以本文“落地顺序”为准；第一版没有轮换，也不做能力协商和最低版本检查 |
+| 落地边界：阶段按 Gateway ADR D7 共用；没有轮换恢复契约不能将第一阶段标为完成；最低兼容 server 版本 | 修改 | 第一阶段的完成条件与验证见本文“落地顺序：实现与验证”；第一版没有轮换，也不做能力协商和最低版本检查 |
 
 ## 防什么、不防什么
 
@@ -103,14 +103,15 @@ desktop 一侧的规则。依据是 owner 2026-11-12 在 ora-space/circus#1084 �
 1. 宿主在 `127.0.0.1` 上监听系统分配的端口（不监听 `0.0.0.0`），生成 32 字节随机 `state` 和 PKCE verifier（base64url），
    用系统浏览器打开 `<origin>/desktop/authorize?redirect_uri=http://127.0.0.1:<端口>/callback&state=…&code_challenge=…&code_challenge_method=S256`。
 2. 之后的网页登录、确认页、“允许”和一次性授权码都按 A6 D6，由 Cloud 完成。用户在确认页点「取消」时，Cloud 把浏览器
-   送回同一个回环地址并带上 `error=access_denied` 和 `state`，desktop 立即以“已在浏览器中取消”结束事务，不必等超时。
+   送回同一个回环地址并带上 `error=access_denied` 和 `state`，desktop 立即以“已在浏览器中取消登录，或授权没有完成”结束事务，不必等超时。
 3. 回环监听只认 `GET /callback` 且 `state` 一致的请求：路径或 `state` 不对的回 `404`，事务继续等；对的那一个结束事务——
-   带 `code` 就回一个不含脚本的静态页“已收到授权，请回到 Ora”，然后换令牌；带 `error` 或没有 `code` 就以失败结束。
+   带 `code` 就回一个不含脚本的静态页“已收到授权，请回到 Ora”，然后换令牌；带 `error` 或没有 `code` 就回一个静态页“登录没有完成，可以回到 Ora 重试”，并以失败结束。
    回调页不说“已登录”：换令牌还没发生，可能因为连不上或授权码失效而失败，结果显示在 desktop 里。
 4. 换令牌只发往事务记录的 origin，带上授权码、verifier 和同一个回调地址。
 5. 一个安装同时只有一个登录事务；再点「登录」会取消前一个。事务 5 分钟超时，用户可以取消。成功、失败、取消、超时和
-   退出程序都会关闭监听、丢弃 verifier。宿主不会自己重新打开浏览器。收到授权码之后才取消（或改地址、再点「登录」）时，
-   换令牌照常完成，随后删除刚写入的条目并尽力吊销这个令牌，不会留下没人吊销的令牌，也不会碰到更新一次登录写入的条目。
+   退出程序都会关闭监听、丢弃 verifier。宿主不会自己重新打开浏览器。授权码到手后，换令牌和写入安全存储在一个不受取消
+   打断的后台任务里完成；写入前后都在安全存储锁内核对“代”（D5）。这时已取消（或改地址、再点「登录」）的，不写入或删除
+   刚写入的条目，再尽力吊销这个令牌：不会留下没人吊销的令牌，也不会碰到更新一次登录写入的条目。
 
 “限制次数”的含义：每个事务只接收一次合法投递，之后监听关闭；路径或 `state` 不对的请求不计次数，只受每个连接的请求头
 读取时限和大小上限约束。
@@ -130,7 +131,10 @@ desktop 一侧的规则。依据是 owner 2026-11-12 在 ora-space/circus#1084 �
   “操作系统用户 + Cloud origin”：以 origin 为键，同时存账号 id 和显示名，让界面在 Cloud 回答之前就能显示“已登录为
   某人”。宿主内存里持有当前令牌，进程重启后从安全存储读回，读回之前本地功能已经可用。
 - Windows 上条目只保存在本机（`CRED_PERSIST_LOCAL_MACHINE`），不随漫游配置文件同步到其他电脑：令牌代表“这一台
-  desktop”，退出登录只影响这一台（D6），同步出去就会出现别的电脑在用、这台退出时又把那边一起删掉的情况。
+  desktop”，退出登录只影响这一台（D6），同步出去就会出现别的电脑在用、这台退出时又把那边一起删掉的情况。宿主经 Win32
+  凭据接口直接写这个条目（目标名 `<origin>.space.ora.desktop.cloud`），因为 `keyring` 库在 Windows 上固定写会漫游的
+  `CRED_PERSIST_ENTERPRISE`；Linux 经 `keyring` 写 Secret Service（服务名 `space.ora.desktop.cloud`、账号为 origin）。
+  安全存储的读写不在异步工作线程上执行，所有读写经同一把锁串行，检查、登录落定、退出和改地址不会交错地读写同一条目。
 - 开发版（`task run:desktop` 设了自己的 `ORA_DATA_DIR`）和正式包的本地配置各自独立，但条目只按“操作系统用户 +
   origin”区分，两者共用：在开发版里对同一 origin 退出或登录，会删除或覆盖正式包的条目。按应用标识判断的单实例插件阻止
   两者同时运行，所以不会有两个宿主同时读写这个条目。第一版接受这个后果：开发版只给开发者用，分开的条目属于根决策 D3
@@ -147,8 +151,8 @@ desktop 一侧的规则。依据是 owner 2026-11-12 在 ora-space/circus#1084 �
 | --- | --- |
 | 换到令牌后写入失败 | 尽力调 desktop 登出接口吊销刚签发的令牌，不在内存里保持登录，显示“系统安全存储不可用”和原因 |
 | 退出登录时删除失败 | 照样用内存里的令牌吊销，状态显示“系统安全存储不可用”和原因（不显示成已退出） |
-| 改地址时删除旧条目失败 | 照样吊销；旧条目以旧 origin 为键，新地址不会读到它 |
-| 收到 `401` 后删除失败 | 状态照样转为需要重新登录 |
+| 改地址时删除旧条目失败 | 只记日志，照样用内存里的令牌请旧服务器吊销，吊销结果照常回报；旧条目以旧 origin 为键，新地址读不到它，保持未登录 |
+| 收到 `401` 后删除失败 | 只记日志，状态照样转为需要重新登录 |
 
 删除失败留下的条目会在下次启动时被读回，宿主照常检查：令牌已吊销或已失效就得到 `401`，再删一次。
 只有删除失败且吊销也没确认时，残留的令牌下次启动仍然有效；这时界面已经同时提示了“安全存储不可用”和“服务端撤销
@@ -164,8 +168,8 @@ desktop 一侧的规则。依据是 owner 2026-11-12 在 ora-space/circus#1084 �
 - 宿主用于 Cloud 的 HTTP 客户端不跟随重定向：任何 3xx 都按“连不上”处理（D5），令牌不会被带到另一个 origin。
 - TLS 使用操作系统的信任库（desktop 已用的平台证书校验）。企业私有 CA 只要装进系统信任库就能用；第一版不提供“信任这个
   自签证书”的入口，也不关闭证书校验。浏览器不信任 Cloud 证书时登录页本身打不开，desktop 同样不绕过。
-- 代理按环境变量：Cloud 地址是回环地址或命中 `NO_PROXY` 时，客户端明确关闭代理直连，不让 HTTP 库再从环境变量取代理；
-  否则走 `HTTPS_PROXY` / `HTTP_PROXY`。不用设置里的网络代理：那个设置只作用于选择使用它的 marketplace 源，强加给内网
+- 代理按环境变量：客户端先关掉 HTTP 库自己从环境变量取代理的行为，只用宿主按规则选出的那一个——Cloud 地址是回环地址
+  或命中 `NO_PROXY` 时直连，否则走 `HTTPS_PROXY` / `HTTP_PROXY`，都没有时退到 `ALL_PROXY`。不用设置里的网络代理：那个设置只作用于选择使用它的 marketplace 源，强加给内网
   Cloud 反而可能连不上。
 
 这条代替根决策不变量 3 的“部署签名身份”：v2-server 没有部署签名身份（A6 D7），第一版能守住的是“令牌只发给用户登录时
@@ -186,8 +190,9 @@ HTTPS 时等价于浏览器的信任边界。回环地址必须直连：开发�
 发出的任何请求遇到 `401` 也按上表处理。令牌在 Cloud 一侧失效的情形只有 A6 D6 列出的几种：desktop 自己退出登录、连续
 30 天没用、账号被停用或删除。desktop 在下一次检查或请求时发现，第一版不承诺发现的时限。
 
-`401` 只对发出请求时的那个令牌生效：宿主在锁内核对“代”没变、当前令牌仍是发请求时的那一个，才转为需要重新登录并删除
-条目。检查发出后用户退出、改地址或重新登录过，迟到的 `401` 什么也不做，不会删掉新登录写入的条目。
+`401` 只对发出请求时的那个令牌生效：宿主核对“代”没变、当前令牌仍是发请求时的那一个，才转为需要重新登录；随后在安全
+存储锁内再核对一次，仍是这次结束的会话才删除条目。检查发出后用户退出、改地址或重新登录过，迟到的 `401` 什么也不做，
+不会删掉新登录写入的条目。
 
 **检查也算使用**：这次检查是带令牌的请求，v2-server 把它和其他请求一样算作使用，距上次刷新超过 1 小时就把过期时间
 顺延到 30 天后（A6 D6）。owner 接受这一点：打开 desktop 本身就是真实的使用，空闲过期要防的是被弃用的设备；不为此新增
@@ -257,16 +262,15 @@ HTTPS 时等价于浏览器的信任边界。回环地址必须直连：开发�
 2. **云端功能接入**：工作流下发、运营统计等以后的云端功能怎么经宿主调用 Cloud（命令形态、缓存、订阅、失败重试），由那些
    功能各自的决策规定；本文只规定它们共用这一个令牌和 D5 的错误分类。
 
-## 落地顺序
+## 落地顺序：实现与验证
 
-1. **本文 `approved` 与核心用例**（ora-space/circus#1378，ora-space/specs#324）：转为 `approved` 时根决策加
-   `> 历史决策：`、术语表同步，并按本文重写
-   [宿主连接、回调与本地独立](../../../test-cases/desktop/cloud-connection/host-connection-and-session.md)，证据先标
-   `Missing`。先定规则和验证义务，实现才合并，评审有据可依。
-2. **实现**（ora-space/circus#1379）：cloud 一个 PR（`v2-server` 的 desktop 令牌、`Bearer` 认人、确认页与 desktop 登录
-   接口），desktop 一个 PR（宿主协调器、命令、设置界面、文档）。完成条件：开发版（`V2_LOGIN=email`）下，Windows 和 Linux
-   上都能完成“登录 → 重启后仍登录 → Cloud 停用账号后提示重新登录 → 退出登录”，Windows 上条目不漫游；部署版的 IDaaS
-   端到端随第一次内网部署验证。
-3. 实现合并、验证完成后由落地运行改为 `implemented`、补核心用例证据，A6 同时转为 `implemented`（A6 落地顺序第 3 条）。
-
-从第 2 步合并起，desktop 可以连接 v2-server；未配置 Cloud 的用户看不到任何行为变化。
+- **实现**：Cloud 一侧在 cloud#432（desktop 令牌与 `Bearer` 认人、确认页、`approve` / `deny` / `token` / `logout` 接口、
+  候选契约 `v2-server/desktop-login.openapi.json`），desktop 一侧在 desktop#806（宿主协调器、安全存储、命令与事件、设置里的
+  「Cloud 连接」、中英文文档）。核心用例的证据登记在
+  [宿主连接、回调与本地独立](../../../test-cases/desktop/cloud-connection/host-connection-and-session.md) 和
+  [登录与会话](../../../test-cases/cloud/login/login-and-sessions.md)。
+- **真实环境**：开发版（`V2_LOGIN=email`）的 debug 构建。Linux 真实栈跑在 desktop `e17c4f82`，之后协调器与安全存储有改写；
+  Windows 11 真机跑在 desktop `63aee9b8`、cloud `15161217`，代码与合并提交相同（ora-space/circus#1379）。验证与证据见核心用例。
+- **仍未验证**：正式安装包（NSIS）的界面与升级；“不漫游”只有 Persist 位作证，没有在第二台电脑上验；部署版 IDaaS 的端到端
+  随第一次内网部署（ora-space/circus#1292）。A6 在 ora-space/circus#1292 完成前保持 `approved`。
+- 未配置 Cloud 的用户看不到任何行为变化。

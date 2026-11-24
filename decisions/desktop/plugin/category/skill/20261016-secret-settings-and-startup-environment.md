@@ -4,6 +4,8 @@ status: implemented
 
 # Skill 配置通过宿主启动环境快照交付，敏感字段按声明脱敏
 
+> 历史决策：[Skill 按存储路径以会话清单交给 Agent](../../../core/agent/session/skill/0-skill-catalog-from-storage-paths.md)（`approved`）取消 Skill 物化。正文中“Effect 物化”“Skill 内容仍正常物化”“无配置的 Skill 继续物化”改读为 Skill 仍进入会话清单；配置交付规则不变。
+
 静态 Skill 插件用 `assets/config.json` 声明配置，通过宿主启动时冻结的环境快照交付给 Agent 进程树。敏感字段不回传编辑器；公开字段正常显示。本 ADR 记录 Desktop 已落地的配置契约；实现与代表性直接证据见对应核心用例。
 
 ## 继承与修改

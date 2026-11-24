@@ -55,6 +55,26 @@ Gateway ADR 称之为 `Handoff Code`（交接码）。
 desktop 与 Cloud 之间的协议以 [登录与会话 A6](../decisions/cloud/login/0-idaas-or-email-login-with-shared-web-and-desktop-sessions.md) D6
 为准，[Gateway 原生会话 ADR](../decisions/cloud/identity-access/20261019-deployment-bound-desktop-sessions.md) 定义暂停的完整版。
 
+## Desktop Release
+
+### Release Notes（更新日志）
+
+一个 Desktop 正式版本面向用户的中英文变更说明，手写来源是 desktop `main` 里该版本的 `release-notes/<版本>.json`
+（见[更新日志决策](../decisions/desktop/release-notes/0-release-notes-in-main-bundled-at-packaging.md)）。它不是 GitHub Release
+的正文，也不是提交或 PR 列表。
+
+### Update Manifest（更新清单）
+
+Desktop 检查更新时读取的 `latest.json`，列出最新版本及各平台的安装包与签名。签名只覆盖安装包，不覆盖清单本身。
+
+_Avoid_: 与 Plugin Manifest、Release Manifest（插件的清单）混用
+
+### Yellow-Zone Build（黄区包）
+
+同时满足下列三条的 Desktop 安装包：用 `scripts/package-desktop.ts --tag` 打包；源码与所用的 desktop 提交相比，只替换首次
+安装数据（现为 `FIRST_INSTALL_SQL`，公开包为空）；只在本地交付，不上传 GitHub Release。“黄区”只指这类安装包的交付环境，
+不表示该环境能否访问某个公网地址。
+
 ## Agent Conversation
 
 `Ora Session`（Ora 会话）是 Workspace 中一条对话的稳定身份，切换 Agent 不改变该身份与历史归属。
@@ -92,8 +112,8 @@ Plugin ID、精确 package version 与 Configuration revision。它用于合并�
 是否过期，不是持久化 ownership 或 Server 健康证据。
 
 `Session MCP Snapshot` 是 Host 针对一个 Agent、一个 Workspace `cwd` 和一次 ACP `session/new` 或
-`session/load` 解析出的有序 `mcpServers`。它是只在内存与该次 setup 帧中存在的运行输入，不是 Effect
-Desired State、持久化 Session 属性或 Workspace Resource。
+`session/load` 解析出的有序 `mcpServers`。它是只在内存与该次 setup 帧中存在的运行输入，不是持久化
+Session 属性，也不写入 Workspace。
 
 `Active Session MCP Revision` 是 Live Session 最近一次成功 `session/new` 或 `session/load` 接受的
 Desired Session MCP Revision。停止的 Ora Session 没有 provider channel，因而没有 Active revision。
@@ -102,8 +122,9 @@ Desired Session MCP Revision。停止的 Ora Session 没有 provider channel，�
 Session 从旧 Active revision 切换到最新 Desired revision。变化提交后开始的 prompt 必须先完成该收敛，
 或在进入 Agent 前明确失败。
 
-`Agent Session Barrier` 是 Effect Resource mutation、Agent replacement 与 MCP refresh 共用的协调
-seam。它等待已经开始的 prompt 到达安全点，并阻止新 prompt 穿过未完成的变更窗口。
+`Agent Session Barrier` 是同一 Agent 上 MCP refresh 的协调 seam。它等待已经开始的 prompt 到达安全点，
+并阻止新 prompt 穿过未完成的变更窗口。Skill 变化不占用它；它曾同时服务 Effect Resource mutation 与 Effect
+引起的 Agent replacement，二者随 Effect 退役删除（见下文 Session Skill）。
 
 `Host MCP Health` 是 Host 对配置完整的已安装 MCP 执行有界握手得到的运行健康事实。它不是配置完整、
 不是 Active Session MCP Revision，也不是 Agent 在会话内已经连上 Server 或工具已经可用。会话横幅只
@@ -111,6 +132,34 @@ seam。它等待已经开始的 prompt 到达安全点，并阻止新 prompt 穿
 
 `MCP Health Probe` 是一次完整的 MCP 客户端会话：按该成员的 transport 完成 `initialize` 与
 `tools/list`，然后拆除连接。它只证明 Host 视角下该绑定产物此刻可以握手。
+
+## Session Skill
+
+Desktop 不再把 Skill 物化到 Workspace，而是按存储路径以会话清单告诉 Agent。规则见
+[Skill 会话清单决策](../decisions/desktop/core/agent/session/skill/0-skill-catalog-from-storage-paths.md)（`approved`）。
+此前的 Effect（Workspace 内 Skill 目录的声明式收敛）已整体退役，相关决策保留为 `superseded` 历史记录。
+
+`Skill Storage Location`（Skill 存储位置）是 Skill package 的权威目录：本地导入的 Skill 在应用数据目录的
+`atoms/skills/<name>/`，插件提供的 Skill 在插件安装目录的 `assets/<skill>/`。它也是交付位置，Ora 不复制或
+链接到 Workspace。
+
+`Session Skill Catalog`（会话 Skill 清单）是某一时刻全部 Available Skill 的条目集合，每项只有名称、描述和
+`SKILL.md` 的绝对路径，以该路径为条目身份。同名 Skill 按路径区分。它不是 Skill Catalog 本身：Unavailable 的
+Catalog 行不进入清单。
+
+`Notified Skill Catalog`（已告知清单）是 runtime 在内存中为一个 Live Session 记录的、已经告知该 Agent 的条目
+集合。它不持久化；Live Session actor 新建或 Agent 报告上下文压缩后视为不存在，下一条用户 prompt 携带全量清单。
+
+`Skill Catalog Delta`（清单增量）是当前清单与已告知清单按 `SKILL.md` 路径比较得出的新增与移除条目。路径不变的
+原地更新不产生增量。
+
+`Skill Read Roots`（Skill 可读根）是 desktop host 在 ACP `session/new` 与 `session/load` 中作为
+`additionalDirectories` 交给 Agent 的稳定存储根：本地 Skill 根与插件安装根。它授予读取便利，不是安全边界。
+
+`Legacy Managed Skill Directory`（旧受管 Skill 目录）是 Effect 曾在 Workspace 中物化、带 `.ora-managed.json`
+标记并登记在 Effect 账本中的目录。升级时只删除标记与账本完全匹配的这类目录，其余内容保留。
+
+_Avoid_: 用“物化”“同步”描述当前的 Skill 交付；用“Skill 就绪”描述发送前提。
 
 ## Plugin
 
@@ -371,7 +420,8 @@ _Avoid_: worktree as the domain identity, checkout path as Workspace identity
 `main worktree` 是 Project 的 Main Workspace 在目标 Node 所在环境中对应的主 Git checkout。
 Main Workspace 本身是一个独立的 Workspace，具有自己的 `WorkspaceId` 和 `WorkspaceLocation`；
 当前实现不为它建立 `worktrees` 表记录；第一版要求该 Workspace 及其 checkout 预先存在，Ora
-只以它为基准创建 task worktree。
+只以它为基准创建 task worktree。Desktop 普通目录项目没有 main worktree，见
+[Workspace Git Capability](#workspace-git-capabilityworkspace-git-能力)。
 _Avoid_: Controller checkout, local worktree, task worktree
 
 ### Task Worktree
@@ -380,6 +430,15 @@ _Avoid_: Controller checkout, local worktree, task worktree
 周期的隔离 Git checkout。Task Workspace 与 Main Workspace 分别拥有独立的 `WorkspaceId`、
 `WorkspaceLocation` 和生命周期；删除 task worktree 不得删除或重置 main worktree。
 _Avoid_: main worktree, workspace root, task checkout as a separate identity
+
+### Workspace Git Capability（Workspace Git 能力）
+
+Desktop 列出一个目录存在的本机 Workspace 时，对该目录做一次 Git 工作树探测得到的结果，取值
+`repository`（从该目录运行的 Git 命令作用于某个工作树）、`notRepository`（Git 明确回答不在任何仓库内，且目录
+及其祖先都没有 `.git` 条目）或 `unknown`（无法确定，不等于否定）。它属于这次列出的 Workspace 目录，不是项目
+属性，也不存储。定义来源是
+[Desktop 本机目录项目决策](../decisions/desktop/core/workspace/0-local-directory-project-with-probed-git-capability.md)。
+_Avoid_: repository kind, Git project flag, Desktop plain folder as a project type
 
 ## Node Process
 
@@ -467,8 +526,9 @@ _Avoid_: Stop Evidence, process attempt record
 
 ## Node Session Stop
 
-本节是 Node 停止 Agent 会话尝试时使用的术语。尝试锁和终止线索沿用上一节的定义，决策入口见
-[会话尝试的进程带环境标记](../decisions/node/agent-runtime/20261120-attempt-mark-in-session-stop-evidence.md)。
+本节是 Node 停止 Agent 会话尝试、以及保留会话前停掉一轮新起进程时使用的术语。尝试锁和终止线索沿用上一节的定义，
+决策入口见[会话尝试的进程带环境标记](../decisions/node/agent-runtime/20261120-attempt-mark-in-session-stop-evidence.md)
+与[保留会话前先停掉这一轮新起的进程](../decisions/node/protocol/20261123-turn-process-fence-before-keeping-session.md)。
 
 ### Attempt Environment Mark（尝试环境标记）
 
@@ -478,6 +538,39 @@ _Avoid_: Stop Evidence, process attempt record
 认领的存活进程。它用来在停止时找到并杀掉脱离进程组、关闭了锁 fd 的后代，并作为停止证据的一部分（扫描干净），
 不是秘密，也不构成强纳管：清空环境后成为孤儿的进程不在其内。
 _Avoid_: session id, process group, secret token, cgroup
+
+### Turn Process Fence（轮次进程栅栏）
+
+`Turn Process Fence` 是 Linux 上一轮以取消或失败结束、Agent 已经回应之后，Node 在决定保留会话之前对这一轮的轮次范围
+执行的冻结、杀与判定：复用尝试环境标记的扫描、冻结与 pidfd 杀，连续两次扫描既无范围内的被认领进程、也无范围内的待定
+进程才算干净；静默窗口之后、写 `stopped` 之前，再对同一范围只扫描不杀地复查一次。栅栏或复查不干净时，会话以
+`turn_processes_unstopped` 结束。它不停止尝试，不终止进程组，一轮正常完成后不运行。取消一轮时可依赖的轮次边界由
+Agent 回应与这个栅栏共同构成，按（插件，版本，平台）登记。
+_Avoid_: session stop, attempt stop, process group kill
+
+### Turn Scope（轮次范围）
+
+`Turn Scope` 是栅栏每一遍扫描时从本尝试的认领结果中收窄出的进程：被本尝试认领、启动时刻不早于这一轮开始、且所在会话
+id 不属于豁免会话的进程。轮次开始是准入提交之后、prompt 写出之前在内存中记下的 boot tick，不写账本。范围对后代封闭；
+认领仍用整个尝试的范围，所以范围外的父进程照样能借出它的子进程。它不同于尝试的范围记录（尝试开始时刻与进程用户）。
+_Avoid_: attempt scope record, process group, all processes started during the turn
+
+### Exempt Session（豁免会话）
+
+`Exempt Session` 是同一遍扫描中，某个在这一轮开始前启动、此刻仍存活且被本尝试认领的进程所在的会话 id（sid）。它在
+栅栏的每一遍扫描时现取，不在轮次开始时快照；在豁免会话中启动的进程（例如 Agent 懒启动的 LSP、MCP）不在轮次范围内，
+栅栏不向它们发信号。这里的会话是内核的进程会话，与 Agent 会话、ACP session 无关。
+_Avoid_: ACP session, agent session, session snapshot
+
+### Turn Failure（一轮失败）
+
+`Turn Failure` 是一个被准入的轮次因运行时先观察到的失败而结束：Agent 以 ACP 错误回应、无进展看门狗放弃、Agent 进程
+退出或 ACP 连接断开，或 Ora 自己的内部错误。它记在这一轮的 `TurnEnded.failure` 中，带封闭集合里的原因码；原因来自 ACP
+错误回应时另带 ACP 错误码与 Agent 报告的、经过清洗且有长度上限的文字。`stop_reason` 仍是 `cancelled`。它不同于调用方取消
+与会话结束时的取消（`TurnEnded.ended_by`），也不同于 MCP 门禁中没有被准入就失败的轮次（`SessionTurnFailed`）。选择了
+`keep_session_on_failure` 的会话，Node 在判定之后以 `TurnFailureSettled` 告知会话保留（`kept`）还是不会保留
+（`session_ending`）；这条事件只说判定，不带原因。
+_Avoid_: cancelled turn, session failure, agent_failed
 
 ## Cloud Deployment
 
