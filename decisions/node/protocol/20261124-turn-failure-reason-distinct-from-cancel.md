@@ -110,7 +110,9 @@ JSONL 只在既有的 `turnEnded` 行上增加可选字段，`SCHEMA_VERSION` �
   Controller 只能猜。
 - **旧解码器是封闭的**：`NodeCapability`、`SessionTurnFailureCode` 是封闭枚举；cloud v2-server 对 `session_turn_failed`
   只接受 `mcp_refresh_wait_timeout`，其他码按协议违规结束会话。
-- **本地文件布局是硬兼容边界**：JSONL 的路径与布局不变，旧文件不迁移；Node 账本的 schema 也不因本决策改变。
+- **本地文件布局是硬兼容边界**：JSONL 的路径与布局不变，旧文件不迁移。Node 账本因本决策升到 schema v17，新增一张表，
+  记录选择了失败后保留的会话中每个失败轮的待结算标记与结论（见 D6）；打开过一次的账本即为 v17，只认 v16 的 Node 会拒绝它，
+  这是不可回退的边界。
 
 ## 决策
 
@@ -275,10 +277,12 @@ Agent 回应的不是 `cancelled` 时**不重发**（owner 裁定）。以 ACP �
   以外的取消结论”是同一条规则。被拒时同一事务中的取消结论也不写入；这一轮在 `EndSession` 的结束决定事务中得到
   `session_ending`，并入的取消同样得到 `session_ending`。所以 `kept` 写入之后不会出现同一次停止的 `session_ending`。
 - **重启与账本恢复后补写**：Node 写任何结束决定时，包括重启收口写 `interrupted` 结束决定、账本恢复可写后补写的结束决定，
-  都读这个执行最后一条已持久化的 Thread 事件：会话选择了 `keep_session_on_failure`、这条事件是带 `failure` 的 `turnEnded`、
-  它之后没有这一轮的 `TurnFailureSettled`，就在同一事务中写 `TurnFailureSettled{session_ending}`。Thread 事件本来就先持久化
-  再发送，会话的选择也在已持久化的执行输入中，所以补写不需要改账本 schema，与重启收口为未结算的 `CancelTurn` 写
-  `session_ending`（取消决策 D3、D4）对称。账本持续不可写时，按取消决策 D4 不发送未落账的事件。
+  都为这个执行每条仍待结算的失败轮在同一事务中写 `TurnFailureSettled{session_ending}`，并排在尚未结算的
+  `TurnCancelSettled{session_ending}` 之前。待结算标记在持久化带 `failure` 的 `turnEnded` Thread 事件的同一事务中写入，只限选择了
+  `keep_session_on_failure` 的会话；它不属于 outbox，Controller 的 ACK 不会删除它；`kept` 与每个结束决定都消费它，所以每轮恰好
+  一条结论。只读已持久化的 Thread 事件做不到这一点：outbox 在 ACK 后删除事件，Controller 已经看到失败的 `TurnEnded` 之后再
+  重启或结束，就找不到这一轮。这与重启收口为未结算的 `CancelTurn` 写 `session_ending`（取消决策 D3、D4）对称。账本持续不可写时，
+  按取消决策 D4 不发送未落账的事件。`kept` 只在这一轮有待结算标记时写入。
 - **没有 Thread 事件的失败没有结论**：运行时没能写出 `TurnEnded`（D2），或会话 JSONL 已写而 Thread 事件还没有持久化时
   Node 崩溃，Controller 没有看到这一轮的失败，也就不等它的结论；会话由终态收尾。
 - 它与 Thread 事件、`TurnCancelSettled`、`SessionTurnFailed` 共享执行内的序号空间：持久化后才发送，确认前保留，重连后
@@ -298,7 +302,7 @@ Agent 回应的不是 `cancelled` 时**不重发**（owner 裁定）。以 ACP �
 而不复用 `turn_cancel`：已经声明 `turn_cancel` 的 Controller（cloud v2-server）不认识这条事件；另立能力后，它在升级之前
 仍能连接，只是不能选择失败后保留。为什么 `kept` 与并入的取消同一事务：栅栏决策 D4 记下了并入取消逐条写入、
 `EndSession` 落在两条之间时结论不同的窗口；失败路径多了一条结论，若仍逐条写，就可能先写 `kept`、再被 `EndSession`
-推翻。为什么重启后补写：Controller 只需要一条规则“看到失败就等结论”；补写只读已持久化的 Thread 事件，不改 schema。
+推翻。为什么重启后补写：Controller 只需要一条规则“看到失败就等结论”；补写读失败轮的待结算标记，它与 Thread 事件同一事务写入，不随 ACK 删除（账本 v17）。
 
 收紧选择条件的兼容依据：已实现的取消决策只要求协商 `turn_cancel`，本决策另要求 `turn_failure`，但当前没有 Controller
 设置这个字段：cloud v2-server 的 `chooseKeep` 只设置 `keep_session_on_cancel`，注释写明在失败原因上报落地之前不启用
@@ -397,7 +401,7 @@ cloud 把 Node 的 detail 映射为公开失败码时只接受一组已知值（
 | `TurnFailureSettled` 对所有会话发送，不看选择 | 规则统一；但没有选择失败后保留的会话本来就以终态结束，多一条事件只增加噪声，并改变取消决策不变量 11 承诺的“行为不变”（D6） |
 | 复用 `turn_cancel` 能力，不另立 `turn_failure` | 少一项协商；但已经声明 `turn_cancel` 的 Controller 不认识新事件，Node 升级后会把它投递给不理解它的 Controller（D6） |
 | `kept` 与并入的取消逐条写入 | 与栅栏决策第 8 步的现有写法一致；但 `EndSession` 落在两条之间时，Controller 会先看到“会话保留”再收到 `session_ending` 与终态（D6） |
-| 重启后不补写，Controller 先收到终态就按 `session_ending` 处理 | Node 少一段重启逻辑；但 Controller 要多维护一条分支，“恰好一条”只在 Node 不重启时成立；补写只读已持久化的 Thread 事件，不改 schema（D6） |
+| 重启后不补写，Controller 先收到终态就按 `session_ending` 处理 | Node 少一段重启逻辑；但 Controller 要多维护一条分支，“恰好一条”只在 Node 不重启时成立；补写读与 Thread 事件同一事务写入的待结算标记（D6） |
 | `ended_by` 区分停止按钮、`CancelTurn` 与 `EndSession` 的各个原因 | 来源更细；但现有消费者只需要“是不是自己的取消”，会话结束的原因已在终态中。owner 选择本版只有两个值（D1） |
 | 取消写出之后 Agent 消失记为 `failure: agent_unavailable` | 直接说出 Agent 不在了；但与“取消写出后的结局都归这次取消”矛盾，Controller 无法据 `ended_by` 判断这是不是自己的取消（D1） |
 | 修改取消决策 D3，照实写为 `agent_turn_failed` | 不改代码；但 Controller 把 `agent_turn_failed` 读作模型请求失败，用它描述 Agent 进程退出是误导。owner 选择改代码（D7） |
