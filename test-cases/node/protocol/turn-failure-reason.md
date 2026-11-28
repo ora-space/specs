@@ -516,8 +516,9 @@ Node 在失败的 `TurnEnded` 之后、结论之前重启，Controller 一直等
 
 ### 必须成立
 
-- 重启：重启收口读最后一条已持久化的 Thread 事件，在 `interrupted` 结束决定的同一事务中补写恰好一条
-  `TurnFailureSettled{session_ending}`，早于终态；终态在取得停止证据之后写入；账本 schema 版本不变。
+- 重启：重启收口读这一轮的待结算标记，在 `interrupted` 结束决定的同一事务中补写恰好一条
+  `TurnFailureSettled{session_ending}`，早于终态；终态在取得停止证据之后写入。
+- Controller 已经 ACK 了失败的 `TurnEnded` 之后再重启或结束，仍然补写这一条结论。
 - 账本不可写：不发送未落账的 `TurnFailureSettled`，不再写出 `session/prompt`；恢复后，在写结束决定的同一事务中补写
   `TurnFailureSettled{session_ending}`，早于终态。
 - 已经有结论的轮次不再补写。
@@ -525,8 +526,7 @@ Node 在失败的 `TurnEnded` 之后、结论之前重启，Controller 一直等
 
 ### 禁止结果
 
-重启后出现 `TurnFailureSettled{kept}`，或没有任何结论就写终态；没有落账的结论被发送；同一轮有两条结论；为了补写而改变账本
-schema。
+重启后出现 `TurnFailureSettled{kept}`，或没有任何结论就写终态；没有落账的结论被发送；同一轮有两条结论；ACK 之后的结束或重启不补写。
 
 ### 验证义务与证据
 
