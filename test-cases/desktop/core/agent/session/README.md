@@ -7,7 +7,7 @@
 | --- | --- |
 | [identity-bindings-and-diagnostics.md](identity-bindings-and-diagnostics.md) | 切换与重复绑定、并发读取、历史降级、未创建状态、重试与循环归属、批量隔离、统一入口及暴露边界 |
 
-[会话选项决策](../../../../../decisions/desktop/core/agent/session/20261125-session-options-single-source.md)（`approved`，尚未实现）的验证义务：
+[会话选项决策](../../../../../decisions/desktop/core/agent/session/20261125-session-options-single-source.md)（`implemented`，代表性证据固定于 desktop `d35f4d1a`）的验证义务：
 
 | 用例文件 | 风险面 |
 | --- | --- |

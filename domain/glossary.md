@@ -91,8 +91,8 @@ _Avoid_: 与 Plugin Manifest、Release Manifest（插件的清单）混用
 （`implemented`）。
 
 `Session Options`（会话选项）是有 provider 的会话由 Agent 报告的全部可配置项和当前值（模型、推理强度等），每次报告都是
-完整集合。它属于当前 `Agent Binding`，不写入会话历史；没有 provider 时用户的选择只是下次附着的意图，不是会话选项。规则见
-[会话选项的唯一来源](../decisions/desktop/core/agent/session/20261125-session-options-single-source.md)（`approved`）。
+完整集合。它属于当前 `Agent Binding`，不写入会话历史；没有 provider 时用户选择的模型只是下次附着的意图，不是会话选项，推理强度不记意图。规则见
+[会话选项的唯一来源](../decisions/desktop/core/agent/session/20261125-session-options-single-source.md)（`implemented`）。
 
 ## Session MCP
 
