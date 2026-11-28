@@ -82,7 +82,7 @@ blocked/node_unavailable 无界 retrySeconds 保留为独立后续问题。
 逐条登记 `Covered` / `Partial`；2026-10-28 在部署 `63034cf` 上完成的真实栈验收（#720）把直接证明的按尝试读取、
 重试与 `output` / `sessionEndReason` 分离登记为证据，其余缺口写在对应行内。Cloud 侧调度器已随根决策落地：运行从 `pending` 进入真实执行，节点状态由
 调度器与真实会话写入，模拟 trace 按根决策排除在验收之外；执行类义务的直接证据登记在各用例里，按 `Covered` / `Partial` 如实
-标注，仍为 `Partial` 的部署级与真实执行侧路径由[承接事项 #665](https://github.com/ora-space/circus/issues/665) 继续跟踪。
+标注；调度用例已补充直接接手、同 Workspace 双 agent、顺序重复、无结果失败及终态时序证据，部署级同步竞争、真正并发的重复提交与真实执行侧旧代回调仍为 `Partial`、真实迟到结果为 `Missing`；端到端补记为 `Missing`（控制面分支测试仅作相邻证据，固定候选没有符合约束的真实外部删除触发器），由[承接事项 #665](https://github.com/ora-space/circus/issues/665) 继续跟踪。
 门禁类义务（图校验、启动门禁、槽位解析）的实现在
 [cloud#65](https://github.com/ora-space/cloud/pull/65) 上，已随合并提交
 [`df507f0`](https://github.com/ora-space/cloud/commit/df507f0) 落到 main，按逐条核对该提交的实现与测试后得到的证据
