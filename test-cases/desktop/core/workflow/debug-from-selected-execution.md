@@ -225,6 +225,7 @@ Running 的 P 中 Start 已提交 hello。“已就绪、尚无行”是瞬时�
 | stop_failed 返回原因与未停稳尝试 ID。解除阻塞时已停止工作按真实结果留在旧修订的 Cancelled/Failed，自动重派次数为零；适用的普通失败恢复或新预览仍可用。 | — | Missing |
 | 在栅栏内旧 foreach/while 尝试中断时启动，普通清理零次写当前账本或结算该轮，run 不因该旧尝试转为 interrupted_by_restart。核验失败时操作返回 stop_failed。applied 后尚未认领的位置在可调度的 run 中自动续派一次。 | — | Missing |
 | 另在 applied 后新修订的 while 尝试已认领、刚开始执行时中断进程。普通启动清理按 while D6 结算 interrupted_by_restart；调试协调器零次重复派发。与尚未认领的变体分别核对尝试 ID 和实际调用数。 | — | Missing |
+| 受理后、生效前或生效后尚未派发时中断进程，同时栅栏外有独立工作在途：启动先清理栅栏外工作，run 以 interrupted_by_restart 失败；已生效操作重开、尚未派发的轮/项不被结算为失败。修订及其对作废结果的撤回在普通失败恢复（或使 run 重新执行的调试确认）的派发之前执行：所选轮/项按新修订重跑，任何派发都读不到已退役尝试的输出。没有在途工作时，修订生效并续派，原 Succeeded 的 run 不被改写为 Failed。 | — | Missing |
 | 对原来 Running 的 run，分别在 stopping、未释放的 stop_failed 期间取消。先提交取消时 run 为 Cancelled，stopping 回执变为 stop_failed、reason=run_cancelled；原已失败的回执保留首次失败原因。刷新或重启后额外派发数为零。 | — | Missing |
 | 从带原错误 E 的 Failed run 调试，在停稳屏障处读取 run 和操作，重启 Desktop 进程：run 仍为 Failed/E，操作仍可被续办。在生效前取消只放弃本次调试，回执 stop_failed/run_cancelled，run 仍为 Failed/E；放行迟到的停稳结果，零新修订、零派发。从原 Cancelled 或 Succeeded 运行放弃调试时，也保持对应终态和原记录。 | — | Missing |
 | 从相同 Failed/E 初态放行停稳，核对一个事务的提交前后：Failed/stopping/旧修订 → Running/applied/新修订。提交后再取消整 run，结果为 Cancelled，生效修订可查且剩余位置零派发。 | — | Missing |
