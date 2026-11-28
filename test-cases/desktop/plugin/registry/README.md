@@ -11,7 +11,8 @@
 原 [本地 pack 与隐藏条目索引决策](../../../../decisions/desktop/plugin/registry/20260915-local-pack-installation-and-hidden-listings.md)
 已 `superseded`，对应 pack 用例改挂到
 [Extension Pack 核心测试用例](../extension-pack/README.md)。
-namespace 相关的身份、绑定与去重规则以来源派生 Namespace 决策为准。
+namespace 相关的身份、绑定与去重规则以来源派生 Namespace 决策为准。来源展示与市场标签规则以
+[插件来源展示决策](../../../../decisions/desktop/plugin/registry/20261127-plugin-origin-presentation.md)为准。
 
 ## 阅读与维护规则
 
@@ -63,3 +64,11 @@ namespace 相关的身份、绑定与去重规则以来源派生 Namespace 决�
 - [Failed Installs Must Leave No Package or Cache Residue](install-time-package-validation.md#failed-installs-must-leave-no-package-or-cache-residue)
 - [Same Name and Version From Different Sources Must Not Share a Cache Path](install-time-package-validation.md#same-name-and-version-from-different-sources-must-not-share-a-cache-path)
 - [Package Content Failures Must Surface as Actionable Field Errors](install-time-package-validation.md#package-content-failures-must-surface-as-actionable-field-errors)
+
+### [origin-presentation.md](origin-presentation.md)
+
+- [Plugin Origin Is a Plugin-Level Attribute Carried by Every Origin-Bearing Response](origin-presentation.md#plugin-origin-is-a-plugin-level-attribute-carried-by-every-origin-bearing-response)
+- [Marketplace Labels Are Computed at Query Time and Unique Within the Comparison Set](origin-presentation.md#marketplace-labels-are-computed-at-query-time-and-unique-within-the-comparison-set)
+- [All Origin-Bearing Responses Agree on the Label for the Same Source](origin-presentation.md#all-origin-bearing-responses-agree-on-the-label-for-the-same-source)
+- [Missing or Unreadable Bindings Degrade Origin Without Failing the Query](origin-presentation.md#missing-or-unreadable-bindings-degrade-origin-without-failing-the-query)
+- [Adding a Same-Name Source Changes Labels but Never Plugin Identity](origin-presentation.md#adding-a-same-name-source-changes-labels-but-never-plugin-identity)

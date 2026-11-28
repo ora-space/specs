@@ -216,6 +216,13 @@ namespace 内保持稳定；版本升级不会改变 identifier。
 `namespace` 是插件身份的来源归属段，由宿主根据 Marketplace Source 绑定并持久化；它不是插件清单
 可以自行声明的内容，也不是插件当前所在的 URL。已安装插件的 namespace 一旦绑定就不改变。
 
+### Plugin Origin（插件来源）
+
+Plugin Origin 是插件面向用户展示的来源类别，由宿主按插件的 namespace 判定：`local` 是本地包，`official`
+是官方，其余是第三方市场。插件提供的 Skill 继承所属插件的来源；本地 Skill 不属于任何插件，来源为“用户”。
+第三方市场的标签由后端在查询时计算，只用于展示，可能随新增来源变化，不是身份，也不替代 namespace。定义来源是
+[插件来源展示决策](../decisions/desktop/plugin/registry/20261127-plugin-origin-presentation.md)。
+
 ### Canonical Plugin ID
 
 Canonical Plugin ID 是插件的完整、可持久化身份，格式为：
