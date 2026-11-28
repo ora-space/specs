@@ -1,5 +1,5 @@
 ---
-status: approved
+status: implemented
 ---
 
 # 同一 checkout 允许多个存活 Agent 会话，恢复继续独占；拒绝只终结当前会话
@@ -10,7 +10,7 @@ status: approved
 
 一个 clone 执行创建的 checkout 可以同时承载多个互相独立的 Agent 会话，行为对齐 Desktop 在同一运行 Workspace 中按节点各建会话的方式。准入只在前序 Revision 恢复、停止确认未知等需要独占 checkout 的情况下拒绝，并以每 checkout 8 个未结束会话为上限。拒绝只把新会话登记为 `agent_failed`，不关闭 Controller 控制连接，也不影响兄弟会话；被拒绝的执行从未运行，也不可交付。Node 以 `shared_checkout_sessions` 能力声明这项行为。
 
-本决策为 `approved`：owner 于 2026-11-16 经四轮评审后批准 D1–D5，核心测试用例见文末“核心测试用例”。实现尚未合入 desktop 的 main，用例义务如实标为 `Missing`；实现合入并完成验证后，由落地运行按最终实现同步正文并改为 `implemented`。本决策覆盖 desktop 的 `ora-node-db`、`ora-node`、`ora-node-protocol` 及消费能力的 Controller。它不改变消息版本、执行身份、事件序号、JSONL、插件进程隔离或数据库布局，不需要数据库迁移，也不改 Cloud／v2 代码。受控模式的运行时单例不在本次范围内。`checkout_busy`、`checkout_session_limit` 与 `checkout_too_deep` 是稳定的终态 `detail` 代码，不是新的协议消息；交付失败码新增 Node 侧的 `checkout_too_deep`。分离工作负载 UID 的部署新增两项宿主要求：`fs.protected_hardlinks = 1`（Node 启动时检查，并在每次交接遍历前重新读取）和足够的 `RLIMIT_NOFILE`（文档要求；Node 在所有 checkout 上同时至多运行 9 次交接遍历）。
+本决策为 `implemented`：owner 于 2026-11-16 批准 D1–D5，Node 侧实现经 desktop#774（合并提交 `c5265072`）合入，审查留下的 4 个测试缺口（并发受理、未清理恢复尝试围栏、已结束恢复阶段、`RLIMIT_NOFILE` 推导）由 desktop#864（合并提交 `89b7ce37`）补齐，最终实现没有偏离 approved 决策；核心测试用例见文末“核心测试用例”。本决策覆盖 desktop 的 `ora-node-db`、`ora-node`、`ora-node-protocol` 及消费能力的 Controller。它不改变消息版本、执行身份、事件序号、JSONL、插件进程隔离或数据库布局，不需要数据库迁移，也不改 Cloud／v2 代码。受控模式的运行时单例不在本次范围内。`checkout_busy`、`checkout_session_limit` 与 `checkout_too_deep` 是稳定的终态 `detail` 代码，不是新的协议消息；交付失败码新增 Node 侧的 `checkout_too_deep`。分离工作负载 UID 的部署新增两项宿主要求：`fs.protected_hardlinks = 1`（Node 启动时检查，并在每次交接遍历前重新读取）和足够的 `RLIMIT_NOFILE`（文档要求；Node 在所有 checkout 上同时至多运行 9 次交接遍历）。
 
 ## 继承与修改
 
@@ -124,12 +124,11 @@ Revision 交付仍要求所属会话已经结束，但它快照的是整个 chec
 
 重属主遍历的剩余边界：描述符是进程级资源，遍历把单次占用限制在 4099 个、整个 Node 并发遍历限制在 9 次，总量仍要由部署按 D1 的 `RLIMIT_NOFILE` 推算提供；低于该值时，深 checkout 上的遍历仍可能让 Node 其他工作暂时遇到 `EMFILE`。硬链接的保证只是宿主的 `fs.protected_hardlinks = 1`，Node 在启动时和每次遍历前确认它；在两次读取之间被改为 0 的宿主仍留下一个窗口，这超出 Node 能控制的范围。在保护生效时，工作负载用户仍可让遍历重属主它本来就能读写的外部文件（用“钉住后删名”的竞争，或在其可写目录中改名移入），于是获得这些文件的属主身份，原属组失去组访问；它够不着 root 拥有的包与状态文件。遍历的总耗时仍不设上限：持续向尚未列举的目录添加条目的写入方可以拖长遍历，这是遍历本身的既有性质，不在本次范围。
 
-落地顺序：
+落地：
 
-1. #938 的 Node MCP 已经独立合入：desktop#773（显式 Session MCP）在 desktop main，其 ADR 经 ora-space/specs#289 批准合入；本 PR 已变基到 desktop#773 之上，会话 MCP 与本决策的准入／能力变化分开评审。
-2. 本 PR 落地 Node DB 准入与原子拒绝终态（只持久化 MCP 无值投影）、`ora-utils` 中钉住条目、有深度上限的不跟随重属主遍历、Node 级遍历信号量及宿主 sysctl 检查（启动时与每次遍历前）、服务能力、协议声明、双语 Node 文档和直接行为测试；不附带 Cloud 改动。本 ADR 已于 2026-11-16 评审通过，完成条件是 desktop 全量门禁通过。
-3. 本 PR 合入后（#938 已在 main），v2 再升级锁定的 Node，并按能力启用同 run 多会话；v2 的 predecessor 结束逻辑、Node pin 和交互工作流验收由 v2 事项承接。
-4. 评审通过后已依据最终决策登记核心测试用例，义务暂标 `Missing`；实现最终合并后按落地流程回填证据，并同步 ADR 为 `implemented`。
+1. 显式 Session MCP（desktop#773，`98c0414f`）先于本决策独立合入，两者的准入与能力变化分开评审。
+2. Node 侧实现经 desktop#774（合并提交 `c5265072`）合入：Node DB 准入与原子拒绝终态（只持久化 MCP 无值投影）、`ora-utils` 中钉住条目、有深度上限的不跟随重属主遍历、Node 级遍历信号量及宿主 sysctl 检查（启动时与每次遍历前）、服务能力、协议声明、双语 Node 文档和直接行为测试，不附带 Cloud 改动；审查留下的 4 个测试缺口由 desktop#864（合并提交 `89b7ce37`）只补测试补齐。核心用例按这两个提交回填证据，无 `Missing`。
+3. v2 升级锁定的 Node 并按能力启用同 run 多会话，以及 v2 的 predecessor 结束逻辑、Node pin 和交互工作流验收，由 v2 事项承接，不计入本决策的实现状态。
 
 保持不变：执行身份、事件序号、命令顺序、插件与历史隔离、恢复停止证据、受控运行时单例、数据库布局。开始改变：非受控 Node 可在同一 checkout 受理最多 8 个普通存活会话；checkout 拒绝不再关闭控制连接，且被拒绝的执行以 `session_not_settled` 不可交付；每个会话在自己的 Agent 启动前亲自把 checkout 交给工作负载用户，特权遍历钉住每个条目、不重新解析路径、不重属主留在原处的硬链接文件，目录深于 4096 层时以 `checkout_too_deep` 拒绝，整个 Node 同时至多 9 次遍历；分离 UID 部署要求 `fs.protected_hardlinks = 1`（启动时与每次遍历前检查）并按文档提供 `RLIMIT_NOFILE`；被拒绝的执行同样不持久化 MCP Setting 值。
 
@@ -138,8 +137,9 @@ Revision 交付仍要求所属会话已经结束，但它快照的是整个 chec
 见[共享 checkout 会话用例](../../../test-cases/node/agent-runtime/shared-checkout-sessions.md)：同一 checkout
 的多个存活会话与独立结束、每 checkout 8 个会话上限、恢复独占与停止证据围栏、拒绝只终结新执行、每个会话
 亲自完成的钉住式不跟随交接、4096 层深度上限、`fs.protected_hardlinks` 检查、Node 级 9 次并发遍历与
-`RLIMIT_NOFILE` 要求，以及 `shared_checkout_sessions` 能力与同版本 Controller 边界。实现尚未合入 desktop
-的 main，义务如实标为 `Missing`；[会话执行用例](../../../test-cases/node/agent-runtime/session-execution.md)、
+`RLIMIT_NOFILE` 要求，以及 `shared_checkout_sessions` 能力与同版本 Controller 边界。37 项验证义务按 desktop#774
+（`c5265072`）与 desktop#864（`89b7ce37`）回填证据，全部 `Covered`；其中 `RLIMIT_NOFILE` 是文档义务，测试只固定
+文档最低值由遍历上限推导，不证明部署提供了该限制。[会话执行用例](../../../test-cases/node/agent-runtime/session-execution.md)、
 [显式 Session MCP 用例](../../../test-cases/node/agent-runtime/session-mcp.md)与
 [恢复截止与停止确认用例](../../../test-cases/node/revision/restore-deadline-and-stop-confirmation.md)的证据
 保持各自范围，不推导本文新义务。

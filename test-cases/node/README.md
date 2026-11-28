@@ -79,7 +79,9 @@ Controller 侧的发送前镜像校验与按能力派发在 [Controller 用例](
 ## 同一 checkout 的多个 Agent 会话
 
 [共享 checkout 会话决策](../../decisions/node/agent-runtime/20261115-shared-checkout-agent-sessions.md)于
-2026-11-16 经 owner 批准为 `approved`。实现尚未合入 desktop 的 main，这些义务目前都是 `Missing`；
+Node 侧已实现为 `implemented`：原测试随 desktop#774（`c5265072`）合入，4 个测试缺口由 desktop#864（`89b7ce37`）只补测试补齐。
+37 项验证义务全部 `Covered`，证据链接固定到这两个合并提交；`RLIMIT_NOFILE` 是文档义务（测试只固定文档最低值由遍历上限推导，
+不证明部署提供了该限制），混合版本边界是部署边界、不登记测试；不把 Node 合入外推为 v2 按能力启用同 run 多会话已完成。
 [会话执行用例](agent-runtime/session-execution.md)、[显式 Session MCP 用例](agent-runtime/session-mcp.md)与
 [恢复截止与停止确认用例](revision/restore-deadline-and-stop-confirmation.md)的证据保持原范围，不推导本文的新义务。
 

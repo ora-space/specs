@@ -1,9 +1,9 @@
 # Node 同一 checkout 的多个 Agent 会话
 
-依据[已批准的共享 checkout 会话决策](../../../decisions/node/agent-runtime/20261115-shared-checkout-agent-sessions.md)。
-实现尚未合入 desktop 的 main，下表义务的证据状态一律如实标为 `Missing`；“所需直接证据”按 desktop
-未合入变更中的目标测试登记（路径相对 desktop 仓库根目录），ADR 转为 `implemented` 时按合入后的最终
-测试逐项核对并回填状态，不以目标变更存在测试替代合入后的核对。尚无目标测试的义务直接写明缺口。
+依据[共享 checkout 会话决策](../../../decisions/node/agent-runtime/20261115-shared-checkout-agent-sessions.md)（Node 侧 `implemented`；v2 按能力启用同 run 多会话由 v2 事项承接）。
+Node 实现依据固定两个合并提交：desktop#774 [`c5265072`](https://github.com/ora-space/desktop/commit/c5265072ace476b6cdd88fc69fb58ffafec20066)（[desktop#774](https://github.com/ora-space/desktop/pull/774)）交付原测试，desktop#864 [`89b7ce37`](https://github.com/ora-space/desktop/commit/89b7ce375579d286f70b9bff17cf5475d9d64b22)（[desktop#864](https://github.com/ora-space/desktop/pull/864)）只补测试，补齐并发受理、未清理恢复尝试围栏、已结束恢复阶段与 `RLIMIT_NOFILE` 推导 4 个缺口。
+“所需直接证据”保留原验证目标（路径相对 desktop 仓库根目录），每个用例末尾列出固定源码的代表性直接证据和不能由它推导的边界。
+37 项验证义务全部 `Covered`，无 `Partial`、`Missing`。其中两项不是测试义务：`RLIMIT_NOFILE` 最低要求是文档义务（测试只固定文档里的最低值始终由遍历上限推导，不证明部署提供了该限制），混合版本边界是部署边界（不登记测试）。
 [会话执行用例](session-execution.md)、[显式 Session MCP 用例](session-mcp.md)与
 [恢复截止与停止确认用例](../revision/restore-deadline-and-stop-confirmation.md)的证据保持各自范围，不推导
 本文新义务。
@@ -42,9 +42,16 @@
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 两个存活会话独立运行与结束 | `apps/ora-node/tests/standalone/agent_sessions/admission.rs` 的 `two_live_sessions_run_turns_and_end_independently`：真实 Node 进程上两个会话各自应答回合，结束 A 只停止 A 的插件，B 仍运行，checkout HEAD 不变 | Missing |
-| 各自的 MCP setup 与租约 | `apps/ora-node/tests/agent_session/mcp.rs` 的 `an_mcp_session_shares_a_checkout_with_a_plain_one`：无 MCP 的兄弟 `session/new` 不列 Server，结束 MCP 会话释放其包租约而兄弟保持 `Running` | Missing |
-| 账本层共享准入 | `crates/node-db/src/tests/session/admission.rs` 的 `plain_sessions_share_a_checkout_until_the_named_limit`：同一 checkout 的普通会话在上限内均被受理 | Missing |
+| 两个存活会话独立运行与结束 | `apps/ora-node/tests/standalone/agent_sessions/admission.rs` 的 `two_live_sessions_run_turns_and_end_independently`：真实 Node 进程上两个会话各自应答回合，结束 A 只停止 A 的插件，B 仍运行，checkout HEAD 不变 | Covered |
+| 各自的 MCP setup 与租约 | `apps/ora-node/tests/agent_session/mcp.rs` 的 `an_mcp_session_shares_a_checkout_with_a_plain_one`：无 MCP 的兄弟 `session/new` 不列 Server，结束 MCP 会话释放其包租约而兄弟保持 `Running` | Covered |
+| 账本层共享准入 | `crates/node-db/src/tests/session/admission.rs` 的 `plain_sessions_share_a_checkout_until_the_named_limit`：同一 checkout 的普通会话在上限内均被受理 | Covered |
+
+### 代表性证据
+
+- [two_live_sessions_run_turns_and_end_independently](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/tests/standalone/agent_sessions/admission.rs#L205)：真实 Node 进程上同一 checkout 启动 A、B 两个会话并各自应答回合；结束 A 后恰好一个插件进程退出（B 的仍在运行），checkout HEAD 不变；B 继续应答后以 `UserEnded` 结束。
+- [an_mcp_session_shares_a_checkout_with_a_plain_one](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/tests/agent_session/mcp.rs#L338)：MCP 会话与无 MCP 的兄弟共享 checkout，各自报告自己的 `session/new`（"MCP frame verified" 对 "MCP frame invalid"，兄弟不列 Server）；租约计数 4（两个 MCP 包加两个 Agent 包），结束 MCP 会话后降为 1、兄弟仍 `Running`；结束兄弟后降为 0。
+- [plain_sessions_share_a_checkout_until_the_named_limit](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-db/src/tests/session/admission.rs#L126)：账本层普通会话在上限内均被受理。
+- 边界：交付与定时产物快照整个 checkout 是 D5 接受的共享 Workspace 语义，本文不另登记测试。
 
 ### 决策依据
 
@@ -86,9 +93,15 @@ checkout。
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 8 个上限与终态释放名额 | `crates/node-db/src/tests/session/admission.rs` 的 `plain_sessions_share_a_checkout_until_the_named_limit`：第 9 个以 `checkout_session_limit` 拒绝，一个终态后恰好再受理一个 | Missing |
-| 按 checkout 分别计数 | 同文件 `limit_counts_each_checkout_separately`：满的 checkout 不拒绝其他 clone 的会话 | Missing |
-| 并发受理不越过上限 | 并发受理路径同时争夺最后一个名额、只有一方被受理的直接测试；目标变更尚无该测试 | Missing |
+| 8 个上限与终态释放名额 | `crates/node-db/src/tests/session/admission.rs` 的 `plain_sessions_share_a_checkout_until_the_named_limit`：第 9 个以 `checkout_session_limit` 拒绝，一个终态后恰好再受理一个 | Covered |
+| 按 checkout 分别计数 | 同文件 `limit_counts_each_checkout_separately`：满的 checkout 不拒绝其他 clone 的会话 | Covered |
+| 并发受理不越过上限 | `crates/node-db/src/tests/session/admission.rs` 的 `concurrent_admissions_cannot_both_take_the_last_slot`：两个准入连接在 `Accept` 写边界会合、同时争夺最后一个名额，恰好一方被受理，另一方得到 `checkout_session_limit` | Covered |
+
+### 代表性证据
+
+- [plain_sessions_share_a_checkout_until_the_named_limit](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-db/src/tests/session/admission.rs#L126)：第 9 个以 `checkout_session_limit` 拒绝，拒绝记录与序号 1 的终态只写一次，重发返回同一记录；结束一个后恰好再受理一个。上限由 [`MAX_SESSIONS_PER_CHECKOUT = 8`](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-db/src/session/admission.rs#L5) 定义。
+- [limit_counts_each_checkout_separately](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-db/src/tests/session/admission.rs#L171)：满的 checkout 不拒绝其他 clone 的会话。
+- [concurrent_admissions_cannot_both_take_the_last_slot](https://github.com/ora-space/desktop/blob/89b7ce375579d286f70b9bff17cf5475d9d64b22/crates/node-db/src/tests/session/admission.rs#L436)：会合式 `WriteGuard` 让两个准入连接在 `Accept` 写边界同时到达 `BEGIN IMMEDIATE`，3 个 checkout 各跑一次，结果恒为一方 `Accepted`、一方 `checkout_session_limit`。把 `checkout_refusal` 挪到事务之前时两条都被受理、事务改成 `Deferred` 时输家得到 `database is locked`，两种变异都被杀死（owner 在 `62a8dc43` 上复核）。
 
 ### 决策依据
 
@@ -132,13 +145,23 @@ checkout C 上存在下列之一：带 `prior_revision` 且处于 `pending`、`g
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 恢复不在存活兄弟下进行 | `crates/node-db/src/tests/session/admission.rs` 的 `prior_revision_is_refused_while_a_sibling_is_unfinished` | Missing |
-| 普通会话等待兄弟恢复的 `agent_admitted` | 同文件 `plain_session_is_refused_while_a_sibling_restore_is_pending`、`plain_session_waits_for_the_sibling_restores_agent_admission`：`pending` 至 `restored` 拒绝，`agent_admitted` 后受理 | Missing |
-| `checkout_busy` 先于上限 | 同文件 `a_prior_revision_start_at_the_limit_reports_busy` | Missing |
-| 未知停止证据继续围住 checkout | 同文件 `legacy_unknown_fences_a_plain_session`；`crates/node-db/src/tests/session/restore.rs` 的 `unknown_stop_retains_clock_terminal_and_checkout_responsibility`、`upgrade_keeps_inflight_legacy_restore_fenced`：替代会话改以 `checkout_busy` 拒绝 | Missing |
-| 未清理 `restore_process_attempts` 独立围栏 | 原执行已结束、仅剩未清理恢复尝试（含 `UnknownIdentity`）时普通会话以 `checkout_busy` 拒绝的直接测试；目标变更尚无该测试 | Missing |
-| 已结束历史不构成围栏 | 已结束执行的 `pending` 等恢复阶段不拒绝新会话的直接测试；目标变更尚无该测试 | Missing |
-| 受控模式的单例先于 checkout 分类 | 同文件 `controlled_start_keeps_the_runtime_singleton_conflict`：受控启动仍以 `ResourceConflict` 拒绝 | Missing |
+| 恢复不在存活兄弟下进行 | `crates/node-db/src/tests/session/admission.rs` 的 `prior_revision_is_refused_while_a_sibling_is_unfinished` | Covered |
+| 普通会话等待兄弟恢复的 `agent_admitted` | 同文件 `plain_session_is_refused_while_a_sibling_restore_is_pending`、`plain_session_waits_for_the_sibling_restores_agent_admission`：`pending` 至 `restored` 拒绝，`agent_admitted` 后受理 | Covered |
+| `checkout_busy` 先于上限 | 同文件 `a_prior_revision_start_at_the_limit_reports_busy` | Covered |
+| 未知停止证据继续围住 checkout | 同文件 `legacy_unknown_fences_a_plain_session`；`crates/node-db/src/tests/session/restore.rs` 的 `unknown_stop_retains_clock_terminal_and_checkout_responsibility`、`upgrade_keeps_inflight_legacy_restore_fenced`：替代会话改以 `checkout_busy` 拒绝 | Covered |
+| 未清理 `restore_process_attempts` 独立围栏 | 同文件 `an_uncleaned_restore_attempt_keeps_fencing_after_its_execution_ended`：原执行已结束、停止上限到期标成 `stop_unconfirmed`、只剩未清理恢复尝试时普通会话仍以 `checkout_busy` 拒绝，`confirm_restore_stop` 之后才受理 | Covered |
+| 已结束历史不构成围栏 | 同文件 `finished_restores_fence_nothing_whatever_phase_they_reached`：`pending`、`git_admitted`、`restored`、`agent_admitted` 各阶段结束前都拒绝普通会话，结束后以全新身份受理的普通会话均被受理 | Covered |
+| 受控模式的单例先于 checkout 分类 | 同文件 `controlled_start_keeps_the_runtime_singleton_conflict`：受控启动仍以 `ResourceConflict` 拒绝 | Covered |
+
+### 代表性证据
+
+- [prior_revision_is_refused_while_a_sibling_is_unfinished](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-db/src/tests/session/admission.rs#L214)：存活普通兄弟时带 `prior_revision` 的启动以 `checkout_busy` 拒绝并记终态，恢复阶段停在 `pending`。
+- [plain_session_is_refused_while_a_sibling_restore_is_pending](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-db/src/tests/session/admission.rs#L243)、[plain_session_waits_for_the_sibling_restores_agent_admission](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-db/src/tests/session/admission.rs#L261)：兄弟恢复停在 `pending` 或已 `restored` 时普通会话被拒，`agent_admitted` 后受理；恢复未结束时另一个带 `prior_revision` 的会话仍被拒。
+- [a_prior_revision_start_at_the_limit_reports_busy](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-db/src/tests/session/admission.rs#L196)：满 8 个时带 `prior_revision` 的启动报 `checkout_busy` 而不是上限。
+- [legacy_unknown_fences_a_plain_session](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-db/src/tests/session/admission.rs#L302)：升级后 in-flight 恢复成为 `legacy_unknown`，不带 `prior_revision` 的普通会话仍以 `checkout_busy` 拒绝；[unknown_stop_retains_clock_terminal_and_checkout_responsibility](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-db/src/tests/session/restore.rs#L69)（停止等待上限到期、重启后替代会话仍被拒，L105）、[upgrade_keeps_inflight_legacy_restore_fenced](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-db/src/tests/session/restore.rs#L262)（升级后两道围栏都在，L283）。
+- [an_uncleaned_restore_attempt_keeps_fencing_after_its_execution_ended](https://github.com/ora-space/desktop/blob/89b7ce375579d286f70b9bff17cf5475d9d64b22/crates/node-db/src/tests/session/admission.rs#L485)：原执行已结束、停止上限到期标成 `stop_unconfirmed`、只剩未清理的 `restore_process_attempts` 时普通会话仍以 `checkout_busy` 拒绝，`confirm_restore_stop` 后才受理。删掉 `OR EXISTS(restore_process_attempts … cleaned=0)` 的变异只被它杀死（原有用例里原执行仍 `running`，被第三个条件挡住）。
+- [finished_restores_fence_nothing_whatever_phase_they_reached](https://github.com/ora-space/desktop/blob/89b7ce375579d286f70b9bff17cf5475d9d64b22/crates/node-db/src/tests/session/admission.rs#L578)：`pending`、`git_admitted`、`restored`、`agent_admitted` 四个阶段结束前都拒绝普通会话，各自结束后以全新身份受理的普通会话均被受理。删掉 `state<>'completed' AND` 的变异被杀死。
+- [controlled_start_keeps_the_runtime_singleton_conflict](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-db/src/tests/session/admission.rs#L328)：受控启动以 `ResourceConflict` 拒绝，不进入 checkout 分类。
 
 ### 决策依据
 
@@ -186,11 +209,19 @@ outbox 写入失败；对被拒绝的执行发送 `DeliverRevision`；之后继�
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 连接与兄弟保持可用、重发返回原终态 | `apps/ora-node/tests/standalone/agent_sessions/admission.rs` 的 `checkout_refusals_keep_the_connection_and_sibling_sessions_alive`：两种代码各有立即状态与序号 1 的终态，树未改动，以不同 Setting 值重发返回同一终态，兄弟继续应答，Node 写下的全部文件无 Setting 值 | Missing |
-| 终态与事件原子提交 | `crates/node-db/src/tests/session/admission.rs` 的 `refusal_terminal_and_outbox_are_atomic`：outbox 写入失败时身份、终态与事件一并回滚 | Missing |
-| 拒绝路径只持久化无值投影 | `apps/ora-node/tests/session_ledger.rs` 的 `session_mcp_settings_never_enter_the_durable_ledger`：拒绝记录等于清空 settings 的投影，不同值重发返回同一记录，数据库目录字节扫描无值，重开后可查到原终态 | Missing |
-| 被拒绝的执行不可交付 | `apps/ora-node/tests/standalone/agent_sessions/delivery.rs` 的 `delivery_for_a_checkout_refused_session_is_refused`：两种拒绝类别均以 `session_not_settled` 失败，共享 checkout 未被读取、推送或上传 | Missing |
-| 受控启动不进入拒绝路径 | `crates/node-db/src/tests/session/admission.rs` 的 `controlled_start_keeps_the_runtime_singleton_conflict` | Missing |
+| 连接与兄弟保持可用、重发返回原终态 | `apps/ora-node/tests/standalone/agent_sessions/admission.rs` 的 `checkout_refusals_keep_the_connection_and_sibling_sessions_alive`：两种代码各有立即状态与序号 1 的终态，树未改动，以不同 Setting 值重发返回同一终态，兄弟继续应答，Node 写下的全部文件无 Setting 值 | Covered |
+| 终态与事件原子提交 | `crates/node-db/src/tests/session/admission.rs` 的 `refusal_terminal_and_outbox_are_atomic`：outbox 写入失败时身份、终态与事件一并回滚 | Covered |
+| 拒绝路径只持久化无值投影 | `apps/ora-node/tests/session_ledger.rs` 的 `session_mcp_settings_never_enter_the_durable_ledger`：拒绝记录等于清空 settings 的投影，不同值重发返回同一记录，数据库目录字节扫描无值，重开后可查到原终态 | Covered |
+| 被拒绝的执行不可交付 | `apps/ora-node/tests/standalone/agent_sessions/delivery.rs` 的 `delivery_for_a_checkout_refused_session_is_refused`：两种拒绝类别均以 `session_not_settled` 失败，共享 checkout 未被读取、推送或上传 | Covered |
+| 受控启动不进入拒绝路径 | `crates/node-db/src/tests/session/admission.rs` 的 `controlled_start_keeps_the_runtime_singleton_conflict` | Covered |
+
+### 代表性证据
+
+- [checkout_refusals_keep_the_connection_and_sibling_sessions_alive](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/tests/standalone/agent_sessions/admission.rs#L249)：两种代码各有立即状态与序号 1 的终态（`assert_refusal`，L129），树未改动；第 9 个启动带 Setting 值被拒后换值重发返回同一终态而不是身份冲突，兄弟继续应答、8 个插件进程都在；结束后递归扫描 Node 写下的全部文件无 Setting 值（`assert_no_secret`）。
+- [refusal_terminal_and_outbox_are_atomic](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-db/src/tests/session/admission.rs#L86)：outbox 写入失败时身份、终态与事件一并回滚（`find_session` 为空、待发事件为空），故障清除后重写得到序号 1。
+- [session_mcp_settings_never_enter_the_durable_ledger](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/tests/session_ledger.rs#L125)：L154 起把第二个 checkout 填满后拒绝一个带 Setting 值的 MCP 启动，拒绝记录等于清空 settings 的投影（L184），换值重发返回同一记录，数据库目录字节扫描无值。
+- [delivery_for_a_checkout_refused_session_is_refused](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/tests/standalone/agent_sessions/delivery.rs#L323)：两种拒绝类别的 `DeliverRevision` 均以 `session_not_settled` 失败，Git Server 的请求数不变（未读取、未推送），`revision-deliveries` 目录为空（未上传、未冻结）。
+- [controlled_start_keeps_the_runtime_singleton_conflict](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-db/src/tests/session/admission.rs#L328)：受控启动以 `ResourceConflict` 拒绝。
 
 ### 决策依据
 
@@ -237,12 +268,22 @@ checkout 内的路径，存活兄弟把名称换成符号链接或另一个目�
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 每个会话亲自遍历 | `apps/ora-node/src/session/workload/tests.rs` 的 `every_separate_start_walks_its_checkout`：遍历打不开的 checkout 使本次启动失败，而不是信任更早会话的交接 | Missing |
-| 钉住、不跟随、不越界 | `crates/utils/src/fs/owned_tree/tests.rs` 的 `walks_the_tree_without_following_links`、`reowns_every_entry_and_links_as_themselves`、`a_name_swapped_after_pinning_changes_nothing_outside`、`a_concurrent_symlink_swap_never_reowns_outside_the_root` | Missing |
-| 并发删除不失败、根必须存在 | 同文件 `an_entry_removed_before_it_is_pinned_is_skipped`、`entries_removed_concurrently_do_not_fail_the_walk`、`the_root_must_exist_as_a_directory` | Missing |
-| 无权条目报告失败 | `crates/utils/src/fs/owned_tree/tests/errors.rs` 的 `reports_entries_it_cannot_reown`、`reports_a_directory_it_cannot_list`、`reports_an_entry_it_cannot_pin`；启动侧 `apps/ora-node/tests/agent_session/workload.rs` 的 `a_checkout_the_walk_cannot_list_ends_the_session_as_a_start_failure`，交付侧 `apps/ora-node/src/revision/tests/snapshot.rs` 的 `a_failed_hand_over_fails_snapshot_failed` | Missing |
-| 硬链接按链接数跳过及其边界 | `crates/utils/src/fs/owned_tree/tests/links.rs` 的 `a_hard_link_that_stays_in_place_is_not_reowned`、`a_hard_linked_file_keeps_its_owner`；`a_hard_link_removed_after_pinning_is_reowned` 固定该跳过不构成保证的边界 | Missing |
-| 描述符不泄漏给子进程 | `crates/utils/src/fs/owned_tree/tests.rs` 的 `every_descriptor_the_walk_holds_is_close_on_exec` | Missing |
+| 每个会话亲自遍历 | `apps/ora-node/src/session/workload/tests.rs` 的 `every_separate_start_walks_its_checkout`：遍历打不开的 checkout 使本次启动失败，而不是信任更早会话的交接 | Covered |
+| 钉住、不跟随、不越界 | `crates/utils/src/fs/owned_tree/tests.rs` 的 `walks_the_tree_without_following_links`、`reowns_every_entry_and_links_as_themselves`、`a_name_swapped_after_pinning_changes_nothing_outside`、`a_concurrent_symlink_swap_never_reowns_outside_the_root` | Covered |
+| 并发删除不失败、根必须存在 | 同文件 `an_entry_removed_before_it_is_pinned_is_skipped`、`entries_removed_concurrently_do_not_fail_the_walk`、`the_root_must_exist_as_a_directory` | Covered |
+| 无权条目报告失败 | `crates/utils/src/fs/owned_tree/tests/errors.rs` 的 `reports_entries_it_cannot_reown`、`reports_a_directory_it_cannot_list`、`reports_an_entry_it_cannot_pin`；启动侧 `apps/ora-node/tests/agent_session/workload.rs` 的 `a_checkout_the_walk_cannot_list_ends_the_session_as_a_start_failure`，交付侧 `apps/ora-node/src/revision/tests/snapshot.rs` 的 `a_failed_hand_over_fails_snapshot_failed` | Covered |
+| 硬链接按链接数跳过及其边界 | `crates/utils/src/fs/owned_tree/tests/links.rs` 的 `a_hard_link_that_stays_in_place_is_not_reowned`、`a_hard_linked_file_keeps_its_owner`；`a_hard_link_removed_after_pinning_is_reowned` 固定该跳过不构成保证的边界 | Covered |
+| 描述符不泄漏给子进程 | `crates/utils/src/fs/owned_tree/tests.rs` 的 `every_descriptor_the_walk_holds_is_close_on_exec` | Covered |
+
+### 代表性证据
+
+- [every_separate_start_walks_its_checkout](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/src/session/workload/tests.rs#L169)：遍历打不开的 checkout 使本次启动失败，而不是信任更早会话的交接。
+- [walks_the_tree_without_following_links](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree/tests.rs#L79)、[reowns_every_entry_and_links_as_themselves](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree/tests.rs#L129)、[a_name_swapped_after_pinning_changes_nothing_outside](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree/tests.rs#L186)、[a_concurrent_symlink_swap_never_reowns_outside_the_root](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree/tests.rs#L232)：链接按本身处理、不跟随；真实改属主到达根、嵌套目录、文件与链接而不触及链接目标；钉住后名称被换成文件、删除或换成指向外部目录的链接时只作用于钉住的 inode；并发写方持续把目录换成外部链接也不会重属主 checkout 之外的任何东西。
+- [an_entry_removed_before_it_is_pinned_is_skipped](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree/tests.rs#L157)、[entries_removed_concurrently_do_not_fail_the_walk](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree/tests.rs#L298)、[the_root_must_exist_as_a_directory](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree/tests.rs#L101)：钉住前消失的条目跳过、并发删除不使遍历失败；缺失的根、是链接的根、是文件的根都报错而不当作空树。
+- [reports_entries_it_cannot_reown](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree/tests/errors.rs#L17)、[reports_a_directory_it_cannot_list](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree/tests/errors.rs#L34)、[reports_an_entry_it_cannot_pin](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree/tests/errors.rs#L55)；启动侧 [a_checkout_the_walk_cannot_list_ends_the_session_as_a_start_failure](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/tests/agent_session/workload.rs#L72) 以 `agent_failed{agent_start_failed}` 结束且不误报 `checkout_too_deep`，交付侧 [a_failed_hand_over_fails_snapshot_failed](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/src/revision/tests/snapshot.rs#L533) 以 `snapshot_failed` 失败且不留冻结对象。
+- [a_hard_link_that_stays_in_place_is_not_reowned](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree/tests/links.rs#L17)、[a_hard_linked_file_keeps_its_owner](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree/tests/links.rs#L70)：留在原处的硬链接（遍历前植入、或钉住前后换入）不重属主其外部 inode，链接数为一的照常重属主；[a_hard_link_removed_after_pinning_is_reowned](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree/tests/links.rs#L99) 固定该跳过不构成保证：写方在钉住后删掉自己的名称，遍历读到链接数为一就会重属主外部 inode。
+- [every_descriptor_the_walk_holds_is_close_on_exec](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree/tests.rs#L341)：从 hook 处检查钉住的条目与各级列举目录的描述符都是 close-on-exec。
+- 边界：真实改属主依赖运行用户有可用的附属组（root 可用任意组）；没有时测试失败而不是静默跳过，除非设 `ORA_TEST_ALLOW_NO_FOREIGN_GROUP=1`。
 
 ### 决策依据
 
@@ -280,10 +321,17 @@ D1 的交接规则与留在原处的硬链接条款，不变量 4。
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 深度上限与描述符上界 | `crates/utils/src/fs/owned_tree/tests/depth.rs` 的 `the_walk_refuses_trees_deeper_than_the_bound`：4096 层完整交接，多一层以 `TooDeep` 拒绝且不重属主，更深的链不使描述符超过上界 | Missing |
-| 启动侧终态 | `apps/ora-node/tests/agent_session/workload.rs` 的 `a_checkout_deeper_than_the_walk_bound_ends_the_session` | Missing |
-| 交付侧失败码 | `apps/ora-node/src/revision/tests/snapshot.rs` 的 `a_checkout_deeper_than_the_walk_bound_fails_checkout_too_deep`；同文件 `a_failed_hand_over_fails_snapshot_failed` 固定其他失败不用该代码 | Missing |
-| wire 拼写与 Controller 映射 | `crates/node-protocol/tests/protocol/revision.rs` 的 `revision_failures_name_push_outcomes` 固定 `checkout_too_deep` 拼写；`apps/ora-controller/src/cloud/deliveries/mapping.rs` 的 `results_project_onto_the_contract` 映射为 `SnapshotFailed` | Missing |
+| 深度上限与描述符上界 | `crates/utils/src/fs/owned_tree/tests/depth.rs` 的 `the_walk_refuses_trees_deeper_than_the_bound`：4096 层完整交接，多一层以 `TooDeep` 拒绝且不重属主，更深的链不使描述符超过上界 | Covered |
+| 启动侧终态 | `apps/ora-node/tests/agent_session/workload.rs` 的 `a_checkout_deeper_than_the_walk_bound_ends_the_session` | Covered |
+| 交付侧失败码 | `apps/ora-node/src/revision/tests/snapshot.rs` 的 `a_checkout_deeper_than_the_walk_bound_fails_checkout_too_deep`；同文件 `a_failed_hand_over_fails_snapshot_failed` 固定其他失败不用该代码 | Covered |
+| wire 拼写与 Controller 映射 | `crates/node-protocol/tests/protocol/revision.rs` 的 `revision_failures_name_push_outcomes` 固定 `checkout_too_deep` 拼写；`apps/ora-controller/src/cloud/deliveries/mapping.rs` 的 `results_project_onto_the_contract` 映射为 `SnapshotFailed` | Covered |
+
+### 代表性证据
+
+- [the_walk_refuses_trees_deeper_than_the_bound](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree/tests/depth.rs#L107)：恰好 [`MAX_OWN_TREE_DEPTH`](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/utils/src/fs/owned_tree.rs#L29)（4096）层完整交接，多一层以 `TooDeep` 拒绝且不重属主，更深的链不使描述符超过上界。
+- [a_checkout_deeper_than_the_walk_bound_ends_the_session](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/tests/agent_session/workload.rs#L36)：启动以 `agent_failed{checkout_too_deep}` 结束，之前没有插件进程或会话目录，Node 继续服务。
+- [a_checkout_deeper_than_the_walk_bound_fails_checkout_too_deep](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/src/revision/tests/snapshot.rs#L504)：交付以 `checkout_too_deep` 失败且不留冻结对象；[a_failed_hand_over_fails_snapshot_failed](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/src/revision/tests/snapshot.rs#L533)：无法列举的目录与失去硬链接保护的宿主都以 `snapshot_failed` 失败，不用该代码。
+- [revision_failures_name_push_outcomes](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-protocol/tests/protocol/revision.rs#L255)：L261 固定 `checkout_too_deep` 的 wire 拼写；[results_project_onto_the_contract](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-controller/src/cloud/deliveries/mapping.rs#L516)：L563 起把 `CheckoutTooDeep` 映射为 `SnapshotFailed`（生产映射在 L154）。
 
 ### 决策依据
 
@@ -323,9 +371,15 @@ D1 的深度上限，D3 末段的交付失败码与 Cloud 映射，不变量 4�
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| 启动时检查 | `apps/ora-node/src/service/tests.rs` 的 `a_separate_workload_requires_protected_hardlinks`、`protected_hardlinks_is_required_only_for_a_separate_workload` | Missing |
-| 每次遍历前重读 | `apps/ora-node/src/hand_over/tests.rs` 的 `every_walk_rereads_protected_hardlinks`：改为非 `1` 后下一次遍历在触碰 checkout 前被拒，恢复后再次运行 | Missing |
-| 启动与交付的拒绝代码 | `apps/ora-node/tests/agent_session/workload.rs` 的 `a_host_without_protected_hardlinks_refuses_the_start`；`apps/ora-node/src/revision/tests/snapshot.rs` 的 `a_failed_hand_over_fails_snapshot_failed` | Missing |
+| 启动时检查 | `apps/ora-node/src/service/tests.rs` 的 `a_separate_workload_requires_protected_hardlinks`、`protected_hardlinks_is_required_only_for_a_separate_workload` | Covered |
+| 每次遍历前重读 | `apps/ora-node/src/hand_over/tests.rs` 的 `every_walk_rereads_protected_hardlinks`：改为非 `1` 后下一次遍历在触碰 checkout 前被拒，恢复后再次运行 | Covered |
+| 启动与交付的拒绝代码 | `apps/ora-node/tests/agent_session/workload.rs` 的 `a_host_without_protected_hardlinks_refuses_the_start`；`apps/ora-node/src/revision/tests/snapshot.rs` 的 `a_failed_hand_over_fails_snapshot_failed` | Covered |
+
+### 代表性证据
+
+- [a_separate_workload_requires_protected_hardlinks](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/src/service/tests.rs#L76)、[protected_hardlinks_is_required_only_for_a_separate_workload](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/src/service/tests.rs#L107)：分离工作负载且 sysctl 不为 `1` 时在打开任何资源前以点名该 sysctl 的错误拒绝启动；共享工作负载不读取。
+- [every_walk_rereads_protected_hardlinks](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/src/hand_over/tests.rs#L66)：Node 启动后把设置改为非 `1`，下一次遍历在触碰 checkout 前被拒，恢复后再次运行。
+- [a_host_without_protected_hardlinks_refuses_the_start](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/tests/agent_session/workload.rs#L97)：启动以 `agent_failed{agent_start_failed}` 结束且无插件进程；交付侧见 [a_failed_hand_over_fails_snapshot_failed](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/src/revision/tests/snapshot.rs#L533)。
 
 ### 决策依据
 
@@ -362,8 +416,13 @@ D1 的 `fs.protected_hardlinks` 条款，不变量 4；“风险、兼容性与�
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| Node 级 9 次并发上限 | `apps/ora-node/src/hand_over/tests.rs` 的 `at_most_nine_walks_run_at_once`：任意多的启动与交付请求至多 9 次重叠且全部最终运行 | Missing |
-| `RLIMIT_NOFILE` 最低要求 | 文档义务：`docs/node/agent-sessions.md` 与 `docs/node/agent-sessions.zh.md` 写明 38,000 最低值与推荐值；没有测试能直接证明部署提供了该限制，合入时按文档核对 | Missing |
+| Node 级 9 次并发上限 | `apps/ora-node/src/hand_over/tests.rs` 的 `at_most_nine_walks_run_at_once`：任意多的启动与交付请求至多 9 次重叠且全部最终运行 | Covered |
+| `RLIMIT_NOFILE` 最低要求 | 文档义务：`docs/node/agent-sessions.md` 与 `docs/node/agent-sessions.zh.md` 写明 38,000 最低值、65,536 推荐值与 9 × 4,099 + 1,024 的推算；`apps/ora-node/src/hand_over/tests.rs` 的 `the_documented_descriptor_minimum_follows_the_walk_bounds` 解析两份文档，把遍历数与每次描述符数钉到 `MAX_CONCURRENT_WALKS` 与 `MAX_OWN_TREE_DEPTH + 3`，要求每个数字覆盖前一个。测试证明的是文档里的最低值始终由遍历上限推导，不是部署真的提供了该限制——后者没有测试能证明，Node 也不读取或调整该限制 | Covered |
+
+### 代表性证据
+
+- [at_most_nine_walks_run_at_once](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/src/hand_over/tests.rs#L20)：任意多的启动与交付遍历请求至多 9 次重叠，许可释放后全部最终运行；上限由 [`MAX_CONCURRENT_WALKS = 9`](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/src/hand_over.rs#L25) 定义。
+- `RLIMIT_NOFILE` 是文档义务：[`docs/node/agent-sessions.md` L98–99](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/docs/node/agent-sessions.md#L98) 与 [`docs/node/agent-sessions.zh.md` L71–72](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/docs/node/agent-sessions.zh.md#L71) 写明 `9 × 4,099 + 1,024 ≈ 38,000`、至少 38,000、推荐 65,536。[the_documented_descriptor_minimum_follows_the_walk_bounds](https://github.com/ora-space/desktop/blob/89b7ce375579d286f70b9bff17cf5475d9d64b22/apps/ora-node/src/hand_over/tests.rs#L197) 解析两份文档，把遍历数和每次描述符数钉到 `MAX_CONCURRENT_WALKS` 与 `MAX_OWN_TREE_DEPTH + 3`（4099），并要求每个数字覆盖前一个：常量改成 10 / 5000 而不改文档、文档最低值或 `≈` 总数改成 30,000 三种变异都被杀死。它证明的是文档里的最低值始终由遍历上限推导出来，不是部署真的提供了该限制——后者没有测试能证明，ADR 也如此声明；Node 不读取也不调整该限制（`apps/ora-node` 与 `ora-utils` 的生产代码没有 `setrlimit`）。
 
 ### 决策依据
 
@@ -404,10 +463,17 @@ Agent 功能启用的 Node 回复 `HelloAccepted`；同版本 `ora-controller` �
 
 | 义务 | 所需直接证据 | 状态 |
 |---|---|---|
-| wire 拼写 | `crates/node-protocol/tests/protocol/session.rs` 的 `accepts_independent_and_combined_execution_capabilities` 固定 `shared_checkout_sessions` | Missing |
-| 生产握手声明 | `apps/ora-node/tests/standalone/agent_sessions/support.rs` 的 `connect`：真实 Node 进程声明 `SharedCheckoutSessions` | Missing |
-| 同版本 Controller 解析交付失败码 | `apps/ora-controller/src/cloud/deliveries/mapping.rs` 的 `results_project_onto_the_contract` | Missing |
-| 混合版本边界 | 部署边界，不登记测试；Controller 在握手中按能力启用同 run 多会话由 v2 事项另行交付并登记 | Missing |
+| wire 拼写 | `crates/node-protocol/tests/protocol/session.rs` 的 `accepts_independent_and_combined_execution_capabilities` 固定 `shared_checkout_sessions` | Covered |
+| 生产握手声明 | `apps/ora-node/tests/standalone/agent_sessions/support.rs` 的 `connect`：真实 Node 进程声明 `SharedCheckoutSessions` | Covered |
+| 同版本 Controller 解析交付失败码 | `apps/ora-controller/src/cloud/deliveries/mapping.rs` 的 `results_project_onto_the_contract` | Covered |
+| 混合版本边界 | 部署边界，不登记测试：`NodeCapability` 是封闭的 Serde 枚举（`crates/node-protocol/src/message/session.rs`），没有未知能力的回退分支，旧版 Rust Controller 对 `shared_checkout_sessions` 解码失败即“Controller 与 Node 必须同版本”的既有边界；Controller 在握手中按能力启用同 run 多会话由 v2 事项另行交付并登记，不计入本文 | Covered |
+
+### 代表性证据
+
+- [accepts_independent_and_combined_execution_capabilities](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-protocol/tests/protocol/session.rs#L10)：固定 `shared_checkout_sessions` 与 `agent_session` 可独立、可同时声明。
+- [connect](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-node/tests/standalone/agent_sessions/support.rs#L155)：所有 standalone 用例共用的生产握手（`connect`，L136）断言真实 Node 进程声明 `SharedCheckoutSessions`（与 `AgentSession`、`RevisionRestore` 等同批）。
+- [results_project_onto_the_contract](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/apps/ora-controller/src/cloud/deliveries/mapping.rs#L516)：同版本 Controller 把 `checkout_too_deep` 映射为 `SnapshotFailed`，不解码失败。
+- 混合版本边界不登记测试：[`NodeCapability`](https://github.com/ora-space/desktop/blob/c5265072ace476b6cdd88fc69fb58ffafec20066/crates/node-protocol/src/message/session.rs#L11) 是封闭的 Serde 枚举，没有未知能力的回退分支，旧版 Rust Controller 解码 `shared_checkout_sessions` 失败即“Controller 与 Node 必须同版本”的既有部署边界（D4）；Controller 在握手中按能力启用同 run 多会话由 v2 事项另行交付并登记。
 
 ### 决策依据
 
